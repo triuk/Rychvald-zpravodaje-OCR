@@ -1,6 +1,6 @@
 # Technická konstrukce F pro OCR
 
-Tento dokument popisuje obecný mechanismus neviditelné textové vrstvy. Obsah, geometrie a testová očekávání se získávají ze zdrojového PDF konkrétního průchodu. Implementace je [tools/ocr_f_layer.py](../tools/ocr_f_layer.py); před použitím přečti její vstupní smlouvu.
+Technická reference již implementovaného generátoru [tools/ocr_f_layer.py](../tools/ocr_f_layer.py). Čti ji při změnách API, fontů, Unicode, tagů nebo spojování řádků; běžný OCR průchod řídí [ocr-workflow.md](ocr-workflow.md). Obsah, geometrie a testová očekávání se získávají ze zdrojového PDF konkrétního průchodu.
 
 ## Font a znakové buňky
 
@@ -32,4 +32,4 @@ Každý řádek kromě posledního v jednotce musí uvést `join_after`: `space`
 
 `work_dir` určuje pracovní složku aktuálního běhu. Zde vznikají pomocné fonty a vrstva. V buňkách s minimální šířkou, u úpravy opakovaných znaků a na hranicích spojení ukládá generátor diagnostiku do `construction-events.json`. Knihovny: PyMuPDF, ReportLab a fontTools. Použij dostupné prostředí, zaznamenej verze a ověř výsledek; kód není OCR ani kontrola správnosti vstupu.
 
-Dokončeno, když nový výstup prošel kontrolou znaků dvěma extraktory, zachováním obrazu a struktury, cílenými výběry podle nového rastru a vlastním testem schránky v dostupných čtečkách. Nedostupné UI operace a neúspěšné malé výřezy zůstávají v reportu samostatně viditelné.
+Ověřování konkrétního výstupu, návratové stavy a předání určuje [workflow](ocr-workflow.md#9-kontroly-opravy-a-předání). Změny konstrukce ověř také syntetickými regresními testy; samotná správná konstrukce PDF nepotvrzuje čtení rastru ani kompatibilitu schránky.

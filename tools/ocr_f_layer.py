@@ -4,12 +4,8 @@ Input contract and verification: docs/ocr-f-construction.md.
 This module carries no transcript, coordinates, or issue-specific exceptions.
 """
 from pathlib import Path
-import copy, json, re, sys
-try:
-    import fitz
-except ModuleNotFoundError:
-    sys.path.insert(0,'/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages')
-    import fitz
+import copy, json, re
+import fitz
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from reportlab.pdfbase import pdfmetrics

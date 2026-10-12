@@ -6,24 +6,26 @@ decisions. Instructions: docs/ocr-workflow.md.
 from pathlib import Path
 import argparse,collections,concurrent.futures,copy,difflib,hashlib,json,re,subprocess,sys
 from importlib.metadata import version
-import numpy as np
-from PIL import Image,ImageFilter,ImageFont,ImageDraw
-from lxml import etree
-import fitz
-from ocr_f_layer import create_pdf
+from ocr_quality import (load, dump, sha, bindings, check_bindings, validate_review,
+                         update_line, article_text, technical_failures, snapshot,
+                         doctor, validate_run, bbox, unique)
 
 FONT_PATH='/usr/share/fonts/noto/NotoSerif-Regular.ttf'
 FONT=None
 SEGMENTATION_EVENTS=[]
-def load(path):return json.loads(Path(path).read_text(encoding='utf-8'))
-def dump(path,value):
- path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
- path.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def run(command):
  p=subprocess.run(command,capture_output=True,text=True)
  if p.returncode:raise RuntimeError(f'{command!r}: {p.stderr}')
  return p
+def recognize_cached(command,prefix,image,outputs,version):
+ cache=Path(str(prefix)+'-cache.json')
+ identity={'command':command,'image_sha256':sha(image),'tesseract':version}
+ if cache.exists():
+  stored=load(cache)
+  if stored.get('identity')==identity and all(Path(str(prefix)+suffix).is_file() and sha(str(prefix)+suffix)==stored.get('outputs',{}).get(suffix) for suffix in outputs):return True
+ result=run(command);Path(str(prefix)+'.log').write_text(result.stderr,encoding='utf-8')
+ dump(cache,{'identity':identity,'outputs':{suffix:sha(str(prefix)+suffix) for suffix in outputs}})
+ return False
 def width(s):return max(1,FONT.getlength(s))
 def union(bs):return [min(b[0] for b in bs),min(b[1] for b in bs),max(b[2] for b in bs),max(b[3] for b in bs)]
 def parse_hocr(path,page,prefix,offset=(0,0)):
@@ -68,35 +70,44 @@ def prepare(a):
  print(f'Prepared {len(d)} pages; {len(commands)} OCR runs; existing text counts are in the manifest')
 def regions(a):
  w=Path(a.work);m=load(w/'input-manifest.json');regions=load(a.regions)
+ unique(regions,'region')
+ tesseract_version=run(['tesseract','--version']).stdout.splitlines()[0]
  ids=[r['id'] for r in regions]
  if len(ids)!=len(set(ids)):raise ValueError('Duplicate region IDs')
  for r in regions:
   if not re.fullmatch(r'[A-Za-z0-9_-]+',r['id']):raise ValueError('Use simple region IDs')
   if not 1<=r['page']<=len(m['pages']):raise ValueError('Invalid page')
+  bbox(r['bbox'],r['page'],m)
  def recognize(original):
   r=copy.deepcopy(original);crop=w/'crops'/(r['id']+'.png');prefix=w/'ocr'/r['id']
   Image.open(w/'raster'/f"page-{r['page']}.png").crop(r['bbox']).save(crop)
   cmd=['tesseract',str(crop),str(prefix),'-l',m['ocr']['language'],'--psm',str(r['psm']),'-c','hocr_char_boxes=1','hocr','tsv','txt']
-  p=run(cmd);prefix.with_suffix('.log').write_text(p.stderr);r['command']=cmd
+  reused=recognize_cached(cmd,prefix,crop,['.hocr','.tsv','.txt'],tesseract_version);r['command']=cmd
   r['lines']=parse_hocr(prefix.with_suffix('.hocr'),r['page'],r['id'],r['bbox'][:2])
   for line in r['lines']:line['region']=r['id']
-  return r
- with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(recognize,regions))
+  return r,reused
+ with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:recognized=list(pool.map(recognize,regions))
+ results=[r for r,reused in recognized]
  dump(w/'regions.json',regions);dump(w/'local-candidates.json',results)
- print(f'OCR candidates for {len(results)} fresh regions')
+ print(f'OCR candidates for {len(results)} regions; {sum(reused for r,reused in recognized)} cached')
 def targeted(a):
- w=Path(a.work);m=load(w/'input-manifest.json');results=[]
- for t in load(a.targets):
+ w=Path(a.work);m=load(w/'input-manifest.json');results=[];cached=0
+ targets=load(a.targets);unique(targets,'target');tesseract_version=run(['tesseract','--version']).stdout.splitlines()[0]
+ for t in targets:
   if not re.fullmatch(r'[A-Za-z0-9_-]+',t['id']):raise ValueError('Use simple target IDs')
+  bbox(t['bbox'],t['page'],m)
   im=Image.open(w/'raster'/f"page-{t['page']}.png").crop(t['bbox']).convert('L')
   bg=np.asarray(im.filter(ImageFilter.GaussianBlur(12)),dtype=float)
   normalized=Image.fromarray(np.uint8(np.clip(np.asarray(im,dtype=float)/np.maximum(bg,1)*235,0,255)))
   for name,image in [('raw',im),('normalized',normalized)]:
    path=w/'crops'/f"{t['id']}-{name}.png";image.save(path);prefix=w/'ocr'/f"{t['id']}-{name}"
    cmd=['tesseract',str(path),str(prefix),'-l',m['ocr']['language'],'--psm',str(t['psm']),'txt','tsv']
-   p=run(cmd);prefix.with_suffix('.log').write_text(p.stderr)
-   results.append({**t,'variant':name,'command':cmd,'candidate':prefix.with_suffix('.txt').read_text(),'returncode':p.returncode})
- dump(w/'targeted-candidates.json',results);print(f'{len(results)} targeted raw/supporting OCR candidates')
+   reused=recognize_cached(cmd,prefix,path,['.txt','.tsv'],tesseract_version)
+   cached+=reused
+   results.append({**t,'variant':name,'command':cmd,'candidate':prefix.with_suffix('.txt').read_text(),'returncode':0})
+ previous=load(w/'targeted-candidates.json') if (w/'targeted-candidates.json').exists() else []
+ replaced={t['id'] for t in targets}
+ dump(w/'targeted-candidates.json',[r for r in previous if r['id'] not in replaced]+results);print(f'{len(results)} targeted raw/supporting OCR candidates; {cached} cached')
 def draft(a):
  w=Path(a.work);target=Path(a.review)
  if target.exists():raise ValueError('Preserve the existing review; choose another filename')
@@ -169,6 +180,7 @@ def token_boxes(text,old,b,mask):
 def segment(a):
  global FONT
  FONT=ImageFont.truetype(a.font,100);w=Path(a.work);m=load(w/'input-manifest.json');review=load(a.review)
+ validate_review(w,review);SEGMENTATION_EVENTS.clear()
  if review['source_sha256']!=m['source_sha256']:raise ValueError('Review belongs to another source')
  candidates={l['id']:l for r in load(w/'local-candidates.json') for l in r['lines']}
  lines={};masks={};geometry=[];unsupported=[];reconstructions=[];references=[]
@@ -247,13 +259,25 @@ def segment(a):
   outside=[i for i,x in enumerate(c) if x['selection_bbox'][0]<b[0]-2 or x['selection_bbox'][2]>b[2]+2]
   if tiny or overlaps or outside:anomalies.append({'line':key,'tiny':tiny,'overlaps':overlaps,'outside':outside})
  dump(w/'checks/geometry-anomalies.json',anomalies)
+ dump(w/'segmented-review.json',review)
+ inputs=bindings(review=a.review,segmented_review=w/'segmented-review.json',candidates=w/'local-candidates.json',manifest=w/'input-manifest.json',font=a.font,
+                 **{f'raster_{p["page"]}':w/'raster'/f'page-{p["page"]}.png' for p in m['pages']},
+                 **{f'proof_{i}':w/path for i,path in enumerate(sorted({r['source_crop'] for r in review['lines']} | {r['source_crop'] for name in ['unresolved','risk_register','publisher_errors'] for r in review.get(name,[]) if r.get('source_crop')}))})
+ dump(w/'segment-manifest.json',{'inputs':inputs,'pages_sha256':sha(w/'pages.json'),'tool_sha256':sha(__file__)})
  print(f'{len(pages)} pages, {len(lines)} reviewed lines; geometry remains approximate')
 def export(a):
  w=Path(a.work);m=load(w/'input-manifest.json');source=Path(a.source).resolve()
  if sha(source)!=m['source_sha256']:raise ValueError('Wrong source hash')
  if any(p['existing_text_characters'] for p in m['pages']) and not a.allow_existing_text:raise ValueError('Source already contains text. Resolve the text-layer handling explicitly; --allow-existing-text keeps it and can cause duplicate extraction')
  pages=load(a.pages);out=Path(a.pdf);txt=Path(a.txt)
- if out.resolve()==source or txt.resolve()==source:raise ValueError('Keep source unchanged')
+ segmentation=load(w/'segment-manifest.json');check_bindings(segmentation['inputs'])
+ if sha(a.pages)!=segmentation['pages_sha256'] or sha(__file__)!=segmentation['tool_sha256']:raise ValueError('Re-run segment after changing pages or segmentation code')
+ if out.resolve()==source or txt.resolve()==source or out.resolve()==txt.resolve():raise ValueError('Keep source and output paths separate')
+ if (w/'output-manifest.json').exists():
+  previous=load(w/'output-manifest.json')
+  if any(path.exists() and str(path.resolve())!=previous[name] for name,path in [('pdf',out),('txt',txt)]):raise ValueError('Refuse to replace an unrelated output')
+  print(f'Archived previous export: {snapshot(w)}')
+ elif out.exists() or txt.exists():raise ValueError('Refuse to overwrite an existing output without its manifest')
  out.parent.mkdir(parents=True,exist_ok=True);txt.parent.mkdir(parents=True,exist_ok=True)
  # For a rotated source, author the unchanged
  # F mechanism in unrotated page coordinates, then restore source rotations.
@@ -278,25 +302,21 @@ def export(a):
    for u,v in zip(actual['units'],changed['units']):u['pdf_text']=v['pdf_text']
  else:create_pdf(pages,source,out,work_dir=w/'construction',raster_dpi=m['dpi'])
  dump(w/'exported-pages.json',pages)
- articles=collections.OrderedDict()
- for p in pages:
-  for u in p['units']:articles.setdefault(u['article'],[]).append(u)
- parts=[]
- for units in articles.values():
-  text='';previous=False
-  for unit in units:
-   table='table_fields' in unit
-   if text:text+='\n' if table and previous else '\n\n'
-   text+='\t'.join(unit['table_fields']) if table else unit['pdf_text'];previous=table
-  parts.append(text)
- txt.write_text('\n\n\n'.join(parts).rstrip()+'\n',encoding='utf-8')
- dump(w/'output-manifest.json',{'source':str(source),'source_sha256':sha(source),'pdf':str(out.resolve()),'pdf_sha256':sha(out),'txt':str(txt.resolve()),'txt_sha256':sha(txt),'status':'ready_for_review','ui_clipboard_tested':False,'tool_sha256':sha(__file__),'generator_sha256':sha(Path(__file__).with_name('ocr_f_layer.py'))})
+ txt.write_text(article_text(pages),encoding='utf-8')
+ dump(w/'exported-review.json',load(w/'segmented-review.json'))
+ dump(w/'export-inputs.json',{'segmentation':segmentation,'review':load(w/'segmented-review.json'),
+                             'samples':load(w/'samples.json') if (w/'samples.json').exists() else None})
+ inputs=bindings(**{name:record['path'] for name,record in segmentation['inputs'].items()},pages=a.pages,
+                 exported_pages=w/'exported-pages.json',exported_review=w/'exported-review.json',export_inputs=w/'export-inputs.json')
+ dump(w/'output-manifest.json',{'source':str(source),'source_sha256':sha(source),'pdf':str(out.resolve()),'pdf_sha256':sha(out),'txt':str(txt.resolve()),'txt_sha256':sha(txt),'inputs':inputs,'status':'exported','ui_clipboard_tested':False,'tool_sha256':sha(__file__),'generator_sha256':sha(Path(__file__).with_name('ocr_f_layer.py'))})
  print(f'Exported {len(pages)} pages; PDF {sha(out)}')
 def check(a):
  w=Path(a.work);c=w/'checks';c.mkdir(parents=True,exist_ok=True);pages=load(a.pages);source=fitz.open(a.source);out=fitz.open(a.pdf)
  if len(source)!=len(out) or len(out)!=len(pages):raise ValueError('Page count mismatch')
  strip=lambda s:re.sub(r'\s','',s)
  result={'source_sha256':sha(a.source),'output_sha256':sha(a.pdf),'versions':{'PyMuPDF':fitz.VersionBind,'Poppler':run(['pdftotext','-v']).stderr.splitlines()[0]},'pages':[],'ui_clipboard':'not_tested'}
+ result['source_identity_preserved']=result['source_sha256']==load(w/'input-manifest.json')['source_sha256']
+ result['inputs']=bindings(source=a.source,pdf=a.pdf,txt=a.txt,pages=a.pages)
  q=subprocess.run(['qpdf','--check',a.pdf],capture_output=True,text=True);(c/'qpdf.txt').write_text(q.stdout+q.stderr);result['qpdf_returncode']=q.returncode
  reviewer=original=None
  if a.reviewer_root:
@@ -327,23 +347,31 @@ def check(a):
  for n,row in enumerate(result['pages'],1):
   first=np.asarray(Image.open(c/f'poppler-source-{n}.png'));last=np.asarray(Image.open(c/f'poppler-final-{n}.png'));row['poppler_render_identical']=first.shape==last.shape and np.array_equal(first,last)
  result['txt_characters_equal_common_transcript']=strip(Path(a.txt).read_text())==strip(''.join(u['pdf_text'] for p in pages for u in p['units']))
+ result['txt_literal_equal_common_transcript']=Path(a.txt).read_bytes()==article_text(pages).encode('utf-8')
  fonts={f[0]:f for p in out for f in p.get_fonts(full=True)}
  result['fonts']=[{'xref':x,'name':f[3],'embedded':bool(out.extract_font(x)[3])} for x,f in fonts.items()]
  result['construction_events']=dict(collections.Counter(e['type'] for e in load(w/'construction/construction-events.json')))
  dump(c/'technical.json',result)
  keys=['geometry_preserved','source_content_streams_preserved','decoded_images_identical','mupdf_render_identical','poppler_render_identical','mupdf_characters_equal','poppler_characters_equal']
  print(json.dumps({'pages':len(out),'qpdf_returncode':q.returncode,**{k:sum(bool(x[k]) for x in result['pages']) for k in keys},'literal_equal':sum(x['mupdf_literal_equal'] for x in result['pages']),'ui_clipboard':'not_tested'}))
+ return 1 if technical_failures(result) else 0
 def samples(a):
  w=Path(a.work);m=load(w/'input-manifest.json');dpi=m['dpi'];doc=fitz.open(a.pdf);results=[]
- for s in load(a.samples):
+ specs=load(a.samples);unique(specs,'sample');(w/'checks').mkdir(parents=True,exist_ok=True)
+ output_hash=sha(a.pdf)
+ for s in specs:
+  if not re.fullmatch(r'[A-Za-z0-9_-]+',s['id']):raise ValueError('Use simple sample IDs')
+  bbox(s['bbox'],s['page'],m)
+  if not s.get('expected_origin'):raise ValueError('Record sample expectation origin')
   b=s['bbox'];n=s['page'];im=Image.open(w/'raster'/f'page-{n}.png')
   im.crop([b[0]-10,b[1]-10,b[2]+10,b[3]+10]).save(w/'checks'/f"{s['id']}-source.png")
   page=doc[n-1];clip=fitz.Rect([v*72/dpi for v in b])*page.derotation_matrix
   mu=page.get_text('text',clip=clip,sort=False)
   cmd=['pdftotext','-f',str(n),'-l',str(n),'-r',str(dpi),'-x',str(b[0]),'-y',str(b[1]),'-W',str(b[2]-b[0]),'-H',str(b[3]-b[1]),'-raw',a.pdf,'-'];pop=run(cmd).stdout
   strip=lambda x:re.sub(r'\s','',x)
-  results.append({**s,'mupdf_literal':mu,'poppler_literal':pop,'mupdf_characters_pass':strip(mu)==strip(s['expected']),'poppler_characters_pass':strip(pop)==strip(s['expected']),'command':cmd,'operation':'extractor rectangle, not UI/clipboard','output_sha256':sha(a.pdf)})
- dump(w/'checks/geometry-samples.json',results);print(f"Samples {len(results)}; MuPDF {sum(x['mupdf_characters_pass'] for x in results)}; Poppler {sum(x['poppler_characters_pass'] for x in results)}")
+  results.append({**s,'mupdf_literal':mu,'poppler_literal':pop,'mupdf_characters_pass':strip(mu)==strip(s['expected']),'poppler_characters_pass':strip(pop)==strip(s['expected']),'command':cmd,'operation':'extractor rectangle, not UI/clipboard','output_sha256':output_hash})
+ dump(w/'checks/geometry-samples.json',{'inputs':bindings(pdf=a.pdf,samples=a.samples,manifest=w/'input-manifest.json'),'samples':results});print(f"Samples {len(results)}; MuPDF {sum(x['mupdf_characters_pass'] for x in results)}; Poppler {sum(x['poppler_characters_pass'] for x in results)}")
+ return 0 if results and all(x['mupdf_characters_pass'] and x['poppler_characters_pass'] for x in results) else 1
 def sheets(a):
  w=Path(a.work);lines=load(a.lines);font=ImageFont.truetype(a.font,18)
  for offset in range(0,len(lines),20):
@@ -361,6 +389,11 @@ def main():
  p=argparse.ArgumentParser(description=__doc__);s=p.add_subparsers(dest='command',required=True)
  def sub(name,func):
   parser=s.add_parser(name);parser.set_defaults(func=func);parser.add_argument('--work',required=True);return parser
+ x=s.add_parser('doctor');x.set_defaults(func=doctor);x.add_argument('--work');x.add_argument('--language',default='ces');x.add_argument('--font',default=FONT_PATH);x.add_argument('--sheet-font',default='/usr/share/fonts/TTF/DejaVuSans.ttf')
+ x=sub('validate-review',lambda a:print(json.dumps(validate_review(a.work,load(a.review)))));x.add_argument('--review',required=True)
+ x=sub('update-line',update_line);x.add_argument('--review',required=True);x.add_argument('--id',required=True);x.add_argument('--patch',required=True)
+ sub('snapshot',lambda a:print(snapshot(a.work)))
+ sub('validate-run',validate_run)
  x=sub('prepare',prepare);x.add_argument('--source',required=True);x.add_argument('--dpi',type=int,default=300);x.add_argument('--language',default='ces')
  x=sub('regions',regions);x.add_argument('--regions',required=True)
  x=sub('targeted',targeted);x.add_argument('--targets',required=True)
@@ -374,5 +407,15 @@ def main():
  x.add_argument('--reviewer-root')
  x=sub('samples',samples);x.add_argument('--pdf',required=True);x.add_argument('--samples',required=True)
  x=sub('sheets',sheets);x.add_argument('--lines',required=True);x.add_argument('--font',default='/usr/share/fonts/TTF/DejaVuSans.ttf')
- a=p.parse_args();a.func(a)
-if __name__=='__main__':main()
+ a=p.parse_args()
+ if a.command in ('prepare','regions','targeted','draft','segment','export','check','samples','sheets'):
+  global np,Image,ImageFilter,ImageFont,ImageDraw,etree,fitz,create_pdf
+  import numpy as np
+  from PIL import Image,ImageFilter,ImageFont,ImageDraw
+  from lxml import etree
+  import fitz
+  from ocr_f_layer import create_pdf
+ try:return a.func(a) or 0
+ except (ValueError,KeyError,TypeError,OSError,RuntimeError) as error:
+  print(str(error),file=sys.stderr);return 1
+if __name__=='__main__':sys.exit(main())

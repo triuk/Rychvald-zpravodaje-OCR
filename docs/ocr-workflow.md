@@ -2,11 +2,11 @@
 
 Použij zdrojové PDF a novou pracovní složku. Přepis, pořadí článků, souřadnice, opravy, nejasná čtení a očekávání kontrol odvozuj z obrazu právě zpracovávaného dokumentu. Obsahově neutrální nástroje jsou `tools/ocr_workflow.py` a `tools/ocr_f_layer.py`.
 
-Postup zahrnuje místní rozpoznání, úplné vizuální čtení, opravy textu, kontrolu geometrie, export PDF/TXT a samostatné ověření kopírování. Automatické OCR kandidáty nejsou potvrzeným přepisem. Dokument je zadáním nezávislého ověřovacího průchodu; označení za produkční politiku je rozhodnutím zadavatele.
+Postup zahrnuje místní rozpoznání, úplné vizuální čtení, opravy textu, kontrolu geometrie, export PDF/TXT a samostatné ověření kopírování. Automatické OCR kandidáty nejsou potvrzeným přepisem. Optimalizace šetří opakované výpočty a ruční evidenci; rozsah čtení a požadavky na kvalitu zůstávají zachované.
 
 ## 1. Prostředí a vlastní cesty
 
-Zvol vstup, novou pracovní složku a vlastní výstupní cesty. Názvy PDF/TXT odvoď od vstupu příponou `-ocr`. Zdrojové PDF zachovej beze změny a existující výstupy nepřepisuj. `prepare` odmítne pracovní složku s existujícím vstupním manifestem. Není zde předepsaný počet stran ani seznam titulů/oblastí.
+Zvol vstup, novou pracovní složku a vlastní výstupní cesty. Názvy PDF/TXT odvoď od vstupu příponou `-ocr`. Zdrojové PDF zachovej beze změny. `prepare` odmítne pracovní složku s existujícím vstupním manifestem; další export téhož běhu automaticky archivuje předchozí iteraci. Cizí existující výstup se odmítne. Není zde předepsaný počet stran ani seznam titulů/oblastí.
 
 Příklady zadej v kořeni repozitáře a nahraď vstup, jazyk a identifikátor běhu:
 
@@ -20,15 +20,20 @@ ocr_pdf="$ocr_work/output/pdf/${ocr_stem}-ocr.pdf"
 ocr_txt="$ocr_work/output/text/${ocr_stem}-ocr.txt"
 ```
 
-Potřebné programy: Python, Tesseract s jazykovým modelem předlohy, `qpdf`, Poppler (`pdftotext`, `pdftoppm`, pro samostatnou inspekci také `pdffonts`). Python balíčky: PyMuPDF (`fitz`), Pillow, numpy, lxml, ReportLab a fontTools. NotoSerif-Regular slouží pro odhad poměrných šířek, DejaVuSans pro popisky kontrolních listů; viditelný text stránky se těmito fonty nesází. V místním prostředí jsou fonty `/usr/share/fonts/noto/NotoSerif-Regular.ttf` a `/usr/share/fonts/TTF/DejaVuSans.ttf`; při jiném umístění použij `segment --font` a `sheets --font`.
-
-V této instalaci systémový Python postrádal PyMuPDF, ale knihovnu obsahoval sousední reviewer. Pro CLI v tomto prostředí použij:
+Jednorázově zřiď vlastní prostředí s Pythonem 3.14. [requirements.txt](../requirements.txt) připíná přímé i tranzitivní runtime závislosti nástrojů:
 
 ```bash
-export PYTHONPATH="/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+source .venv/bin/activate
+python tools/ocr_workflow.py doctor --work "$ocr_work" --language "$ocr_language"
 ```
 
-V prostředí se standardně dostupným `fitz` není toto nastavení potřeba. Zamknutý requirements soubor není součástí nástroje. Chybějící program, model nebo font zjisti před během; skutečné verze a případné náhrady zapiš do pracovních záznamů.
+Při dalších bězích stačí aktivace a `doctor`. Příkaz ověří importy, Tesseract a požadované modely, qpdf, Poppler a oba fonty; chybějící závislost vrátí kód 1 před OCR. Verze a hashe fontů uloží do `checks/environment.json`. Python prostředí je samostatné; systémové programy a fonty nejsou requirements souborem uzamčené. Při jiném umístění fontů předej stejné cesty do `doctor --font/--sheet-font`, `segment --font` a `sheets --font`.
+
+Hned zjisti dostupnost skutečné cílové čtečky a jejího výběru/schránky. Pokud UI není dostupné, připrav ruční případy pro člověka podle [smlouvy kontrol](ocr-data-contracts.md#schránka); jejich stav zůstane `not_tested`. OCR může pokračovat, ale souhrn nebude tvrdit ověřenou kompatibilitu. Rozsah čteček a obtížné výběry řeší [pdf-copy-compatibility.md](pdf-copy-compatibility.md).
+
+**Hotovo:** `doctor` prošel a je známý způsob provedení nebo předání zkoušek schránky.
 
 ## 2. Identita, rastr a první rozpoznání
 
@@ -47,6 +52,8 @@ tesseract PAGE.png PREFIX -l LANGUAGE --psm 11 -c hocr_char_boxes=1 hocr tsv txt
 ```
 
 CLI dosadí `PAGE`, `PREFIX` a jazyk z parametrů a uloží skutečné příkazy do `ocr-commands.json`; pracují nejvýše dvě souběžné úlohy. PSM 3 tvoří základ inventáře, PSM 11 další kandidáty. Výsledek této fáze není potvrzený přepis.
+
+**Hotovo:** manifest odpovídá vstupu, všechny stránky mají rastr a oba kandidátní průchody. Tyto podklady se při opravách přepisu znovu nevytvářejí.
 
 ## 3. Nové oblasti a místní OCR
 
@@ -73,6 +80,10 @@ tesseract CROP.png PREFIX -l LANGUAGE --psm PSM -c hocr_char_boxes=1 hocr tsv tx
 
 `local-candidates.json` uchovává kandidátní text, řádky, slova, znakové hOCR boxy i příkazy. Boxy výřezu se převádějí do souřadnic stránky přičtením počátku výřezu. `draft` pouze vytvoří návrh `review.json` s `text_status: candidate` a jednou jednotkou na tiskový řádek. Odstavce, nadpisy, pořadí a potvrzení čtení musí následovat podle obrazu.
 
+`regions` a `targeted` znovu použijí OCR pouze při shodě hashe výřezu, příkazu, verze Tesseractu a hashů všech kandidátních výstupů. Poškozený nebo změněný podklad se rozpozná znovu. `targeted` zachovává i výsledky předchozích cílů; další průchod zadávej jen pro obtížná nebo změněná místa. `draft` vytvoř jednou, pak upravuj potvrzený přepis.
+
+**Hotovo:** inventář oblastí pokrývá všechny texty stránky; každý kandidát bude v přepisu ponechán nebo vyřazen s důvodem.
+
 ## 4. Úplné vizuální čtení a obtížná místa
 
 Projdi všechny textové bloky proti původnímu rastru, včetně drobného textu, poškozených okrajů a tabulek. Uprav `review.json`: potvrď znění, doplň opomenuté řádky a vyřaď šum s důvodem. Jména, čísla a data kontroluj jako jednotlivé údaje. Confidence ani shoda kandidátů nejsou samostatným důkazem správnosti. Čitelnou chybu vydavatele zachovej v textu a popiš odděleně.
@@ -89,27 +100,23 @@ Pokud přesné znění nelze určit, zachovej bezpečně čitelné okolí, nahra
 
 Zapiš vizuální rozsah kontroly v novém pracovním prostoru: které stránky, bloky a údaje byly skutečně přečteny, co je potvrzené a co otevřené. CLI takovou kontrolu samo neprohlašuje za provedenou. Nejde o systematické ověřování čitelných věcných tvrzení dokumentu proti externím zdrojům.
 
+**Hotovo:** všechny textové bloky byly přečteny, rizikové údaje zkontrolovány a každý výskyt `[NEČITELNÉ]` má vlastní záznam. Nejistota neblokuje zpracování zbytku vydání.
+
 ## 5. Logické jednotky a smlouva `review.json`
 
 Dokonči článek před přechodem k dalšímu. Jednotkou je nadpis nebo skutečný odstavec, případně tabulkový záznam, nikoli každý tiskový řádek. Pokračování přes sloupec na jedné straně patří do téže jednotky. Články mají své `article` ID. PDF objekty jsou stránkové; pokračování odstavce přes stránku vyžaduje vlastní ověření. U takového dokumentu zapiš návaznost a zvlášť ověř spojení v TXT a ve čtečkách; automatické sloučení přes stránky CLI zatím nepřidává.
 
-`review.json` je čerstvý obsahový podklad vytvořený z právě zpracovávaného zdroje:
+Před úpravami čti [smlouvu přepisu a geometrie](ocr-data-contracts.md#přepis). Pracuj se strukturovanými soubory přímo na disku; do kontextu vracej potřebné řádky a stručnou validaci. JSON získávej ze souboru, nikoli parsováním zobrazovací obálky nástroje.
 
-| Položka | Význam |
-|---|---|
-| `source_sha256` | Hash právě tohoto vstupu; převzít z nového vstupního manifestu. |
-| `lines` | Všechny ponechané/doplněné řádky; vlastní `id`, `page`, `text`, `selection_region`, `source_crop`, `decision_basis` a `text_status` (`visually_confirmed` nebo `partially_unresolved`). |
-| `candidate_id` u řádku | Odkaz na původní místní OCR řádek; u vizuálně doplněného textu bez odpovídajícího kandidáta může být `null`. |
-| `join_after` | Na každém vnitřním tiskovém řádku jednotky: `space`, `typesetting_hyphen`, `literal_hyphen` nebo `none`. Určuje skutečné spojení podle rastru. |
-| `fields` u řádku | U tabulek oddělené údaje, každý vlastní `text` a `bbox`; `line.text` je jejich souhrn s tabulátory. Bez `fields` se zpracuje celý řádek jako jedno pole. |
-| `units` | V logickém pořadí: `id`, `page`, `article`, `tag` (`H1`, `H2`, `P`), `line_ids`. Každý ponechaný řádek patří právě jedné jednotce. |
-| `table_fields` u jednotky | Volitelný seznam hodnot jednoho záznamu pro TXT s tabulátory; prázdná hodnota zachová prázdnou buňku. |
-| `dropped_candidates` | Položky `id` a `reason` pro každý místní OCR řádek vyřazený jako šum nebo nahrazený jinými řádky. |
-| `unresolved` | Jeden záznam pro každý výskyt `[NEČITELNÉ]`: stabilní ID, řádek, strana, oblast/výřez, kontext, kandidáty, důvod a stav. |
-| `publisher_errors` | Tištěné znění, řádek, vysvětlení a potvrzená chyba/podezření; samotný přepis zůstává věrný. |
-| `risk_register` | Jednotlivě kontrolované rizikové údaje, jejich stav a obrazový doklad. Tyto záznamy se v novém CLI přenášejí z vizuální revize, nevzniká automatické potvrzení správnosti. |
+```bash
+python tools/ocr_workflow.py validate-review --work "$ocr_work" --review "$ocr_work/review.json"
+python tools/ocr_workflow.py update-line --work "$ocr_work" \
+  --review "$ocr_work/review.json" --id ID --patch "$ocr_work/line-patch.json"
+```
 
-Příklad schématu spojení: řádky `kni-` / `hovna` mohou mít `typesetting_hyphen`; skutečný spojovník v `česko-` / `anglický` má `literal_hyphen`. V obou případech musí být spojovník samostatnou poslední buňkou. `none` slouží např. vertikálním písmenům téhož nápisu. Tyto příklady vysvětlují smlouvu, nejsou čtením nového vstupu.
+První sestavení odstavců a hromadné úpravy dokonči validací. Pro následnou opravu řádku používej `update-line`: patch obsahuje celý řádek a výslovné náhrady jeho souvisejících registrů. Příkaz ověří celý přepis před atomickým zápisem a uloží předchozí přepis do `review-history/`. Očekávání testů nemění.
+
+**Hotovo:** validace prošla, všechny řádky patří právě jedné jednotce, kandidáti jsou vypořádaní a vnitřní řádky mají správný `join_after`.
 
 ## 6. Geometrie podle nového rastru
 
@@ -120,26 +127,21 @@ python3 tools/ocr_workflow.py sheets --work "$ocr_work" --lines "$ocr_work/revie
 
 Nejprve odděl tabulkové údaje podle skutečných sloupců. Původní OCR segmentace zůstává kandidátem; opravovaný token nemá automaticky správný obrazový rozsah. Nástroj používá textové zarovnání tokenů, poměrné šířky NotoSerif a minima inkoustové projekce, takže výsledné znakové řezy jsou **aproximace**. Nové příznaky zůstávají `approximation_requires_character_review` / `requires_character_review`.
 
-Použité pracovní parametry, nikoli obecně prokázané meze kvality: maska `gray < GaussianBlur(gray,12) * 0.80`; mezera pro rozdělení slov `max(4, round(height*0.16))`; hledání řezu v okolí poměrné polohy s poloměrem `max(2,min(9,average_width*0.38))`, cenou inkoustu a vzdálenosti `0.35`. U prázdných řezů následuje dynamické přerozdělení: váha poměrné šířky 5, hranice 3, pokuta za prázdný řez 35. Řezy před a po opravě zůstávají v `segmentation-events.json`. Přítomnost popředí nedokládá identitu glyfu.
-
-Automatická diagnostika se dívá na šířku <1 px, překryv sousedních nemezerných buněk >1 px a přesah z řádku >2 px. Výškový odlehlý token >1.45 mediánu vhodných slov se omezí na medián horní/dolní polohy s rezervou −3/+2 px. U pomlčky může poměr šířky/výšky >1.8 podpořit ohraničení jejího horizontálního tvaru. Tyto konstanty jsou pracovní heuristiky; samy neposkytují potvrzený znak ani univerzální kalibraci.
+Pracovní heuristiky a jejich prahy jsou v `tools/ocr_workflow.py`; nejsou obecně prokázanými mezemi kvality. Řezy před a po přerozdělení zůstávají v `segmentation-events.json`, podezřelé buňky v `checks/unsupported-cells.json` a `checks/geometry-anomalies.json`. Přítomnost popředí nedokládá identitu glyfu.
 
 Prohlédni originály a nové červené překryvy. Kontroluj malé znaky, tečky, pomlčky, jednotlivá písmena, opakované číslice, diakritiku, stín, přesahy do sousedního slova/řádku a volné mezery. `candidate_ink_bbox` není ručně změřený obrys. Každé rizikové přiřazení oprav nebo výslovně ponech otevřené.
 
-Přesné nové obrazové výjimky se zapisují v daném poli řádku:
+Přesné obrazové výjimky zapisuj do polí řádku podle [smlouvy geometrie](ocr-data-contracts.md#geometrie). Explicitní box sám nepotvrzuje správnost.
 
-- `token_boxes`: slovník index tokenu → `[x0,y0,x1,y1]`.
-- `placeholder_surrogates`: index tokenu → poměrná náhrada nejisté části pro odhad šířky, např. `00`; musí odpovídat novému obrazovému rozsahu, ne starému čtení.
-- `piece_boxes`: index tokenu → index části po rozdělení kolem `[NEČITELNÉ]` → samostatný box části.
-- `character_boxes`: klíč `token:část:znak` → samostatný box ověřovaný nad původním tiskem.
-
-Indexy jsou od 0 a v JSON jsou klíče řetězce. V novém CLI mají explicitní tokenové boxy přednost před dalším automatickým zúžením/výškovou úpravou. Samotné explicitní zadání nepotvrzuje správnost boxu. Běžné mezery mají explicitní buňky, omezené na 1–7 px; netvoří most přes sloupce.
+**Hotovo:** původní výřezy a překryvy byly prohlédnuty; riziková přiřazení jsou opravena nebo jednotlivě evidována jako otevřená. Po opravách stačí znovu prohlédnout dotčené řádky a návaznosti; úplné první čtení se tím nenahrazuje.
 
 ## 7. Výběrová očekávání před exportem
 
 Podle **původního rastru** vyber testovací oblasti a jejich očekávané čtení. Box testu získaný z výstupní znakové buňky není nezávislým ověřením její polohy. Nový `samples.json` je seznam položek `id`, `page`, `bbox`, `expected`, `expected_origin`; přidej, kdo a z jakého původního výřezu čtení potvrdil.
 
 Pokryj to, co se v novém dokumentu skutečně vyskytuje: interpunkci, drobné pomlčky/odrážky, samostatná písmena, diakritiku, opakované znaky/číslice, část slova, nadpis, poškozený okraj, tabulky a sousední sloupce. Vyber také každou nově nalezenou podezřelou nebo opravovanou oblast. Počet vzorků ani jejich čtení nejsou předvyplněné.
+
+Připrav také doslovná očekávání ručních výběrů. Původní neúspěšné očekávání zachovej; jeho změna vyžaduje nový obrazový důkaz. **Hotovo:** očekávání i výběrové boxy jsou odvozené ze zdroje před exportem.
 
 ## 8. Neviditelná vrstva F a TXT
 
@@ -149,13 +151,13 @@ python3 tools/ocr_workflow.py export \
   --pdf "$ocr_pdf" --txt "$ocr_txt"
 ```
 
-Použitá konstrukce F se zachovává jako celek: samostatný obdélníkový glyph pro každý výskyt znaku, vlastní fontové metriky, Unicode přes ToUnicode, jeden `BT … ET` na celou stránkovou logickou jednotku, neviditelný režim `3 Tr`, tagovaný Form nad původním obrazem a původní obsah označený Artifact. Bez `ActualText`, bez škálování běžného fontu přes `Tz`, bez mezerných mostů. Rect buňky se převádí faktorem `72/DPI`; jde o výběrový rozsah, nikoli obrys inkoustu.
-
-Obsahově neutrální API je `create_pdf(pages, source_path, output_path, work_dir=..., raster_dpi=300)`. `pages` jsou v pořadí všech stran zdroje; `page` od 1, `units`, jejich `tag`, `lines`, buňky `text` a `selection_bbox`, vnitřní řádky `join_after`. Generátor doplní `unit.pdf_text`. Má metriky 1000 em, ascent 1000, descent −1; výška fontu je výška buňky / 1.001. Fontové zásobníky se dělí nejvýše po 6000 buňkách. Pojistka těsných opakovaných znaků zdvojnásobuje svislé metriky a zmenšuje font při zachování efektivního boxu. Použití pojistek se loguje v `construction-events.json`; log nenahrazuje výsledek extrakce.
+Používá se zachovaná konstrukce F v `tools/ocr_f_layer.py`. [ocr-f-construction.md](ocr-f-construction.md) je technická reference pro změny generátoru, fontů, Unicode, tagů a spojování řádků; při běžném průchodu postačí tento workflow a datová smlouva. Diagnostika konstrukce je v `construction-events.json` a nenahrazuje extrakční kontroly.
 
 U nenulové rotace CLI převádí boxy pomocí `page.derotation_matrix` do rámce dočasného zdroje s rotací 0, zavolá stejný generátor F a ve výsledku obnoví původní rotace. Původní vstup se nemění.
 
 TXT je UTF-8: souvislý text jednotek z `pdf_text`, mezi odstavci `\n\n`, mezi články `\n\n\n`, uvnitř tabulkového záznamu tabulátory a mezi navazujícími tabulkovými řádky jeden newline. Původní tiskové zlomy se do logického textu nepřenášejí. TXT a PDF vycházejí ze stejného potvrzeného přepisu.
+
+Export odmítne zastaralý přepis, kandidáty, rastry nebo segmentaci. Uloží jejich hashe, zmrazený přepis `exported-review.json` a očekávání do `export-inputs.json`. Další export automaticky uloží předchozí PDF/TXT, zmrazené vstupy, konstrukci a kontroly do `iterations/`; rozsáhlé OCR a obrazové podklady zůstávají ve work s evidovanými hashi. **Hotovo:** výstupní manifest váže PDF/TXT na aktuální segmentaci.
 
 ## 9. Kontroly, opravy a předání
 
@@ -169,7 +171,7 @@ python3 tools/ocr_workflow.py samples --work "$ocr_work" --pdf "$ocr_pdf" --samp
 
 `--reviewer-root` je cesta ke skutečnému dostupnému revieweru. Bez něj nástroj tuto cestu netestuje; chybějící kontrolu zapiš jako neprovedenou. Kontrola používá `app.pdf_document.PdfDocument.render_page(index,1250)` pro extrakci `pdf_order` i render.
 
-Přečti jednotlivé výsledky v `checks/technical.json` a `checks/geometry-samples.json`. Návratový kód 0 kontrolního příkazu znamená dokončený kontrolní záznam, ne automaticky úspěch všech jeho položek. Otevřené/neúspěšné operace vykazuj podle skutečných hodnot.
+`check` vrátí kód 1 při selhání povinné technické podmínky; doslovné whitespace rozdíly vykáže samostatně. `samples` vrátí kód 1 při neúspěšném vzorku nebo prázdné sadě. Oba uloží report i při zjištěném neúspěchu. `geometry-samples.json` má nyní objekt `inputs` a seznam `samples`; staré experimentální reporty se nemění.
 
 Rozliš výsledky jednotlivých kontrol:
 
@@ -179,24 +181,28 @@ Rozliš výsledky jednotlivých kontrol:
 4. **Whitespace a schránka:** uložit doslovné UTF-8 výstupy. Srovnání bez whitespace ověřuje jen zachování znaků/pořadí. Neprokazuje správné odstavce.
 5. **Přijetí:** samostatné rozhodnutí zadavatele o tomto konkrétním výstupu; nevyřešená čtení a neprovedené kontroly zůstávají evidované.
 
-Základní kontrolní příkazy (dosaď skutečné cesty, stranu a oblast):
+Příkazy a doslovné výsledky uchovává CLI v reportech. `samples` používá aktuální DPI manifestu a převádí rasterový box pro rotaci MuPDF. Originální a výstupní rendery se porovnávají jako dekódované pixely.
+
+Při nálezu zachovej původní neúspěšný případ, jeho oblast, očekávání a doslovný výstup. Oprav přepis nebo geometrii podle rastru a opakuj `validate-review → segment → sheets → export → check → samples`. Při kontrole sheets čti změněné řádky a jejich okolí; techniku a úplnou sadu výběrových vzorků ověř po každém exportu. Původní OCR opakuj jen při změně výřezu nebo potřebě nového kandidáta. Úspěch celé strany neuzavírá chybu malého výřezu.
+
+Proveď připravené ruční případy v dostupné cílové čtečce; ulož doslovné UTF-8 schránky včetně mezer a newline, OS, verzi, způsob a rozsah výběru. Člověku předej stejná očekávání i konkrétní PDF s hashem, pokud UI nemůže ovládat agent. Nedostupná prostředí zůstávají neotestovaná. Podrobný rozsah je v [pdf-copy-compatibility.md](pdf-copy-compatibility.md); extrakce není UI test.
+
+Dokonči `checks/visual-review.json`, `checks/manual-copy/status.json` a jednotlivé otevřené nálezy v `checks/findings.json` podle [smlouvy kontrol](ocr-data-contracts.md#kontroly). Vizuální závěry zůstávají skutečným záznamem čtenáře. Poté spusť:
 
 ```bash
-qpdf --check OUTPUT.pdf
-pdffonts OUTPUT.pdf
-pdftotext -f N -l N -raw OUTPUT.pdf -
-pdftoppm -r 150 -png SOURCE.pdf PREFIX_SOURCE
-pdftoppm -r 150 -png OUTPUT.pdf PREFIX_OUTPUT
-pdftotext -f N -l N -r 300 -x X -y Y -W WIDTH -H HEIGHT -raw OUTPUT.pdf -
+python tools/ocr_workflow.py validate-run --work "$ocr_work"
+python tools/ocr_workflow.py snapshot --work "$ocr_work"
 ```
 
-U jiného DPI nové `samples` dosadí aktuální DPI z manifestu. MuPDF používá `page.get_text('text',sort=False)` a výběr `clip`; pro nenulovou rotaci nástroj převádí rasterový obdélník do neotočených souřadnic MuPDF. Originální a výstupní rendery porovnávej jako dekódované pixely, ne jen hash souboru PNG.
+| Kód `validate-run` | Význam a další krok |
+|---|---|
+| `0` | Kontroly jsou ověřené v zaznamenaném rozsahu; předej výsledek k přijetí. |
+| `1` | Technické selhání, zastaralý/chybějící podklad nebo neevidovaný neúspěch; oprav a opakuj kontrolu. |
+| `2` | Povinné podmínky prošly, zůstávají jednotlivě doložené otevřené nálezy nebo neprovedené UI zkoušky; předej výsledek s omezeními. |
 
-Při nálezu zachovej původní neúspěšný případ, jeho oblast, očekávání a doslovný výstup. Oprav znění nebo geometrii podle rastru, znovu proveď dotčenou kontrolu i celostránkový export a seskupování. Úspěch celé strany neuzavírá chybu malého výřezu. Zástupný text, otevřená aproximace a neotestovaná čtečka jsou různé stavy.
+Souhrn `checks/run-validation.json` kontroluje identitu zdroje/výstupů, vazby reportů, shodu logických jednotek s přepisem a existenci dokladů. Kód 2 neznamená plné ověření geometrie nebo schránky. Přijetí zadavatelem je samostatné rozhodnutí.
 
-Skutečné manuální kopírování: připrav čerstvé doslovné očekávání celé první strany, víceřádkového odstavce, dvou sousedních odstavců a pokračování přes sloupec, pokud existuje. V dostupném Acrobatu/Chrome/Edge/Firefox proveď výběr a ulož skutečný obsah schránky bez odstranění tiskových enterů; zaznamenej OS, verzi, způsob a rozsah výběru. Okular/Preview/Safari jsou doplňující prostředí podle dostupnosti. Mobilní rozsah je zobrazení, hledání a základní kopírování, nikoli přesnost drobného obdélníku. Nedostupné prostředí označ jako neotestované; extrakce není UI test.
-
-Předej PDF, TXT, manifest jejich identity, nové vstupy/kandidáty, potvrzený přepis a logické pořadí, geometrii se stavy, výřezy, evidence nejasností/rekonstrukcí/chyb vydavatele a samostatné výsledky kontrol. CLI vytvoří technická data a výstupní hash, ale **nevytváří fiktivní vizuální kontrolu, úspěch schránky ani souhlas zadavatele**. Zpracování dalších vydání ani označení tohoto dokumentu za politiku nebylo tímto zápisem provedeno.
+**Hotovo:** předej PDF/TXT, jejich manifest, souhrn kontrol a celý work se vstupy, výřezy, přepisem, geometrií, evidencí nejasností/rekonstrukcí/chyb vydavatele a iteracemi. CLI nevytváří vizuální potvrzení, úspěch schránky ani souhlas zadavatele.
 
 ## Omezení a samostatná budoucí ověření
 
@@ -204,4 +210,16 @@ Předej PDF, TXT, manifest jejich identity, nové vstupy/kandidáty, potvrzený 
 - Deskew, automatické odstranění existující vrstvy, automatické spojování odstavce přes stránku a odemykání heslem chráněných PDF nejsou implementovány. Takový vstup vyžaduje samostatné rozhodnutí a záznam zásahu.
 - Jiný jazyk vyžaduje odpovídající Tesseract model a kontrolu znaků i fontových metrik. Generátor nastavuje katalogové `Lang` na `cs-CZ`; jazyk metadat jiného dokumentu vyžaduje samostatnou úpravu.
 - Geometrie, výběr a skutečná schránka se kontrolují pro každý výstup. Automatická extrakce nenahrazuje zkoušku konkrétní čtečky.
-- Širší přenositelnost prostředí, produkční adresářová organizace a integrace následných oprav z revieweru zůstávají samostatnou implementací.
+- Produkční adresářová organizace a integrace následných oprav z revieweru zůstávají samostatnou implementací. Python závislosti jsou připnuté; změny systému a čteček vyžadují nový `doctor` a příslušné kontroly.
+
+## Dokumentace a ověření nástrojů
+
+Workflow popisuje provádění OCR a kvalitu výsledku. `ocr-f-construction.md` popisuje API a invarianty generátoru a čte se při úpravách konstrukce. Datové smlouvy přepisu, geometrie a kontrol jsou v `ocr-data-contracts.md`.
+
+Při změně nástrojů spusť v prostředí z kroku 1:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Regresní případy používají syntetická data; integrační test vytvoří malý sken a ověří export, obraz, extrakci, cache a archivaci. Vyžaduje závislosti, systémové programy a výchozí fonty tohoto prostředí. CI provádí kontrolu syntaxe a testy podmínek validace se standardní knihovnou; integrační export se bez runtime závislostí výslovně přeskočí.

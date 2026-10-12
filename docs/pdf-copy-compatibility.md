@@ -1,6 +1,6 @@
 # Výběr části slova a kopírování plynulých odstavců
 
-Pro nezávislé zpracování použij [obecný OCR postup](ocr-workflow.md) a [technický mechanismus F](ocr-f-construction.md). Tento dokument uchovává metodiku kompatibility; výsledek konkrétního PDF musí mít vlastní kontroly.
+Pro nezávislé zpracování použij [obecný OCR postup](ocr-workflow.md); [technický mechanismus F](ocr-f-construction.md) je reference pro změny generátoru. Tento dokument uchovává metodiku kompatibility; výsledek konkrétního PDF musí mít vlastní kontroly. Dostupnost čtečky zjisti na začátku běhu a výsledky zapisuj podle [datové smlouvy schránky](ocr-data-contracts.md#schránka).
 
 ## Odpověď na požadavek
 
