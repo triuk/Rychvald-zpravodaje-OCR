@@ -1,12 +1,14 @@
 # Výběr části slova a kopírování plynulých odstavců
 
+Pro nezávislé zpracování použij [obecný OCR postup](ocr-workflow.md) a [technický mechanismus F](ocr-f-construction.md). Tento dokument uchovává metodiku kompatibility; výsledek konkrétního PDF musí mít vlastní kontroly.
+
 ## Odpověď na požadavek
 
 Požadavky na přesný výběr části slova nad skenem a na plynulý kopírovaný odstavec se významově nevylučují. Zatím však není prokázáno, že je jeden výsledný PDF soubor splní současně ve všech běžných čtečkách. Výběr znaků lze podpořit jejich správným textovým kódováním a geometrií; sestavení schránkového textu z tiskových řádků zároveň ovlivňuje čtečka. Není správné slíbit veřejnou kompatibilitu jen na základě správného přepisu nebo přítomnosti tagů.
 
 Samostatný schválený textový výstup může mít plynulé odstavce bez závislosti na PDF čtečce. Je to doprovodný výstup; sám o sobě nesplňuje požadavek na výběr a kopírování přímo nad skenem.
 
-## Ověření nového experimentu
+## Ověření konkrétního výstupu
 
 Očekávané znění a hranice výběru se určují ze zdrojového rastru. Správnost jednotlivých znaků, jejich geometrie a kopírovaných odstavců se musí doložit vlastním experimentem; samotná přítomnost textové vrstvy nestačí.
 
@@ -34,11 +36,11 @@ Toto je sada k ověření, nikoli seznam již potvrzené kompatibility:
 
 Výběr každé čtečky bude zaznamenán s verzí, systémem a konkrétní operací. Na mobilech je přesnost dotykových úchytů také vlastností uživatelského rozhraní. Dokumentace potvrzuje kopírování a dotykový výběr, nikoli záruku libovolné hranice písmena: [Chrome Android](https://support.google.com/chrome/answer/16215622?co=GENIE.Platform%3DAndroid&hl=en), [Preview na Macu](https://support.apple.com/en-ie/guide/preview/prvw1020/mac), [Okular](https://docs.kde.org/stable_kf6/en/okular/okular/menutools.html).
 
-Na tomto hostu byly read-only kontrolou nalezeny Firefox, Chromium a Okular (Flatpak). Edge, Acrobat Reader a Google Chrome nebyly v kontrolovaných běžných instalacích nalezeny; testy mimohostitelských čteček zatím neproběhly. Test Chromia nelze bez dalšího uvádět jako provedený test Chrome nebo Edge. Zadavatel podle Q14 může ručně ověřit Acrobat; dostupnost dalších prostředí nepotvrdil. Word je příklad následného použití textu, nikoli povinná čtečka nebo povinné testovací prostředí.
+Dostupnost čteček zjisti pro konkrétní průchod. Test Chromia nelze uvádět jako test Chrome nebo Edge. Zadavatel podle Q14 může ručně ověřit Acrobat. Word je příklad následného použití textu, nikoli povinná čtečka nebo povinné testovací prostředí.
 
-## Návrh pilotních kontrol
+## Návrh kontrol kopírování
 
-1. Vybrat `využ` uvnitř nerozděleného slova a další vnitřní úsek slova. Výběr i schránka musí obsahovat pouze požadované znaky; nesmí být vynucen výběr celého slova nebo odstavce.
+1. Vybrat vnitřní úsek nerozděleného slova podle právě zpracovávaného zdroje. Výběr i schránka musí obsahovat pouze požadované znaky; nesmí být vynucen výběr celého slova nebo odstavce.
 2. Samostatně vybrat část slova rozděleného přes tiskový řádek a celé takové slovo. Ověřit vynechání sazbového spojovníku i zachování skutečných spojovníků.
 3. Zkopírovat odstavec přes alespoň tři tiskové řádky a porovnat přesný prostý text schránky. Uvnitř odstavce nesmí zůstat pevné zlomy řádků; skutečné hranice odstavců se zachovají. Vložení do vhodného editoru pak umožní zalomení podle jeho šířky; Word je pouze možný příklad.
 4. Zkopírovat vícesloupcový článek bez přimíchání sousedního článku a pokračování přes stránku. Rozlišit logické pořadí kompletní extrakce od schopnosti čtečky vybrat rozsah jedním tahem.
