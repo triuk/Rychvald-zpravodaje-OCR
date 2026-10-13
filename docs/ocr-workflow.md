@@ -29,7 +29,7 @@ source .venv/bin/activate
 python tools/ocr_workflow.py doctor --work "$ocr_work" --language "$ocr_language"
 ```
 
-Při dalších bězích stačí aktivace a `doctor`. Příkaz ověří importy, Tesseract a požadované modely, qpdf, Poppler a oba fonty; chybějící závislost vrátí kód 1 před OCR. Verze a hashe fontů uloží do `checks/environment.json`. Python prostředí je samostatné; systémové programy a fonty nejsou requirements souborem uzamčené. Při jiném umístění fontů předej stejné cesty do `doctor --font/--sheet-font`, `segment --font` a `sheets --font`.
+Při dalších bězích stačí aktivace a `doctor`. Každý veřejný příkaz ověří [manifest nativního prostředí](native-environment.md) před změnou pracovních dat: přesnou binárku a verzi Pythonu, obsah přímých i tranzitivních knihoven, systémové programy, modely, konfigurace Tesseractu a fonty. Chybějící prostředek, nesprávná verze nebo změněný obsah vrátí kód 1 před OCR. Úspěšný `doctor --work` uloží identitu sestavení a ověřené cesty do `checks/environment.json`. Aktuální profil je ověřené vývojové prostředí CachyOS/Linux x86_64-v3 s glibc 2.44; není hotovým instalačním balíkem. Jiný manifest a cesty vyber pomocí `--environment /cesta/environment.json` před názvem příkazu nebo `OCR_ENVIRONMENT`. Programy a TESSDATA_PREFIX se přebírají z manifestu, nikoli z náhodného PATH.
 
 Pokud se rozhodneš provést i volitelnou zkoušku schránky, zjisti dostupnost cílové čtečky a postupuj podle [smlouvy schránky](ocr-data-contracts.md#schránka). Běžný OCR průchod nevyžaduje inventář čteček, ruční případy ani předání člověku. Souhrn uvede `ui_clipboard.status: not_tested`; tento stav není otevřeným nálezem a neznamená ověřenou kompatibilitu čteček.
 

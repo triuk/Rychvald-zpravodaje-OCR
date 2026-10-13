@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "build_id": "rychvald-ocr-linux-x86_64-v3-2026-10-13-dev1",
+  "profile": "verified-development-environment",
+  "platform": {"system": "Linux", "machine": "x86_64", "cpu_baseline": "x86-64-v3", "libc": "glibc 2.44"},
+  "root": "/",
+  "python": {"path": "usr/bin/python3.14", "version": "3.14.7", "sha256": "dd65a07e8f535525443d63e2bd6dd10efbf22bf22e0b6d65e634266acc7ac976", "source": "https://archive.archlinux.org/packages/p/python/python-3.14.7-2-x86_64.pkg.tar.zst"},
+  "packages": {
+    "PyMuPDF": {"version": "1.26.7", "tree_sha256": "6d66467c56b10f81349bc89c791c4b4fe58b93e79e9bbbdef7ccac9bd4f91321", "source": "https://pypi.org/project/PyMuPDF/1.26.7/"},
+    "Pillow": {"version": "12.3.0", "tree_sha256": "b0b783cf32a196461f62625fb1fefac73adccdfe2320d6cb7499137ff13ad8d8", "source": "https://pypi.org/project/Pillow/12.3.0/"},
+    "numpy": {"version": "2.5.3", "tree_sha256": "8a4671099c3b6cee017cdcef1fadd316746e7ff3a7e37759f1e8cac2204c16b4", "source": "https://pypi.org/project/numpy/2.5.3/"},
+    "lxml": {"version": "6.1.3", "tree_sha256": "6aff3148f584fef72bb388f8a9bcc29262c3fb5036be398356dd6fc744407b5e", "source": "https://pypi.org/project/lxml/6.1.3/"},
+    "reportlab": {"version": "5.0.1", "tree_sha256": "f8ec3b8c86af3395adccb59bb4b4b829fa880e5e3c26cdc0c7900ec612490d9a", "source": "https://pypi.org/project/reportlab/5.0.1/"},
+    "fonttools": {"version": "4.66.1", "tree_sha256": "f55c8f56fa926928f02bfc645509683ebd06d461fac43cf7ba6b156267ab5797", "source": "https://pypi.org/project/fonttools/4.66.1/"},
+    "charset-normalizer": {"version": "3.5.1", "tree_sha256": "635f890705e1fdda63c568a3a79b04b099f2e6392345393599715ab18a666aa5", "source": "https://pypi.org/project/charset-normalizer/3.5.1/", "dependency_of": "reportlab"}
+  },
+  "programs": {
+    "tesseract": {"path": "usr/bin/tesseract", "version": "tesseract 5.5.3", "sha256": "037aac252011c50f005b6c98d879154a64f1b78511b9ae5c5200ac9d5f9f4b45", "source": "https://github.com/tesseract-ocr/tesseract/releases/tag/5.5.3", "package": "tesseract 5.5.3-1.1 (CachyOS)"},
+    "qpdf": {"path": "usr/bin/qpdf", "version": "qpdf version 12.4.2", "sha256": "7ad66cd7333a0548667c10171d5871c1273530495408eb5ef15d78a73a950acc", "source": "https://github.com/qpdf/qpdf/releases/tag/v12.4.2", "package": "qpdf 12.4.2-1.1 (CachyOS)"},
+    "pdftotext": {"path": "usr/bin/pdftotext", "version": "pdftotext version 26.08.0", "sha256": "69399fac44ed4c454f69f040ed2ead51959f6986b103c6b37e1674f046266f5e", "source": "https://poppler.freedesktop.org/poppler-26.08.0.tar.xz", "package": "poppler 26.08.0-1.1 (CachyOS)"},
+    "pdftoppm": {"path": "usr/bin/pdftoppm", "version": "pdftoppm version 26.08.0", "sha256": "29a82745aabcaf059836f056bafa37febbb4c884fe95a68299741b8f3de01bca", "source": "https://poppler.freedesktop.org/poppler-26.08.0.tar.xz", "package": "poppler 26.08.0-1.1 (CachyOS)"},
+    "pdffonts": {"path": "usr/bin/pdffonts", "version": "pdffonts version 26.08.0", "sha256": "3178b6ab6aabfc4d8bb7a3fff5a7f7435743764e8cf7c545e05943c0a1bc4adf", "source": "https://poppler.freedesktop.org/poppler-26.08.0.tar.xz", "package": "poppler 26.08.0-1.1 (CachyOS)"}
+  },
+  "tessdata": "usr/share/tessdata",
+  "models": {
+    "ces": {"path": "usr/share/tessdata/ces.traineddata", "sha256": "ce861ed1dc20e74db449c4636d44a83042cd2aeb8cd95c9008293b5d0f79023a", "source": "https://github.com/tesseract-ocr/tessdata/raw/4.1.0/ces.traineddata"},
+    "eng": {"path": "usr/share/tessdata/eng.traineddata", "sha256": "daa0c97d651c19fba3b25e81317cd697e9908c8208090c94c3905381c23fc047", "source": "https://github.com/tesseract-ocr/tessdata/raw/4.1.0/eng.traineddata"},
+    "osd": {"path": "usr/share/tessdata/osd.traineddata", "sha256": "e19f2ae860792fdf372cf48d8ce70ae5da3c4052962fe22e9de1f680c374bb0e", "source": "https://github.com/tesseract-ocr/tessdata/raw/4.1.0/osd.traineddata"}
+  },
+  "fonts": {
+    "segmentation": {"path": "usr/share/fonts/noto/NotoSerif-Regular.ttf", "sha256": "19e72cd8d595fae5bd74a5206f5d938512e1183d4fed7abb1ec1be1d7efa5f88", "source": "https://archive.archlinux.org/packages/n/noto-fonts/noto-fonts-1%3A2026.10.01-1-any.pkg.tar.zst"},
+    "sheet": {"path": "usr/share/fonts/TTF/DejaVuSans.ttf", "sha256": "6038a160b491e121c1f12c7bccb4a9c8730296e3adc1086a059404ed84b7451c", "source": "https://github.com/dejavu-fonts/dejavu-fonts/releases/tag/version_2_37"}
+  },
+  "configs": {
+    "hocr": {"path": "usr/share/tessdata/configs/hocr", "sha256": "d6a7ec7c5143317a59fce2393054f6b7a8261824b934e7426fdd24febc929ad6", "source": "https://github.com/tesseract-ocr/tesseract/blob/5.5.3/tessdata/configs/hocr"},
+    "tsv": {"path": "usr/share/tessdata/configs/tsv", "sha256": "59d079bb75d8b3d7c839a3564580cb559e362c93a9d70f234e421c0c3e767e04", "source": "https://github.com/tesseract-ocr/tesseract/blob/5.5.3/tessdata/configs/tsv"},
+    "txt": {"path": "usr/share/tessdata/configs/txt", "sha256": "9bcbdbe285fd3a024be563cb237751ceb3435d86610e231f08894023321af5d7", "source": "https://github.com/tesseract-ocr/tesseract/blob/5.5.3/tessdata/configs/txt"},
+    "makebox": {"path": "usr/share/tessdata/configs/makebox", "sha256": "a8fe20a2bc9ff1e9e8ed06d56845336c978627b8e965600abd63f1f412c18ffe", "source": "https://github.com/tesseract-ocr/tesseract/blob/5.5.3/tessdata/configs/makebox"}
+  },
+  "library_dirs": [],
+  "libraries": {}
+}
