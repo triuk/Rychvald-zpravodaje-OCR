@@ -9,6 +9,7 @@ import importlib.metadata
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -166,30 +167,280 @@ def validate_review(work, review):
     return {'lines': len(lines), 'units': len(review['units']), 'unresolved': len(unresolved)}
 
 
-def update_line(a):
-    review = load(a.review)
-    patch = load(a.patch)
+def apply_line_patch(review, key, patch, allow_new=False):
     if set(patch) - {'line', 'unresolved', 'publisher_errors', 'risk_register'}:
         raise ValueError('Patch accepts line and related registers only')
     lines = unique(review['lines'], 'line')
-    if a.id not in lines or patch['line']['id'] != a.id:
-        raise ValueError(f'Missing or mismatched line: {a.id}')
-    changed = copy.deepcopy(review)
-    changed['lines'] = [patch['line'] if r['id'] == a.id else r for r in review['lines']]
+    if (key not in lines and not allow_new) or patch['line']['id'] != key:
+        raise ValueError(f'Missing or mismatched line: {key}')
+    review['lines'] = [patch['line'] if r['id'] == key else r for r in review['lines']]
+    if key not in lines:
+        review['lines'].append(patch['line'])
     for register in ('unresolved', 'publisher_errors', 'risk_register'):
-        related = [r for r in review.get(register, []) if r['line'] == a.id]
+        related = [r for r in review.get(register, []) if r['line'] == key]
         if related and register not in patch:
             raise ValueError(f'Patch must explicitly replace related {register} (use [] to clear)')
         if register in patch:
-            if any(r['line'] != a.id for r in patch[register]):
+            if any(r['line'] != key for r in patch[register]):
                 raise ValueError(f'Patch {register} references another line')
-            changed[register] = [r for r in review.get(register, []) if r['line'] != a.id] + patch[register]
+            review[register] = [r for r in review.get(register, []) if r['line'] != key] + patch[register]
+
+
+def save_review(a, review, changed):
     summary = validate_review(a.work, changed)
     backup = Path(a.work) / 'review-history' / (sha(a.review) + '.json')
     if not backup.exists():
         dump(backup, review)
     dump(a.review, changed)
-    print(json.dumps({'line': patch['line'], 'validation': summary}, ensure_ascii=False))
+    print(json.dumps({'review': str(a.review), 'previous': str(backup), 'validation': summary}, ensure_ascii=False))
+
+
+def update_line(a):
+    review = load(a.review)
+    changed = copy.deepcopy(review)
+    apply_line_patch(changed, a.id, load(a.patch))
+    save_review(a, review, changed)
+
+
+def update_review(a):
+    """Apply a batch once; archive and write only after whole-review validation."""
+    review, patch = load(a.review), load(a.patch)
+    if not patch or set(patch) - {'lines', 'drop_lines', 'units', 'dropped_candidates'}:
+        raise ValueError('Batch accepts lines, drop_lines, units and dropped_candidates')
+    changed = copy.deepcopy(review)
+    edits = patch.get('lines', [])
+    unique([edit['line'] for edit in edits], 'line patch')
+    for edit in edits:
+        apply_line_patch(changed, edit['line']['id'], edit, allow_new=True)
+    drops = patch.get('drop_lines', [])
+    if len(set(drops)) != len(drops) or not set(drops) <= set(unique(changed['lines'], 'line')):
+        raise ValueError('Missing or duplicate dropped line')
+    for register in ('unresolved', 'publisher_errors', 'risk_register'):
+        if any(row['line'] in drops for row in changed.get(register, [])):
+            raise ValueError(f'Explicitly clear related {register} in line patches before dropping a line')
+    changed['lines'] = [line for line in changed['lines'] if line['id'] not in drops]
+    for name in ('units', 'dropped_candidates'):
+        if name in patch:
+            changed[name] = patch[name]
+    save_review(a, review, changed)
+
+
+def validate_clipboard_expectations(work, expectations):
+    manifest = load(Path(work) / 'input-manifest.json')
+    if expectations['source_sha256'] != manifest['source_sha256']:
+        raise ValueError('Clipboard expectations belong to another source')
+    if not expectations.get('expected_origin'):
+        raise ValueError('Record clipboard expectation origin')
+    cases = unique(expectations['cases'], 'clipboard expectation')
+    required = set(expectations.get('required_cases', []))
+    if not required <= set(cases):
+        raise ValueError('Missing required clipboard expectation')
+    for key, case in cases.items():
+        if case.get('result') == 'not_applicable':
+            if key in required or not case.get('reason'):
+                raise ValueError(f'Invalid not_applicable clipboard expectation: {key}')
+            continue
+        if not case.get('selection'):
+            raise ValueError(f'Missing clipboard selection: {key}')
+        path = work_file(work, case['expected_file'])
+        if sha(path) != case['expected_sha256']:
+            raise ValueError(f'Modified clipboard expectation: {key}')
+        path.read_bytes().decode('utf-8')
+    return expectations
+
+
+def clipboard_expectations(a):
+    """Write exact UTF-8 bytes into an immutable version before PDF export."""
+    work = Path(a.work)
+    source_hash = load(work / 'input-manifest.json')['source_sha256']
+    spec = load(a.cases)
+    if set(spec) - {'expected_origin', 'required_cases', 'cases'} or not spec.get('expected_origin'):
+        raise ValueError('Use expected_origin, optional required_cases and cases')
+    cases = unique(spec['cases'], 'clipboard case')
+    if not cases:
+        raise ValueError('Provide at least one clipboard case')
+    required = set(spec.get('required_cases', []))
+    if not required <= set(cases):
+        raise ValueError('Missing required clipboard case')
+    version = hashlib.sha256(json.dumps(spec, ensure_ascii=False, sort_keys=True).encode('utf-8')).hexdigest()
+    records, files = [], []
+    for key, case in cases.items():
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', key):
+            raise ValueError(f'Use a simple clipboard case ID: {key}')
+        if set(case) - {'id', 'selection', 'expected', 'result', 'reason'} or case.get('result', 'not_tested') not in ('not_tested', 'not_applicable'):
+            raise ValueError(f'Clipboard specification must contain expectations, not executed results: {key}')
+        if case.get('result') == 'not_applicable':
+            if key in required or not case.get('reason'):
+                raise ValueError(f'Invalid not_applicable clipboard case: {key}')
+            records.append({'id': key, 'result': 'not_applicable', 'reason': case['reason']})
+            continue
+        if not case.get('selection') or not isinstance(case.get('expected'), str):
+            raise ValueError(f'Provide selection and exact expected text: {key}')
+        relative = f'checks/manual-copy/expectations/{version}/{key}.txt'
+        path = (work / relative).resolve()
+        if not path.is_relative_to(work.resolve()):
+            raise ValueError('Clipboard expectation must stay inside work')
+        content = case['expected'].encode('utf-8')
+        if path.exists() and path.read_bytes() != content:
+            raise ValueError(f'Modified immutable clipboard expectation: {key}')
+        files.append((path, content))
+        records.append({'id': key, 'selection': case['selection'], 'expected_file': relative,
+                        'expected_sha256': hashlib.sha256(content).hexdigest(), 'result': 'not_tested',
+                        'actual_clipboard_file': None})
+    # Check the whole specification before writing any artifacts.
+    for path, content in files:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            fd, temporary = tempfile.mkstemp(dir=path.parent, prefix='.' + path.name)
+            try:
+                with os.fdopen(fd, 'wb') as stream:
+                    stream.write(content)
+                os.replace(temporary, path)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
+    result = {'source_sha256': source_hash, 'version': version,
+              'expected_origin': spec['expected_origin'], 'required_cases': sorted(required), 'cases': records}
+    validate_clipboard_expectations(work, result)
+    dump(work / 'clipboard-expectations.json', result)
+    print(f'Clipboard expectations: {work / "clipboard-expectations.json"}; {len(records)} cases; version {version[:12]}')
+
+
+def clipboard_validation(work, manifest, errors, open_finding):
+    """Optional UI coverage; an executed test still needs frozen expectations."""
+    result = {'optional': True, 'status': 'not_tested', 'tested_cases': []}
+    frozen = load(manifest['inputs']['export_inputs']['path']).get('clipboard_expectations')
+    if frozen is not None:
+        validate_clipboard_expectations(work, frozen)
+    path = Path(work) / 'checks/manual-copy/status.json'
+    if not path.exists():
+        return result
+    manual = load(path)
+    if manual.get('pdf_sha256') != manifest['pdf_sha256'] or manual.get('source_sha256') != manifest['source_sha256']:
+        raise ValueError('Clipboard report belongs to another export')
+    cases = unique(manual.get('cases', []), 'clipboard case')
+    required = set(manual.get('required_cases', []))
+    if frozen:
+        required.update(frozen.get('required_cases', []))
+    if not required <= set(cases):
+        errors.append('clipboard_case_coverage')
+    expected = unique(frozen['cases'], 'frozen clipboard case') if frozen else {}
+    for key, case in cases.items():
+        state = case['result']
+        if state == 'not_applicable':
+            if key in required or not case.get('reason'):
+                errors.append('clipboard_not_applicable/' + key)
+            continue
+        if state == 'not_tested':
+            continue
+        if state not in ('pass', 'fail') or not all(manual.get(k) for k in ('reader', 'version', 'os')):
+            errors.append('clipboard_record/' + key)
+            continue
+        golden = expected.get(key)
+        if not golden or golden.get('result') == 'not_applicable':
+            errors.append('clipboard_unfrozen/' + key)
+            continue
+        if manual.get('expected_origin') != frozen['expected_origin'] or any(
+                case.get(k) != golden.get(k) for k in ('selection', 'expected_file', 'expected_sha256')):
+            errors.append('clipboard_changed_expectation/' + key)
+            continue
+        expected_path = work_file(work, golden['expected_file'])
+        actual_path = work_file(work, case['actual_clipboard_file'])
+        actual_path.read_bytes().decode('utf-8')
+        result['tested_cases'].append(key)
+        if actual_path.read_bytes() != expected_path.read_bytes():
+            if state == 'fail':
+                open_finding('clipboard/' + key)
+            else:
+                errors.append('clipboard_mismatch/' + key)
+        elif state != 'pass':
+            errors.append('clipboard_result/' + key)
+    if result['tested_cases']:
+        result['status'] = 'tested'
+    return result
+
+
+def report_templates(a):
+    """Prepare metadata and finding IDs; never assert a visual review or a reason."""
+    work = Path(a.work)
+    manifest = load(work / 'output-manifest.json')
+    identity = {key: manifest[key] for key in ('source_sha256', 'pdf_sha256')}
+    technical = load(work / 'checks/technical.json')
+    samples = load(work / 'checks/geometry-samples.json')
+    check_bindings(manifest['inputs'])
+    check_bindings(technical['inputs'])
+    check_bindings(samples['inputs'])
+    if technical['source_sha256'] != identity['source_sha256'] or technical['output_sha256'] != identity['pdf_sha256'] or samples['inputs']['pdf']['sha256'] != identity['pdf_sha256']:
+        raise ValueError('Run checks and samples on the current PDF before preparing reports')
+    targets = {}
+    for name in ('checks/visual-review.json', 'checks/findings.json', 'checks/manual-copy/status.json'):
+        path = work / name
+        if not path.exists():
+            continue
+        existing = load(path)
+        current = all(existing.get(key) == value for key, value in identity.items())
+        if not current and not a.reset:
+            raise ValueError(f'Report belongs to another export: {name}; use --reset after export archived the previous run')
+        targets[name] = existing if current and not a.reset else None
+    visual = targets.get('checks/visual-review.json') or {
+        **identity, 'review_sha256': sha(manifest['inputs']['review']['path']),
+        'reviewer': None, 'pages_reviewed': [], 'evidence': [],
+        'geometry_status': 'approximation_requires_character_review'}
+    findings = targets.get('checks/findings.json') or {**identity, 'items': []}
+    registered = unique(findings['items'], 'finding')
+
+    def pending(key, evidence, **details):
+        if key not in registered:
+            row = {'id': key, 'status': 'open', 'reason': None, 'evidence': evidence, **details}
+            findings['items'].append(row)
+            registered[key] = row
+
+    for page in technical['pages']:
+        for extractor in ('mupdf', 'poppler'):
+            if page.get(extractor + '_literal_equal') is not True:
+                number = page['page']
+                pending(f'literal/{number}/{extractor}',
+                        ['checks/technical.json', f'checks/expected-page-{number}.txt', f'checks/{extractor}-page-{number}.txt'],
+                        page=number, extractor=extractor)
+    for sample in samples['samples']:
+        for extractor in ('mupdf', 'poppler'):
+            if sample.get(extractor + '_characters_pass') is not True:
+                evidence = ['checks/geometry-samples.json']
+                crop = f"checks/{sample['id']}-source.png"
+                if (work / crop).is_file():
+                    evidence.append(crop)
+                pending(f"sample/{sample['id']}/{extractor}", evidence, page=sample['page'],
+                        bbox=sample['bbox'], expected=sample['expected'], actual=sample[extractor + '_literal'])
+    if visual['geometry_status'] != 'visually_verified':
+        pending('geometry/approximation', ['checks/visual-review.json'])
+    unsupported = work / 'checks/unsupported-cells.json'
+    if unsupported.exists():
+        for index, cell in enumerate(load(unsupported)):
+            pending(f"geometry/unsupported/{cell['line']}/{index}", ['checks/unsupported-cells.json'],
+                    diagnostic_status=cell.get('status'), **{key: value for key, value in cell.items() if key != 'status'})
+    anomalies = work / 'checks/geometry-anomalies.json'
+    if anomalies.exists():
+        for row in load(anomalies):
+            pending('geometry/anomaly/' + row['line'], ['checks/geometry-anomalies.json'], **row)
+    outputs = {'checks/visual-review.json': visual, 'checks/findings.json': findings}
+    frozen = load(work / 'export-inputs.json').get('clipboard_expectations')
+    if frozen is not None:
+        manual = targets.get('checks/manual-copy/status.json') or {
+            **frozen, **identity, 'reader': None, 'version': None, 'os': None}
+        outputs['checks/manual-copy/status.json'] = manual
+    elif (work / 'checks/manual-copy/status.json').exists() and a.reset:
+        outputs['checks/manual-copy/status.json'] = {**identity, 'cases': [], 'status': 'not_tested'}
+    for name, value in outputs.items():
+        path = work / name
+        if path.exists() and a.reset:
+            dump(work / 'checks/report-history' / (sha(path) + '.json'), load(path))
+        dump(path, value)
+    expected_pages = {page['page'] for page in load(work / 'input-manifest.json')['pages']}
+    todo = {'source_sha256': identity['source_sha256'], 'pdf_sha256': identity['pdf_sha256'],
+            'visual_review_required': not visual.get('reviewer') or set(visual.get('pages_reviewed', [])) != expected_pages or not visual.get('evidence'),
+            'finding_reasons_required': [key for key, row in registered.items() if row.get('status') == 'open' and not row.get('reason')]}
+    dump(work / 'checks/report-todo.json', todo)
+    print(f'Report templates: {work / "checks"}; finding reasons to fill: {len(todo["finding_reasons_required"])}; visual review must be recorded by the reader')
 
 
 def article_text(pages):
@@ -327,6 +578,7 @@ def doctor(a):
 def validate_run(a):
     work = Path(a.work).resolve()
     errors, opened, manifest = [], [], {}
+    clipboard = {'optional': True, 'status': 'not_tested', 'tested_cases': []}
     try:
         manifest = load(work / 'output-manifest.json')
         for name in ('source', 'pdf', 'txt'):
@@ -366,6 +618,8 @@ def validate_run(a):
         check_bindings(sample_report['inputs'])
         if sample_report['inputs']['pdf']['sha256'] != manifest['pdf_sha256']:
             raise ValueError('Sample report belongs to another export')
+        if sample_report['inputs']['samples']['sha256'] != manifest['inputs']['samples']['sha256']:
+            raise ValueError('Sample expectations differ from the frozen export inputs')
         expected = unique(load(sample_report['inputs']['samples']['path']), 'sample')
         actual = unique(sample_report['samples'], 'sample result')
         if not expected or set(expected) != set(actual):
@@ -408,35 +662,7 @@ def validate_run(a):
             opened.append({'id': 'unresolved/' + entry['id'], 'reason': entry['reason']})
         if not any('reviewer_render_identical' in row for row in technical['pages']):
             opened.append({'id': 'reviewer/not_tested', 'reason': 'Optional reviewer was not tested'})
-        manual = load(work / 'checks/manual-copy/status.json')
-        if manual.get('pdf_sha256') != manifest['pdf_sha256'] or manual.get('source_sha256') != manifest['source_sha256']:
-            raise ValueError('Clipboard report belongs to another export')
-        cases = unique(manual['cases'], 'clipboard case')
-        required = {'first-page', 'multiline-paragraph', 'two-adjacent-paragraphs'}
-        required.update(manual.get('required_cases', []))
-        if not required <= set(cases):
-            errors.append('clipboard_case_coverage')
-        for key, case in cases.items():
-            expected_path = work_file(work, case['expected_file'])
-            result = case['result']
-            if not case.get('selection') or not manual.get('expected_origin'):
-                errors.append('clipboard_expectation/' + key)
-            if result == 'not_applicable' and key not in required and case.get('reason'):
-                continue
-            if result == 'not_tested' and case.get('reason', manual.get('reason')):
-                opened.append({'id': 'clipboard/' + key, 'reason': case.get('reason', manual.get('reason'))})
-                continue
-            if result not in ('pass', 'fail') or not all(manual.get(k) for k in ('reader', 'version', 'os')) or not case.get('selection'):
-                errors.append('clipboard_record/' + key)
-                continue
-            actual_path = work_file(work, case['actual_clipboard_file'])
-            if actual_path.read_bytes() != expected_path.read_bytes():
-                if result == 'fail':
-                    open_finding('clipboard/' + key)
-                else:
-                    errors.append('clipboard_mismatch/' + key)
-            elif result != 'pass':
-                errors.append('clipboard_result/' + key)
+        clipboard = clipboard_validation(work, manifest, errors, open_finding)
         # Keep additional open findings visible even when no automatic check produces them.
         for key, finding in registered.items():
             for path in finding.get('evidence', []):
@@ -452,7 +678,17 @@ def validate_run(a):
     report = {'source_sha256': manifest.get('source_sha256'), 'pdf_sha256': manifest.get('pdf_sha256'),
               'txt_sha256': manifest.get('txt_sha256'), 'inputs': bindings(**report_inputs),
               'status': status, 'errors': errors, 'open_items': opened,
+               'ui_clipboard': clipboard,
               'acceptance': 'separate_user_decision'}
     dump(work / 'checks/run-validation.json', report)
-    print(json.dumps(report, ensure_ascii=False))
+    summary = [f'OCR validation: {status}', '',
+               f'Source SHA-256: {manifest.get("source_sha256")}',
+               f'PDF SHA-256: {manifest.get("pdf_sha256")}',
+               f'Optional UI clipboard: {clipboard["status"]}; tested cases: {len(clipboard["tested_cases"])}',
+               '', f'Errors: {len(errors)}; open items: {len(opened)}']
+    summary.extend('- ' + error for error in errors)
+    summary.extend('- ' + item['id'] + ': ' + item['reason'] for item in opened)
+    summary.append('\nVerified scope is the recorded technical, source-reading and selection checks; UI compatibility is covered only by executed UI cases.\n')
+    (work / 'checks/run-summary.md').write_text('\n'.join(summary), encoding='utf-8')
+    print(f'{status}; errors {len(errors)}; open items {len(opened)}; UI clipboard {clipboard["status"]}; {work / "checks/run-validation.json"}')
     return 1 if errors else 2 if opened else 0

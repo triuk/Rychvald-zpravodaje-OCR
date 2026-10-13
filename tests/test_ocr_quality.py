@@ -70,6 +70,17 @@ class QualityTests(unittest.TestCase):
                        'reader': 'synthetic', 'version': '1', 'os': 'test', 'expected_origin': 'fixture',
                        'cases': [{'id': name, 'selection': name, 'expected_file': 'expected.txt', 'actual_clipboard_file': 'actual.txt', 'result': 'pass'}
                                  for name in ('first-page', 'multiline-paragraph', 'two-adjacent-paragraphs')]}
+        for case in self.manual['cases']:
+            case['expected_sha256'] = quality.sha(self.work / 'expected.txt')
+        self.frozen_clipboard = {'source_sha256': quality.sha(self.source), 'expected_origin': 'fixture',
+                                 'required_cases': [], 'cases': copy.deepcopy(self.manual['cases'])}
+        for case in self.frozen_clipboard['cases']:
+            case.update(result='not_tested', actual_clipboard_file=None)
+        self.put('export-inputs.json', {'clipboard_expectations': self.frozen_clipboard})
+        self.manifest['inputs'].update(quality.bindings(samples=self.work / 'samples.json',
+                                                       export_inputs=self.work / 'export-inputs.json',
+                                                       clipboard_expected=self.work / 'expected.txt'))
+        self.put('output-manifest.json', self.manifest)
         self.put('checks/manual-copy/status.json', self.manual)
 
     def put(self, name, value):
@@ -127,13 +138,192 @@ class QualityTests(unittest.TestCase):
         (self.work / 'actual.txt').write_bytes(b'ABC\r\n')
         self.assertEqual(self.validate()[0], 1)
 
-    def test_unavailable_ui_remains_open(self):
+    def test_unavailable_ui_is_optional(self):
         for case in self.manual['cases']:
             case.update(result='not_tested', reason='UI unavailable', actual_clipboard_file=None)
         self.put('checks/manual-copy/status.json', self.manual)
         code, report = self.validate()
+        self.assertEqual(code, 0)
+        self.assertEqual(report['open_items'], [])
+        self.assertEqual(report['ui_clipboard']['status'], 'not_tested')
+
+    def test_missing_ui_report_is_optional(self):
+        (self.work / 'checks/manual-copy/status.json').unlink()
+        self.assertEqual(self.validate()[0], 0)
+
+    def test_ocr_without_any_ui_inputs_is_verified(self):
+        self.put('export-inputs.json', {'clipboard_expectations': None})
+        self.manifest['inputs']['export_inputs'] = quality.bindings(export_inputs=self.work / 'export-inputs.json')['export_inputs']
+        del self.manifest['inputs']['clipboard_expected']
+        self.put('output-manifest.json', self.manifest)
+        for name in ('checks/manual-copy/status.json', 'expected.txt', 'actual.txt'):
+            (self.work / name).unlink()
+        code, report = self.validate()
+        self.assertEqual(code, 0)
+        self.assertEqual(report['ui_clipboard'], {'optional': True, 'status': 'not_tested', 'tested_cases': []})
+
+    def test_not_applicable_needs_no_expected_file(self):
+        self.manual['cases'].append({'id': 'cross-page', 'result': 'not_applicable', 'reason': 'No continuation'})
+        self.put('checks/manual-copy/status.json', self.manual)
+        self.assertEqual(self.validate()[0], 0)
+        self.manual['required_cases'] = ['cross-page']
+        self.put('checks/manual-copy/status.json', self.manual)
+        self.assertEqual(self.validate()[0], 1)
+
+    def test_modified_clipboard_golden_and_actual_cannot_pass(self):
+        (self.work / 'expected.txt').write_bytes(b'CHANGED\n')
+        (self.work / 'actual.txt').write_bytes(b'CHANGED\n')
+        self.assertEqual(self.validate()[0], 1)
+
+    def test_ui_result_cannot_change_selection_or_expected_hash(self):
+        self.manual['cases'][0]['expected_sha256'] = 'wrong'
+        self.put('checks/manual-copy/status.json', self.manual)
+        self.assertIn('clipboard_changed_expectation/first-page', self.validate()[1]['errors'])
+        self.manual['cases'][0]['expected_sha256'] = quality.sha(self.work / 'expected.txt')
+        self.manual['cases'][0]['selection'] = 'different selection'
+        self.put('checks/manual-copy/status.json', self.manual)
+        self.assertEqual(self.validate()[0], 1)
+
+    def test_executed_ui_requires_frozen_expectations_and_reader(self):
+        self.put('export-inputs.json', {'clipboard_expectations': None})
+        self.manifest['inputs']['export_inputs'] = quality.bindings(export_inputs=self.work / 'export-inputs.json')['export_inputs']
+        self.put('output-manifest.json', self.manifest)
+        self.assertIn('clipboard_unfrozen/first-page', self.validate()[1]['errors'])
+        self.put('export-inputs.json', {'clipboard_expectations': self.frozen_clipboard})
+        self.manifest['inputs']['export_inputs'] = quality.bindings(export_inputs=self.work / 'export-inputs.json')['export_inputs']
+        self.put('output-manifest.json', self.manifest)
+        self.manual['reader'] = None
+        self.put('checks/manual-copy/status.json', self.manual)
+        self.assertEqual(self.validate()[0], 1)
+
+    def test_executed_ui_failure_still_requires_individual_finding(self):
+        self.manual['cases'] = self.manual['cases'][:1]
+        self.manual['cases'][0]['result'] = 'fail'
+        self.put('checks/manual-copy/status.json', self.manual)
+        (self.work / 'actual.txt').write_bytes(b'wrong')
+        self.assertEqual(self.validate()[0], 1)
+        self.finding('clipboard/first-page')
+        code, report = self.validate()
         self.assertEqual(code, 2)
-        self.assertEqual(len(report['open_items']), 3)
+        self.assertEqual(report['ui_clipboard']['tested_cases'], ['first-page'])
+
+    def test_samples_cannot_be_replaced_after_export_and_rechecked(self):
+        self.samples[0]['expected'] = 'WRONG'
+        self.put('samples.json', self.samples)
+        self.sample_report['inputs']['samples'] = quality.bindings(samples=self.work / 'samples.json')['samples']
+        self.sample_report['samples'][0]['expected'] = 'WRONG'
+        self.put('checks/geometry-samples.json', self.sample_report)
+        self.assertEqual(self.validate()[0], 1)
+
+    def test_clipboard_builder_writes_exact_utf8_and_preserves_versions(self):
+        spec = {'expected_origin': 'fresh synthetic raster', 'cases': [
+            {'id': 'letter', 'selection': 'one letter', 'expected': 'F'},
+            {'id': 'row', 'selection': 'a row', 'expected': 'Ž\t0\n'},
+            {'id': 'cross-page', 'result': 'not_applicable', 'reason': 'No continuation'}]}
+        self.put('clipboard-cases.json', spec)
+        args = SimpleNamespace(work=self.work, cases=self.work / 'clipboard-cases.json')
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.clipboard_expectations(args)
+        frozen = quality.load(self.work / 'clipboard-expectations.json')
+        letter = self.work / frozen['cases'][0]['expected_file']
+        self.assertEqual(letter.read_bytes(), b'F')
+        self.assertEqual((self.work / frozen['cases'][1]['expected_file']).read_bytes(), 'Ž\t0\n'.encode('utf-8'))
+        self.assertNotIn('expected_file', frozen['cases'][2])
+        spec['cases'][0]['expected'] = 'G'
+        self.put('clipboard-cases.json', spec)
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.clipboard_expectations(args)
+        latest = quality.load(self.work / 'clipboard-expectations.json')
+        self.assertNotEqual(latest['version'], frozen['version'])
+        self.assertEqual(letter.read_bytes(), b'F')
+        self.assertEqual((self.work / latest['cases'][0]['expected_file']).read_bytes(), b'G')
+
+    def test_clipboard_builder_rejects_invalid_case_before_writing(self):
+        self.put('clipboard-cases.json', {'expected_origin': 'fixture', 'cases': [
+            {'id': 'letter', 'selection': 'letter', 'expected': 'F'},
+            {'id': '../escape', 'selection': 'letter', 'expected': 'F'}]})
+        with self.assertRaisesRegex(ValueError, 'simple clipboard'):
+            quality.clipboard_expectations(SimpleNamespace(work=self.work, cases=self.work / 'clipboard-cases.json'))
+        self.assertFalse((self.work / 'clipboard-expectations.json').exists())
+        self.assertFalse((self.work / 'checks/manual-copy/expectations').exists())
+
+    def test_batch_review_updates_lines_and_order_atomically(self):
+        before = quality.sha(self.work / 'review.json')
+        original = {**self.review['lines'][0], 'text': 'ABD'}
+        added = {**original, 'id': 'added', 'candidate_id': None, 'text': 'XYZ'}
+        units = [self.review['units'][0], {'id': 'added-unit', 'article': 'article', 'page': 1, 'tag': 'P', 'line_ids': ['added']}]
+        self.put('batch.json', {'lines': [{'line': original}, {'line': added}], 'units': units})
+        args = SimpleNamespace(work=self.work, review=self.work / 'review.json', patch=self.work / 'batch.json')
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.update_review(args)
+        changed = quality.load(self.work / 'review.json')
+        self.assertEqual([line['text'] for line in changed['lines']], ['ABD', 'XYZ'])
+        self.assertEqual(changed['units'], units)
+        self.assertTrue((self.work / 'review-history' / (before + '.json')).is_file())
+        self.assertEqual(quality.load(self.work / 'samples.json'), self.samples)
+
+    def test_invalid_batch_leaves_review_and_history_unchanged(self):
+        before = (self.work / 'review.json').read_bytes()
+        self.put('batch.json', {'lines': [{'line': {**self.review['lines'][0], 'text': 'ABD'}},
+                                        {'line': {**self.review['lines'][0], 'id': 'added', 'candidate_id': 'missing'}}]})
+        with self.assertRaisesRegex(ValueError, 'candidate'):
+            quality.update_review(SimpleNamespace(work=self.work, review=self.work / 'review.json', patch=self.work / 'batch.json'))
+        self.assertEqual((self.work / 'review.json').read_bytes(), before)
+        self.assertFalse((self.work / 'review-history').exists())
+
+    def test_batch_drop_requires_candidate_reason_and_updated_units(self):
+        added = {**self.review['lines'][0], 'id': 'added', 'candidate_id': None}
+        self.put('batch.json', {'lines': [{'line': added}], 'drop_lines': ['line'],
+                               'units': [{**self.review['units'][0], 'line_ids': ['added']}],
+                               'dropped_candidates': [{'id': 'candidate', 'reason': 'Synthetic noise replacement'}]})
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.update_review(SimpleNamespace(work=self.work, review=self.work / 'review.json', patch=self.work / 'batch.json'))
+        self.assertEqual([line['id'] for line in quality.load(self.work / 'review.json')['lines']], ['added'])
+
+    def test_report_templates_do_not_claim_visual_review_or_waive_failures(self):
+        (self.work / 'checks/visual-review.json').unlink()
+        self.sample_report['samples'][0].update(mupdf_characters_pass=False, mupdf_literal='WRONG')
+        self.put('checks/geometry-samples.json', self.sample_report)
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.report_templates(SimpleNamespace(work=self.work, reset=False))
+        visual = quality.load(self.work / 'checks/visual-review.json')
+        self.assertIsNone(visual['reviewer'])
+        self.assertEqual(visual['pages_reviewed'], [])
+        findings = quality.load(self.work / 'checks/findings.json')['items']
+        self.assertTrue(any(row['id'] == 'sample/sample/mupdf' and row['reason'] is None for row in findings))
+        self.assertEqual(self.validate()[0], 1)
+
+    def test_report_templates_preserve_completed_reasons(self):
+        self.sample_report['samples'][0].update(mupdf_characters_pass=False, mupdf_literal='WRONG')
+        self.put('checks/geometry-samples.json', self.sample_report)
+        self.finding('sample/sample/mupdf')
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.report_templates(SimpleNamespace(work=self.work, reset=False))
+        self.assertEqual(quality.load(self.work / 'checks/findings.json')['items'][0]['reason'], 'synthetic open finding')
+
+    def test_report_reset_archives_old_ui_and_does_not_require_it(self):
+        self.put('export-inputs.json', {'clipboard_expectations': None})
+        self.manifest['inputs']['export_inputs'] = quality.bindings(export_inputs=self.work / 'export-inputs.json')['export_inputs']
+        self.put('output-manifest.json', self.manifest)
+        self.manual['pdf_sha256'] = 'old'
+        self.put('checks/manual-copy/status.json', self.manual)
+        old_hash = quality.sha(self.work / 'checks/manual-copy/status.json')
+        with self.assertRaisesRegex(ValueError, 'another export'):
+            quality.report_templates(SimpleNamespace(work=self.work, reset=False))
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.report_templates(SimpleNamespace(work=self.work, reset=True))
+        self.assertTrue((self.work / 'checks/report-history' / (old_hash + '.json')).is_file())
+        self.assertEqual(quality.load(self.work / 'checks/manual-copy/status.json')['cases'], [])
+
+    def test_report_diagnostics_stay_open_until_reader_fills_reason(self):
+        self.put('checks/unsupported-cells.json', [{'line': 'line', 'text': 'A', 'status': 'open_geometry_uncertainty'}])
+        self.put('checks/geometry-anomalies.json', [{'line': 'line', 'tiny': [0], 'overlaps': [], 'outside': []}])
+        with contextlib.redirect_stdout(io.StringIO()):
+            quality.report_templates(SimpleNamespace(work=self.work, reset=False))
+        findings = quality.load(self.work / 'checks/findings.json')['items']
+        self.assertEqual(len(findings), 2)
+        self.assertTrue(all(row['status'] == 'open' and row['reason'] is None for row in findings))
+        self.assertEqual(self.validate()[0], 1)
 
     def test_missing_evidence_fails(self):
         (self.work / 'crop.png').unlink()
@@ -231,16 +421,30 @@ class ExportIntegrationTests(unittest.TestCase):
             cli('segment', '--review', review_path)
             cli('sheets', '--lines', work / 'reviewed-lines.json')
             quality.dump(work / 'samples.json', [{'id': 'all', 'page': 1, 'bbox': [0, 0, 900, 220], 'expected': 'OCR 11', 'expected_origin': 'synthetic source'}])
+            cli('sample-sheets', '--samples', work / 'samples.json')
+            preview = quality.load(work / 'checks/sample-source.json')
+            self.assertTrue((work / preview['samples'][0]['source_preview']).is_file())
+            quality.dump(work / 'clipboard-cases.json', {'expected_origin': 'synthetic raster', 'cases': [
+                {'id': 'all', 'selection': 'all text', 'expected': 'OCR 11'},
+                {'id': 'cross-page', 'result': 'not_applicable', 'reason': 'Only one page'}]})
+            cli('clipboard-expectations', '--cases', work / 'clipboard-cases.json')
             pdf, txt = work / 'output/pdf/scan-ocr.pdf', work / 'output/text/scan-ocr.txt'
             cli('export', '--source', source, '--pages', work / 'pages.json', '--pdf', pdf, '--txt', txt)
             self.assertEqual(txt.read_bytes(), b'OCR 11\n')
             cli('check', '--source', source, '--pages', work / 'exported-pages.json', '--pdf', pdf, '--txt', txt)
             cli('samples', '--pdf', pdf, '--samples', work / 'samples.json')
+            cli('reports')
+            clipboard = quality.load(work / 'checks/manual-copy/status.json')
+            self.assertEqual((work / clipboard['cases'][0]['expected_file']).read_bytes(), b'OCR 11')
+            export_inputs = quality.load(work / 'export-inputs.json')
+            self.assertEqual(export_inputs['clipboard_expectations']['expected_origin'], 'synthetic raster')
             old_hash = quality.sha(pdf)
             cli('export', '--source', source, '--pages', work / 'pages.json', '--pdf', pdf, '--txt', txt)
             snapshots = list((work / 'iterations').glob('*/snapshot.json'))
             self.assertEqual(len(snapshots), 1)
             self.assertEqual(quality.load(snapshots[0])['pdf_sha256'], old_hash)
+            stored = quality.load(snapshots[0])['artifacts']
+            self.assertTrue(stored[clipboard['cases'][0]['expected_file']]['stored'])
             quality.dump(work / 'samples.json', [{'id': 'all', 'page': 1, 'bbox': [0, 0, 900, 220], 'expected': 'WRONG', 'expected_origin': 'deliberately failing fixture'}])
             cli('samples', '--pdf', pdf, '--samples', work / 'samples.json', code=1)
             txt.write_bytes(b'changed whitespace\n')

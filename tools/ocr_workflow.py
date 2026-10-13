@@ -9,6 +9,8 @@ from importlib.metadata import version
 from ocr_quality import (load, dump, sha, bindings, check_bindings, validate_review,
                          update_line, article_text, technical_failures, snapshot,
                          doctor, validate_run, bbox, unique)
+from ocr_quality import (update_review, clipboard_expectations,
+                         validate_clipboard_expectations, report_templates)
 
 FONT_PATH='/usr/share/fonts/noto/NotoSerif-Regular.ttf'
 FONT=None
@@ -17,6 +19,37 @@ def run(command):
  p=subprocess.run(command,capture_output=True,text=True)
  if p.returncode:raise RuntimeError(f'{command!r}: {p.stderr}')
  return p
+def sample_specs(work,path):
+ manifest=load(Path(work)/'input-manifest.json');specs=load(path)
+ if not specs:raise ValueError('Provide at least one source-derived sample')
+ unique(specs,'sample')
+ for sample in specs:
+  if not re.fullmatch(r'[A-Za-z0-9_-]+',sample['id']):raise ValueError('Use simple sample IDs')
+  bbox(sample['bbox'],sample['page'],manifest)
+  if not sample.get('expected_origin') or not isinstance(sample.get('expected'),str):raise ValueError(f"Record expected text and source origin: {sample['id']}")
+ return specs
+def sample_sheets(a):
+ from PIL import Image,ImageDraw,ImageFont
+ w=Path(a.work);specs=sample_specs(w,a.samples);font=ImageFont.truetype(a.font,18)
+ target=w/'checks/sample-source'/sha(a.samples);target.mkdir(parents=True,exist_ok=True);records=[]
+ for s in specs:
+  b=s['bbox']
+  with Image.open(w/'raster'/f"page-{s['page']}.png") as image:
+   bounds=[max(0,b[0]-40),max(0,b[1]-40),min(image.width,b[2]+40),min(image.height,b[3]+40)]
+   crop=image.convert('RGB').crop(bounds)
+  ImageDraw.Draw(crop).rectangle([b[0]-bounds[0],b[1]-bounds[1],b[2]-bounds[0],b[3]-bounds[1]],outline='green',width=2)
+  path=target/(s['id']+'.png');crop.save(path)
+  records.append({**s,'source_preview':str(path.relative_to(w))})
+ for offset in range(0,len(records),10):
+  subset=records[offset:offset+10];sheet=Image.new('RGB',(1500,len(subset)*180),'white');draw=ImageDraw.Draw(sheet)
+  for row,record in enumerate(subset):
+   draw.text((10,row*180),f"{record['id']} (p{record['page']}) {record['bbox']}",font=font,fill='black')
+   draw.text((10,row*180+25),repr(record['expected'])[:140],font=font,fill='black')
+   with Image.open(w/record['source_preview']) as preview:
+    preview.thumbnail((1480,120));sheet.paste(preview,(10,row*180+55))
+  sheet.save(target/f'sheet-{offset//10+1:03}.png')
+ dump(w/'checks/sample-source.json',{'inputs':bindings(samples=a.samples,manifest=w/'input-manifest.json'),'samples':records,'status':'source rectangles awaiting visual review'})
+ print(f'Source sample previews: {target}; {len(records)} samples; visual confirmation has not been asserted')
 def recognize_cached(command,prefix,image,outputs,version):
  cache=Path(str(prefix)+'-cache.json')
  identity={'command':command,'image_sha256':sha(image),'tesseract':version}
@@ -272,6 +305,8 @@ def export(a):
  pages=load(a.pages);out=Path(a.pdf);txt=Path(a.txt)
  segmentation=load(w/'segment-manifest.json');check_bindings(segmentation['inputs'])
  if sha(a.pages)!=segmentation['pages_sha256'] or sha(__file__)!=segmentation['tool_sha256']:raise ValueError('Re-run segment after changing pages or segmentation code')
+ sample_specs(w,w/'samples.json')
+ clipboard=validate_clipboard_expectations(w,load(w/'clipboard-expectations.json')) if (w/'clipboard-expectations.json').exists() else None
  if out.resolve()==source or txt.resolve()==source or out.resolve()==txt.resolve():raise ValueError('Keep source and output paths separate')
  if (w/'output-manifest.json').exists():
   previous=load(w/'output-manifest.json')
@@ -305,9 +340,11 @@ def export(a):
  txt.write_text(article_text(pages),encoding='utf-8')
  dump(w/'exported-review.json',load(w/'segmented-review.json'))
  dump(w/'export-inputs.json',{'segmentation':segmentation,'review':load(w/'segmented-review.json'),
-                             'samples':load(w/'samples.json') if (w/'samples.json').exists() else None})
+                             'samples':load(w/'samples.json'),'clipboard_expectations':clipboard})
  inputs=bindings(**{name:record['path'] for name,record in segmentation['inputs'].items()},pages=a.pages,
-                 exported_pages=w/'exported-pages.json',exported_review=w/'exported-review.json',export_inputs=w/'export-inputs.json')
+                 samples=w/'samples.json',exported_pages=w/'exported-pages.json',exported_review=w/'exported-review.json',export_inputs=w/'export-inputs.json')
+ if clipboard is not None:
+  inputs.update(bindings(**{'clipboard_expected/'+case['id']:w/case['expected_file'] for case in clipboard['cases'] if case['result']!='not_applicable'}))
  dump(w/'output-manifest.json',{'source':str(source),'source_sha256':sha(source),'pdf':str(out.resolve()),'pdf_sha256':sha(out),'txt':str(txt.resolve()),'txt_sha256':sha(txt),'inputs':inputs,'status':'exported','ui_clipboard_tested':False,'tool_sha256':sha(__file__),'generator_sha256':sha(Path(__file__).with_name('ocr_f_layer.py'))})
  print(f'Exported {len(pages)} pages; PDF {sha(out)}')
 def check(a):
@@ -357,7 +394,7 @@ def check(a):
  return 1 if technical_failures(result) else 0
 def samples(a):
  w=Path(a.work);m=load(w/'input-manifest.json');dpi=m['dpi'];doc=fitz.open(a.pdf);results=[]
- specs=load(a.samples);unique(specs,'sample');(w/'checks').mkdir(parents=True,exist_ok=True)
+ specs=sample_specs(w,a.samples);(w/'checks').mkdir(parents=True,exist_ok=True)
  output_hash=sha(a.pdf)
  for s in specs:
   if not re.fullmatch(r'[A-Za-z0-9_-]+',s['id']):raise ValueError('Use simple sample IDs')
@@ -392,6 +429,10 @@ def main():
  x=s.add_parser('doctor');x.set_defaults(func=doctor);x.add_argument('--work');x.add_argument('--language',default='ces');x.add_argument('--font',default=FONT_PATH);x.add_argument('--sheet-font',default='/usr/share/fonts/TTF/DejaVuSans.ttf')
  x=sub('validate-review',lambda a:print(json.dumps(validate_review(a.work,load(a.review)))));x.add_argument('--review',required=True)
  x=sub('update-line',update_line);x.add_argument('--review',required=True);x.add_argument('--id',required=True);x.add_argument('--patch',required=True)
+ x=sub('update-review',update_review);x.add_argument('--review',required=True);x.add_argument('--patch',required=True)
+ x=sub('clipboard-expectations',clipboard_expectations);x.add_argument('--cases',required=True)
+ x=sub('reports',report_templates);x.add_argument('--reset',action='store_true')
+ x=sub('sample-sheets',sample_sheets);x.add_argument('--samples',required=True);x.add_argument('--font',default='/usr/share/fonts/TTF/DejaVuSans.ttf')
  sub('snapshot',lambda a:print(snapshot(a.work)))
  sub('validate-run',validate_run)
  x=sub('prepare',prepare);x.add_argument('--source',required=True);x.add_argument('--dpi',type=int,default=300);x.add_argument('--language',default='ces')

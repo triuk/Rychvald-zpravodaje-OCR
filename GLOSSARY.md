@@ -8,6 +8,10 @@ Převod naskenovaných vydání Rychvaldského zpravodaje do podoby s věrným, 
 Vstupní PDF zachycující stránky zpravodaje, které slouží jako předloha rozpoznání a porovnání výsledku.
 _Nepoužívat_: raw jako název výsledku, originál bez rozlišení od papírového výtisku.
 
+**Projekt vydání**:
+Samostatný pracovní celek jednoho zdrojového PDF, jeho přepisu, nevyřešených míst, revizí a výsledných podob. Provází vydání od zahájení OCR po konečnou ruční revizi a opravu.
+_Nepoužívat_: repozitář jako synonymum; jeden repozitář může zpracovávat mnoho projektů vydání.
+
 **OCR PDF**:
 Výsledné PDF s rozpoznaným textem, který lze vyhledávat, označovat na příslušném místě stránky a kopírovat.
 

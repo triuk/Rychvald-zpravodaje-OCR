@@ -1,6 +1,6 @@
 # Výběr části slova a kopírování plynulých odstavců
 
-Pro nezávislé zpracování použij [obecný OCR postup](ocr-workflow.md); [technický mechanismus F](ocr-f-construction.md) je reference pro změny generátoru. Tento dokument uchovává metodiku kompatibility; výsledek konkrétního PDF musí mít vlastní kontroly. Dostupnost čtečky zjisti na začátku běhu a výsledky zapisuj podle [datové smlouvy schránky](ocr-data-contracts.md#schránka).
+Pro nezávislé zpracování použij [obecný OCR postup](ocr-workflow.md); [technický mechanismus F](ocr-f-construction.md) je reference pro změny generátoru. Tento dokument uchovává metodiku volitelného ověření kompatibility. Skutečné UI a schránka nejsou podmínkou dokončení ani přijetí běžného OCR výstupu. Pokud tuto zkoušku provádíš, zjisti dostupnost čtečky a výsledky zapisuj podle [datové smlouvy schránky](ocr-data-contracts.md#schránka).
 
 ## Odpověď na požadavek
 
@@ -10,7 +10,7 @@ Samostatný schválený textový výstup může mít plynulé odstavce bez závi
 
 ## Ověření konkrétního výstupu
 
-Očekávané znění a hranice výběru se určují ze zdrojového rastru. Správnost jednotlivých znaků, jejich geometrie a kopírovaných odstavců se musí doložit vlastním experimentem; samotná přítomnost textové vrstvy nestačí.
+Očekávané znění a hranice výběru se určují ze zdrojového rastru. Tvrzení o přesném výběru a kopírovaných odstavcích ve skutečné čtečce se dokládá vlastním experimentem; samotná přítomnost textové vrstvy nestačí. Přijatelnost OCR bez tohoto volitelného experimentu se posuzuje podle povinných kontrol workflow.
 
 ## Co mohou a nemohou zajistit PDF mechanismy
 
@@ -31,12 +31,12 @@ Toto je sada k ověření, nikoli seznam již potvrzené kompatibility:
 | Hlavní počítačová sada | Adobe Acrobat Reader, vestavěné čtečky Chrome, Edge a Firefox | Přesný výběr znaků, slova, odstavce, článku a obsah schránky |
 | Doplňkově macOS | Preview a Safari | Stejné vzorky podle dostupnosti zařízení |
 | Doplňkově Linux | Okular | Stejné vzorky; Firefox již patří do hlavní sady |
-| Android | Chrome a Acrobat Reader | Obraz, vyhledávání a základní kopírování; přesnost dotykového výběru několika znaků není podmínkou dokončení podle Q11 |
-| iPhone/iPad | Safari a Acrobat Reader | Obraz, vyhledávání a základní kopírování; přesnost dotykového výběru několika znaků není podmínkou dokončení podle Q11 |
+| Android | Chrome a Acrobat Reader | Obraz, vyhledávání a základní kopírování; přesnost dotykového výběru několika znaků není podmínkou dokončení |
+| iPhone/iPad | Safari a Acrobat Reader | Obraz, vyhledávání a základní kopírování; přesnost dotykového výběru několika znaků není podmínkou dokončení |
 
 Výběr každé čtečky bude zaznamenán s verzí, systémem a konkrétní operací. Na mobilech je přesnost dotykových úchytů také vlastností uživatelského rozhraní. Dokumentace potvrzuje kopírování a dotykový výběr, nikoli záruku libovolné hranice písmena: [Chrome Android](https://support.google.com/chrome/answer/16215622?co=GENIE.Platform%3DAndroid&hl=en), [Preview na Macu](https://support.apple.com/en-ie/guide/preview/prvw1020/mac), [Okular](https://docs.kde.org/stable_kf6/en/okular/okular/menutools.html).
 
-Dostupnost čteček zjisti pro konkrétní průchod. Test Chromia nelze uvádět jako test Chrome nebo Edge. Zadavatel podle Q14 může ručně ověřit Acrobat. Word je příklad následného použití textu, nikoli povinná čtečka nebo povinné testovací prostředí.
+Dostupnost čteček zjisti pro konkrétní zvolenou zkoušku. Test Chromia nelze uvádět jako test Chrome nebo Edge. Zadavatel může ručně ověřit Acrobat. Word je příklad následného použití textu, nikoli povinná čtečka nebo povinné testovací prostředí.
 
 ## Návrh kontrol kopírování
 
@@ -47,4 +47,4 @@ Dostupnost čteček zjisti pro konkrétní průchod. Test Chromia nelze uvádět
 5. Ověřit českou diakritiku, nadpis, číslo, jméno, tabulkový řádek a dvě sousední odstavcové jednotky.
 6. Pro každý vzorek zaznamenat přesný text schránky a výsledek v konkrétní čtečce. Automatická extrakce není náhradou této kontroly.
 
-Než se spustí celá dávka, musí být dohodnuto, které výsledky jsou závazné a jak se postupuje při selhání některé čtečky. Zachování přesného výběru části slova nelze bez dohody obětovat trikům pro kopírování celého odstavce; stejně tak nelze doprovodný textový soubor vydávat za splnění všech požadavků na samotné PDF.
+Při zvolené zkoušce předem zaznamenej rozsah čteček a případů. Pro běžný OCR průchod tato sada není závazná. Nalezené selhání konkrétního výběru uchovej jako samostatný nález; neprovedenou zkoušku označ `not_tested`. Přesný výběr části slova a plynulý odstavec posuzuj odděleně; doprovodný TXT dokládá svůj vlastní obsah, nikoli kompatibilitu výběru v PDF čtečkách.
