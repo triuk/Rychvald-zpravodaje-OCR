@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+"""Project registry and small process protocol; importing never starts OCR."""
+from pathlib import Path
+import argparse
+from contextlib import contextmanager
+import fcntl
+import hashlib
+import json
+import os
+import shutil
+import sys
+import tempfile
+import uuid
+
+PROTOCOL_VERSION = 1
+MAX_RESPONSE_BYTES = 4096
+
+
+class ProjectError(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def response(operation, *, project=None, artifacts=None, counts=None,
+             status='completed', error=None, **extra):
+    return {'protocol_version': PROTOCOL_VERSION, 'operation': operation,
+            'status': status, 'project': project, 'counts': counts or {},
+            'artifacts': artifacts or {}, 'error': error, **extra}
+
+
+def emit_response(value):
+    encoded = (json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
+    if len(encoded) > MAX_RESPONSE_BYTES:
+        raise ProjectError('response_too_large', 'Response exceeds 4096 UTF-8 bytes; use a smaller selection.')
+    sys.stdout.buffer.write(encoded)
+
+
+def atomic_json(path, value):
+    """Publish complete UTF-8 JSON with one rename; preserve the last valid file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                         prefix=f'.{path.name}-', delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(value, stream, ensure_ascii=False)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def source_hash(path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+class ProjectRegistry:
+    def __init__(self, root):
+        self.root = Path(root).resolve()
+        self.path = self.root / 'registry.json'
+
+    def _read(self):
+        if not self.path.exists():
+            return {'schema_version': 1, 'projects': []}
+        try:
+            value = json.loads(self.path.read_text(encoding='utf-8'))
+            if value.get('schema_version') != 1 or not isinstance(value.get('projects'), list):
+                raise ValueError()
+            for record in value['projects']:
+                self._validate_record(record)
+            return value
+        except (ValueError, UnicodeError, KeyError, TypeError, AttributeError):
+            raise ProjectError('registry_invalid', 'Registry is not a valid version 1 project registry.') from None
+
+    @staticmethod
+    def _validate_record(record):
+        project = record['project']
+        identifier = project['project_id']
+        digest = project['source_sha256']
+        if (not isinstance(identifier, str) or len(identifier) != 25 or
+                identifier[12] != '-' or any(character not in '0123456789abcdef' for character in identifier.replace('-', '')) or
+                not isinstance(digest, str) or len(digest) != 64 or
+                any(character not in '0123456789abcdef' for character in digest)):
+            raise ValueError()
+        if project['run_id'] != identifier or not isinstance(project['original_name'], str):
+            raise ValueError()
+        for key in ('phase', 'operation_state', 'validation', 'acceptance'):
+            if not isinstance(project[key], str):
+                raise ValueError()
+        if record['artifacts']['project'] != f'work/{identifier}/project.json':
+            raise ValueError()
+        if record['artifacts']['workspace'] != f'work/{identifier}' or record['artifacts']['source'] != f'inputs/{digest}.pdf':
+            raise ValueError()
+        if not isinstance(record['counts'], dict):
+            raise ValueError()
+
+    @contextmanager
+    def _registry_lock(self):
+        self.root.mkdir(parents=True, exist_ok=True)
+        with (self.root / '.registry.lock').open('a') as stream:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            yield
+
+    def import_source(self, source, *, new_run=False):
+        with self._registry_lock():
+            return self._import_source(source, new_run=new_run)
+
+    def _import_source(self, source, *, new_run=False):
+        source = Path(source)
+        if not source.exists():
+            raise ProjectError('source_missing', 'Source PDF does not exist.')
+        if not source.is_file():
+            raise ProjectError('invalid_source', 'Source must be a PDF file.')
+        with source.open('rb') as stream:
+            if b'%PDF-' not in stream.read(1024):
+                raise ProjectError('invalid_source', 'Source has no PDF header.')
+        digest = source_hash(source)
+        registry = self._read()
+        if not new_run:
+            for record in registry['projects']:
+                if record['project']['source_sha256'] == digest:
+                    destination = self.root / record['artifacts']['source']
+                    if not destination.is_file() or source_hash(destination) != digest:
+                        raise ProjectError('source_corrupt', 'Registered source differs from its content hash.')
+                    return self.get(record['project']['project_id']), False
+        identifier = digest[:12] + '-' + uuid.uuid4().hex[:12]
+        artifacts = {'source': f'inputs/{digest}.pdf', 'workspace': f'work/{identifier}',
+                     'project': f'work/{identifier}/project.json',
+                     'output_pdf': f'outputs/{identifier}-ocr.pdf',
+                     'output_txt': f'outputs/{identifier}-ocr.txt'}
+        project = {'project_id': identifier, 'run_id': identifier,
+                   'source_sha256': digest, 'original_name': source.name,
+                   'phase': 'registered', 'operation_state': 'idle',
+                   'validation': 'not_run', 'acceptance': 'not_recorded'}
+        for folder in ('inputs', 'work', 'outputs'):
+            (self.root / folder).mkdir(parents=True, exist_ok=True)
+        (self.root / artifacts['workspace']).mkdir()
+        record = {'project': project, 'artifacts': artifacts, 'counts': {}}
+        try:
+            destination = self.root / artifacts['source']
+            if destination.exists():
+                if source_hash(destination) != digest:
+                    raise ProjectError('source_corrupt', 'Registered source differs from its content hash.')
+            else:
+                temporary = None
+                try:
+                    with tempfile.NamedTemporaryFile(dir=destination.parent, prefix='.source-', delete=False) as stream:
+                        temporary = Path(stream.name)
+                        with source.open('rb') as input_stream:
+                            shutil.copyfileobj(input_stream, stream)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    if source_hash(temporary) != digest:
+                        raise ProjectError('source_changed', 'Source changed while it was being imported; retry with a stable input.')
+                    os.replace(temporary, destination)
+                finally:
+                    if temporary is not None:
+                        temporary.unlink(missing_ok=True)
+            atomic_json(self.root / artifacts['project'], record)
+            registry['projects'].append(record)
+            atomic_json(self.path, registry)
+        except BaseException:
+            shutil.rmtree(self.root / artifacts['workspace'])
+            raise
+        return record, True
+
+    def _get_record(self, project_id):
+        for record in self._read()['projects']:
+            if record['project']['project_id'] == project_id:
+                try:
+                    current = json.loads((self.root / record['artifacts']['project']).read_text(encoding='utf-8'))
+                    self._validate_record(current)
+                    if current['project']['project_id'] != project_id or current['project']['source_sha256'] != record['project']['source_sha256']:
+                        raise ValueError()
+                    return current
+                except (ValueError, UnicodeError, KeyError, TypeError, AttributeError, FileNotFoundError):
+                    raise ProjectError('project_invalid', 'Project metadata is missing or invalid.') from None
+        raise ProjectError('project_not_found', 'Project does not exist in this registry.')
+
+    def get(self, project_id):
+        record = self._get_record(project_id)
+        lock_path = self.root / record['artifacts']['workspace'] / '.operation.lock'
+        if lock_path.exists():
+            with lock_path.open('a') as stream:
+                try:
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    record['project']['operation_state'] = 'running'
+                    return record
+        if record['project']['operation_state'] == 'running':
+            record['project']['operation_state'] = 'interrupted'
+        return record
+
+    @contextmanager
+    def project_lock(self, project_id):
+        """Exclusive project transaction: edit the yielded record; commit on success.
+
+        Keep this context open across OCR subprocesses and checkpoint writes.
+        The OS releases the lock after a crash, so a leftover lock file is harmless.
+        """
+        original = self._get_record(project_id)
+        lock_path = self.root / original['artifacts']['workspace'] / '.operation.lock'
+        with lock_path.open('a') as stream:
+            try:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise ProjectError('project_busy', 'Another operation is active for this project.') from None
+            record = self._get_record(project_id)
+            yield record
+            self._validate_record(record)
+            for key in ('project_id', 'run_id', 'source_sha256', 'original_name'):
+                if record['project'][key] != original['project'][key]:
+                    raise ProjectError('identity_changed', 'Project identity is immutable.')
+            atomic_json(self.root / original['artifacts']['project'], record)
+
+    def list_projects(self, *, offset=0, limit=10):
+        if offset < 0 or limit < 1:
+            raise ProjectError('invalid_selection', 'Offset must be nonnegative and limit must be positive.')
+        records = self._read()['projects']
+        result = response('list', counts={'total': len(records), 'returned': 0},
+                          artifacts={'registry': 'registry.json'}, projects=[], next_offset=None)
+        for record in records[offset:offset + min(limit, 1000)]:
+            project = self.get(record['project']['project_id'])['project']
+            result['projects'].append(project)
+            result['counts']['returned'] = len(result['projects'])
+            end = offset + len(result['projects'])
+            result['next_offset'] = end if end < len(records) else None
+            if len((json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')) > MAX_RESPONSE_BYTES:
+                result['projects'].pop()
+                result['counts']['returned'] = len(result['projects'])
+                result['next_offset'] = offset + len(result['projects'])
+                break
+        if not result['projects'] and offset < len(records):
+            raise ProjectError('response_too_large', 'Project summary exceeds the response limit.')
+        return result
+
+
+class ProtocolArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise ProjectError('invalid_arguments', 'Invalid command arguments; use --help for syntax.')
+
+
+def build_parser():
+    parser = ProtocolArgumentParser(description=__doc__)
+    parser.add_argument('--root', required=True, type=Path)
+    parser.add_argument('--json', action='store_true', help='Version 1 JSON protocol (also the default).')
+    commands = parser.add_subparsers(dest='operation', required=True)
+    command = commands.add_parser('import')
+    command.add_argument('source', type=Path)
+    command.add_argument('--new-run', action='store_true')
+    command = commands.add_parser('status')
+    command.add_argument('project_id')
+    command = commands.add_parser('list')
+    command.add_argument('--offset', type=int, default=0)
+    command.add_argument('--limit', type=int, default=10)
+    return parser
+
+
+def main(argv=None):
+    operation = 'request'
+    try:
+        args = build_parser().parse_args(argv)
+        operation = args.operation
+        registry = ProjectRegistry(args.root)
+        if args.operation == 'import':
+            if args.source.is_dir():
+                counts = {'sources': 0, 'created': 0, 'reused': 0}
+                for source in sorted(args.source.iterdir()):
+                    if source.is_file() and source.suffix.lower() == '.pdf':
+                        _, created = registry.import_source(source, new_run=args.new_run)
+                        counts['sources'] += 1
+                        counts['created' if created else 'reused'] += 1
+                result = response(args.operation, artifacts={'registry': 'registry.json'}, counts=counts)
+            else:
+                record, created = registry.import_source(args.source, new_run=args.new_run)
+                result = response(args.operation, project=record['project'], artifacts=record['artifacts'],
+                                  counts={'created': int(created), 'reused': int(not created)})
+        elif args.operation == 'list':
+            result = registry.list_projects(offset=args.offset, limit=args.limit)
+        else:
+            record = registry.get(args.project_id)
+            result = response(args.operation, **record)
+        emit_response(result)
+        return 0
+    except ProjectError as error:
+        emit_response(response(operation, status='failed', error={'code': error.code, 'message': str(error)}))
+        return 1
+    except OSError:
+        emit_response(response(operation, status='failed', error={'code': 'io_error', 'message': 'Project filesystem operation failed.'}))
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())
