@@ -6,6 +6,7 @@ decisions. Instructions: docs/ocr-workflow.md.
 from pathlib import Path
 import argparse,collections,concurrent.futures,copy,difflib,hashlib,json,re,subprocess,sys
 from importlib.metadata import version
+from ocr_environment import verify_environment
 from ocr_quality import (load, dump, sha, bindings, check_bindings, validate_review,
                          update_line, article_text, technical_failures, snapshot,
                          doctor, validate_run, bbox, unique)
@@ -14,9 +15,14 @@ from ocr_quality import (update_review, clipboard_expectations,
 
 FONT_PATH='/usr/share/fonts/noto/NotoSerif-Regular.ttf'
 FONT=None
+ENVIRONMENT=None
 SEGMENTATION_EVENTS=[]
+def configure_environment(path=None,language='ces'):
+ global ENVIRONMENT
+ ENVIRONMENT=verify_environment(path,language)
+ return ENVIRONMENT
 def run(command):
- p=subprocess.run(command,capture_output=True,text=True)
+ p=ENVIRONMENT.run(command) if ENVIRONMENT else subprocess.run(command,capture_output=True,text=True)
  if p.returncode:raise RuntimeError(f'{command!r}: {p.stderr}')
  return p
 def sample_specs(work,path):
@@ -52,7 +58,7 @@ def sample_sheets(a):
  print(f'Source sample previews: {target}; {len(records)} samples; visual confirmation has not been asserted')
 def recognize_cached(command,prefix,image,outputs,version):
  cache=Path(str(prefix)+'-cache.json')
- identity={'command':command,'image_sha256':sha(image),'tesseract':version}
+ identity={'command':command,'image_sha256':sha(image),'tesseract':version,'environment':ENVIRONMENT.identity if ENVIRONMENT else None}
  if cache.exists():
   stored=load(cache)
   if stored.get('identity')==identity and all(Path(str(prefix)+suffix).is_file() and sha(str(prefix)+suffix)==stored.get('outputs',{}).get(suffix) for suffix in outputs):return True
@@ -87,14 +93,14 @@ def prepare(a):
   target=w/'raster'/f'page-{n}.png';p.get_pixmap(dpi=a.dpi).save(target)
   im=Image.open(target);size=im.size;im.thumbnail((1250,1800));im.save(w/'raster'/f'overview-{n}.png')
   records.append({'page':n,'rect':list(p.rect),'mediabox':list(p.mediabox),'cropbox':list(p.cropbox),'rotation':p.rotation,'raster_size':size,'raster_sha256':sha(target),'existing_text_characters':len(p.get_text().strip())})
- manifest={'source':str(source),'source_sha256':sha(source),'pages':records,'dpi':a.dpi,'transform':'none','content_inputs':'source raster only',
+ manifest={'source':str(source),'source_sha256':sha(source),'pages':records,'dpi':a.dpi,'transform':'none','content_inputs':'source raster only','environment':ENVIRONMENT.identity if ENVIRONMENT else None,
   'versions':{'Python':sys.version,'PyMuPDF':fitz.VersionBind,'Tesseract':run(['tesseract','--version']).stdout.splitlines()[0],**{name:version(name) for name in ['Pillow','numpy','lxml','reportlab','fonttools']}},'ocr':{'language':a.language,'psm':[3,11],'hocr_char_boxes':1}}
  dump(w/'input-manifest.json',manifest)
  def recognize(job):
   n,psm=job;prefix=w/'ocr'/f'page-{n}-psm{psm}'
   cmd=['tesseract',str(w/'raster'/f'page-{n}.png'),str(prefix),'-l',a.language,'--psm',str(psm),'-c','hocr_char_boxes=1','hocr','tsv','txt','makebox']
   result=run(cmd);prefix.with_suffix('.log').write_text(result.stderr)
-  return {'page':n,'psm':psm,'command':cmd}
+  return {'page':n,'psm':psm,'command':ENVIRONMENT.command(cmd) if ENVIRONMENT else cmd}
  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:commands=list(pool.map(recognize,[(n,s) for n in range(1,len(d)+1) for s in [3,11]]))
  dump(w/'ocr-commands.json',commands)
  lines=[]
@@ -115,7 +121,7 @@ def regions(a):
   r=copy.deepcopy(original);crop=w/'crops'/(r['id']+'.png');prefix=w/'ocr'/r['id']
   Image.open(w/'raster'/f"page-{r['page']}.png").crop(r['bbox']).save(crop)
   cmd=['tesseract',str(crop),str(prefix),'-l',m['ocr']['language'],'--psm',str(r['psm']),'-c','hocr_char_boxes=1','hocr','tsv','txt']
-  reused=recognize_cached(cmd,prefix,crop,['.hocr','.tsv','.txt'],tesseract_version);r['command']=cmd
+  reused=recognize_cached(cmd,prefix,crop,['.hocr','.tsv','.txt'],tesseract_version);r['command']=ENVIRONMENT.command(cmd) if ENVIRONMENT else cmd
   r['lines']=parse_hocr(prefix.with_suffix('.hocr'),r['page'],r['id'],r['bbox'][:2])
   for line in r['lines']:line['region']=r['id']
   return r,reused
@@ -137,7 +143,7 @@ def targeted(a):
    cmd=['tesseract',str(path),str(prefix),'-l',m['ocr']['language'],'--psm',str(t['psm']),'txt','tsv']
    reused=recognize_cached(cmd,prefix,path,['.txt','.tsv'],tesseract_version)
    cached+=reused
-   results.append({**t,'variant':name,'command':cmd,'candidate':prefix.with_suffix('.txt').read_text(),'returncode':0})
+   results.append({**t,'variant':name,'command':ENVIRONMENT.command(cmd) if ENVIRONMENT else cmd,'candidate':prefix.with_suffix('.txt').read_text(),'returncode':0})
  previous=load(w/'targeted-candidates.json') if (w/'targeted-candidates.json').exists() else []
  replaced={t['id'] for t in targets}
  dump(w/'targeted-candidates.json',[r for r in previous if r['id'] not in replaced]+results);print(f'{len(results)} targeted raw/supporting OCR candidates; {cached} cached')
@@ -354,7 +360,7 @@ def check(a):
  result={'source_sha256':sha(a.source),'output_sha256':sha(a.pdf),'versions':{'PyMuPDF':fitz.VersionBind,'Poppler':run(['pdftotext','-v']).stderr.splitlines()[0]},'pages':[],'ui_clipboard':'not_tested'}
  result['source_identity_preserved']=result['source_sha256']==load(w/'input-manifest.json')['source_sha256']
  result['inputs']=bindings(source=a.source,pdf=a.pdf,txt=a.txt,pages=a.pages)
- q=subprocess.run(['qpdf','--check',a.pdf],capture_output=True,text=True);(c/'qpdf.txt').write_text(q.stdout+q.stderr);result['qpdf_returncode']=q.returncode
+ q=ENVIRONMENT.run(['qpdf','--check',a.pdf]) if ENVIRONMENT else subprocess.run(['qpdf','--check',a.pdf],capture_output=True,text=True);(c/'qpdf.txt').write_text(q.stdout+q.stderr);result['qpdf_returncode']=q.returncode
  reviewer=original=None
  if a.reviewer_root:
   sys.path.insert(0,str(Path(a.reviewer_root).resolve()));from app.pdf_document import PdfDocument
@@ -423,7 +429,7 @@ def sheets(a):
   sheet.save(w/'checks'/f'geometry-review-{offset//20+1:03}.png')
  print(f'Rendered {(len(lines)+19)//20} diagnostic sheets; visual review has not been asserted')
 def main():
- p=argparse.ArgumentParser(description=__doc__);s=p.add_subparsers(dest='command',required=True)
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment');s=p.add_subparsers(dest='command',required=True)
  def sub(name,func):
   parser=s.add_parser(name);parser.set_defaults(func=func);parser.add_argument('--work',required=True);return parser
  x=s.add_parser('doctor');x.set_defaults(func=doctor);x.add_argument('--work');x.add_argument('--language',default='ces');x.add_argument('--font',default=FONT_PATH);x.add_argument('--sheet-font',default='/usr/share/fonts/TTF/DejaVuSans.ttf')
@@ -449,6 +455,22 @@ def main():
  x=sub('samples',samples);x.add_argument('--pdf',required=True);x.add_argument('--samples',required=True)
  x=sub('sheets',sheets);x.add_argument('--lines',required=True);x.add_argument('--font',default='/usr/share/fonts/TTF/DejaVuSans.ttf')
  a=p.parse_args()
+ try:
+  environment=configure_environment(a.environment,getattr(a,'language','ces'))
+  for option,key,default in [('font','segmentation',FONT_PATH),('sheet_font','sheet','/usr/share/fonts/TTF/DejaVuSans.ttf')]:
+   if hasattr(a,option):
+    # Sheet commands historically use --font rather than --sheet-font.
+    if option=='font' and a.command in ('sheets','sample-sheets'):key='sheet';default='/usr/share/fonts/TTF/DejaVuSans.ttf'
+    record=environment.manifest['fonts'][key]
+    if getattr(a,option)!=default:
+     environment.check_file('selected font',{**record,'path':getattr(a,option)})
+    else:setattr(a,option,str(environment.resolve(record['path'])))
+ except (ValueError,KeyError,TypeError,OSError) as error:
+  print(str(error),file=sys.stderr);return 1
+ if a.command=='doctor':
+  report=environment.report()
+  if a.work:dump(Path(a.work)/'checks/environment.json',report)
+  print(json.dumps(report,ensure_ascii=False));return 0
  if a.command in ('prepare','regions','targeted','draft','segment','export','check','samples','sheets'):
   global np,Image,ImageFilter,ImageFont,ImageDraw,etree,fitz,create_pdf
   import numpy as np
