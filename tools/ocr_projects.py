@@ -12,6 +12,10 @@ import sys
 import tempfile
 import uuid
 
+# The executable and its command modules must share protocol/error classes.
+if __name__ == '__main__':
+    sys.modules.setdefault('ocr_projects', sys.modules[__name__])
+
 PROTOCOL_VERSION = 1
 MAX_RESPONSE_BYTES = 4096
 
@@ -198,6 +202,18 @@ class ProjectRegistry:
                     return record
         if record['project']['operation_state'] == 'running':
             record['project']['operation_state'] = 'interrupted'
+        marker = self.root / record['artifacts']['workspace'] / 'preparation-checkpoint.json'
+        if marker.is_file():
+            try:
+                preparation = json.loads(marker.read_text(encoding='utf-8'))
+            except (ValueError, OSError):
+                preparation = {'status': 'invalid'}
+            if preparation.get('status') != 'completed':
+                failed = preparation.get('status') == 'failed'
+                record['project'].update(operation_state='failed' if failed else 'interrupted',
+                                         phase='preparation_failed' if failed else 'preparation_interrupted',
+                                         validation='not_run')
+                record['artifacts']['preparation_checkpoint'] = str(marker.relative_to(self.root))
         return record
 
     @contextmanager
@@ -262,6 +278,11 @@ def build_parser():
     command = commands.add_parser('list')
     command.add_argument('--offset', type=int, default=0)
     command.add_argument('--limit', type=int, default=10)
+    command = commands.add_parser('prepare')
+    command.add_argument('project_id')
+    command.add_argument('--dpi', type=int, default=300)
+    command.add_argument('--language', default='ces')
+    command.add_argument('--environment', type=Path)
     return parser
 
 
@@ -284,6 +305,11 @@ def main(argv=None):
                 record, created = registry.import_source(args.source, new_run=args.new_run)
                 result = response(args.operation, project=record['project'], artifacts=record['artifacts'],
                                   counts={'created': int(created), 'reused': int(not created)})
+        elif args.operation == 'prepare':
+            from ocr_project_prepare import prepare_project
+            record = prepare_project(registry, args.project_id, dpi=args.dpi,
+                                     language=args.language, environment=args.environment)
+            result = response(args.operation, **record)
         elif args.operation == 'list':
             result = registry.list_projects(offset=args.offset, limit=args.limit)
         else:
@@ -292,7 +318,13 @@ def main(argv=None):
         emit_response(result)
         return 0
     except ProjectError as error:
-        emit_response(response(operation, status='failed', error={'code': error.code, 'message': str(error)}))
+        record = {}
+        if operation == 'prepare':
+            try:
+                record = registry.get(args.project_id)
+            except (ProjectError, OSError):
+                pass
+        emit_response(response(operation, **record, status='failed', error={'code': error.code, 'message': str(error)}))
         return 1
     except OSError:
         emit_response(response(operation, status='failed', error={'code': 'io_error', 'message': 'Project filesystem operation failed.'}))

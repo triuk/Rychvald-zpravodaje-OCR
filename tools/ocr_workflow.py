@@ -7,6 +7,7 @@ from pathlib import Path
 import argparse,collections,concurrent.futures,copy,difflib,hashlib,json,re,subprocess,sys
 from importlib.metadata import version
 from ocr_environment import verify_environment
+from ocr_projects import atomic_json
 from ocr_quality import (load, dump, sha, bindings, check_bindings, validate_review,
                          update_line, article_text, technical_failures, snapshot,
                          doctor, validate_run, bbox, unique)
@@ -58,12 +59,16 @@ def sample_sheets(a):
  print(f'Source sample previews: {target}; {len(records)} samples; visual confirmation has not been asserted')
 def recognize_cached(command,prefix,image,outputs,version):
  cache=Path(str(prefix)+'-cache.json')
- identity={'command':command,'image_sha256':sha(image),'tesseract':version,'environment':ENVIRONMENT.identity if ENVIRONMENT else None}
+ language=command[command.index('-l')+1] if '-l' in command else ''
+ models={name:ENVIRONMENT.manifest['models'][name]['sha256'] for name in language.split('+')} if ENVIRONMENT else {}
+ identity={'command':ENVIRONMENT.command(command) if ENVIRONMENT else command,'image_sha256':sha(image),'tesseract':version,'language':language,'models':models,'environment':ENVIRONMENT.identity if ENVIRONMENT else None}
  if cache.exists():
-  stored=load(cache)
-  if stored.get('identity')==identity and all(Path(str(prefix)+suffix).is_file() and sha(str(prefix)+suffix)==stored.get('outputs',{}).get(suffix) for suffix in outputs):return True
+  try:stored=load(cache)
+  except (ValueError,OSError):stored={}
+  if isinstance(stored,dict) and isinstance(stored.get('outputs'),dict) and stored.get('status')=='completed' and stored.get('identity')==identity and all(Path(str(prefix)+suffix).is_file() and sha(str(prefix)+suffix)==stored['outputs'].get(suffix) for suffix in outputs):return True
+ atomic_json(cache,{'schema_version':1,'status':'running','identity':identity,'outputs':{}})
  result=run(command);Path(str(prefix)+'.log').write_text(result.stderr,encoding='utf-8')
- dump(cache,{'identity':identity,'outputs':{suffix:sha(str(prefix)+suffix) for suffix in outputs}})
+ atomic_json(cache,{'schema_version':1,'status':'completed','identity':identity,'outputs':{suffix:sha(str(prefix)+suffix) for suffix in outputs}})
  return False
 def width(s):return max(1,FONT.getlength(s))
 def union(bs):return [min(b[0] for b in bs),min(b[1] for b in bs),max(b[2] for b in bs),max(b[3] for b in bs)]
