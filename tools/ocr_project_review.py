@@ -1,12 +1,12 @@
 """Selective project queries and validated review transactions (stdlib only)."""
-import json
 import contextlib
 import copy
 import io
 from pathlib import Path
 from types import SimpleNamespace
 
-from ocr_projects import MAX_RESPONSE_BYTES, ProjectError, atomic_json, response, source_hash
+from ocr_projects import (MAX_RESPONSE_BYTES, ProjectError, atomic_json, paginate_response,
+                          response, response_size, source_hash)
 from ocr_quality import load, patched_review, apply_line_patch, validate_review, save_review
 
 
@@ -61,25 +61,19 @@ def _query_project(registry, project_id, view, *, page=None, ids=None, article=N
     result = response('query', **record, view=view, rows=[], next_offset=None,
                       limits={'response_bytes': MAX_RESPONSE_BYTES, 'text_preview_bytes': text_bytes,
                               'requested_rows': limit})
-    for row in rows[offset:offset + min(limit, 1000)]:
+
+    def prepare_row(row, result):
         if not result['rows'] and response_size({**result, 'rows': [row]}) > MAX_RESPONSE_BYTES - 64:
             keep = ['id', 'line', 'page', 'status', 'text_status', 'text', 'text_bytes',
                     'text_truncated', 'artifact', 'source', 'candidate_kind', 'variant', 'stale_for_current_review']
             omitted = [key for key in row if key not in keep]
             row = {key: row[key] for key in keep if key in row}
             row['omitted_fields'] = omitted
-        result['rows'].append(row)
-        result['counts']['returned'] = len(result['rows'])
-        end = offset + len(result['rows'])
-        result['next_offset'] = end if end < len(rows) else None
-        if response_size(result) > MAX_RESPONSE_BYTES:
-            result['rows'].pop()
-            result['counts']['returned'] = len(result['rows'])
-            result['next_offset'] = offset + len(result['rows'])
-            break
-    if offset < len(rows) and not result['rows']:
-        raise ProjectError('response_too_large', 'Selected record exceeds protocol budget; request a smaller text preview.')
-    return result
+        return row
+
+    return paginate_response(
+        result, 'rows', rows, offset=offset, limit=limit, prepare_row=prepare_row,
+        too_large='Selected record exceeds protocol budget; request a smaller text preview.')
 
 
 def read_artifact(path):
@@ -168,10 +162,6 @@ def summarize(value, text_bytes):
     return result
 
 
-def response_size(value):
-    return len((json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8'))
-
-
 def stale_artifacts(work):
     """Preserved evidence stays readable, but never masquerades as current."""
     marker = work / 'review-invalidation.json'
@@ -183,28 +173,30 @@ def stale_artifacts(work):
         return set()
     stale = {entry['path'] for entry in invalidation['artifacts']
              if (work / entry['path']).is_file() and source_hash(work / entry['path']) == entry['sha256']}
-    for manifest, segment in [('segment-manifest.json', True), ('output-manifest.json', False)]:
+    for manifest, artifacts in [('segment-manifest.json', SEGMENTATION_ARTIFACTS),
+                                ('output-manifest.json', EXPORT_ARTIFACTS)]:
         path = work / manifest
         if path.is_file():
             inputs = read_artifact(path).get('inputs', {})
             if inputs.get('review', {}).get('sha256') == current:
-                if segment:
-                    stale -= set(DERIVED_ARTIFACTS[:12])
-                else:
-                    stale -= set(DERIVED_ARTIFACTS[12:])
+                stale -= set(artifacts)
     return stale
 
 
-DERIVED_ARTIFACTS = (
+SEGMENTATION_ARTIFACTS = (
     'segment-manifest.json', 'segmented-review.json', 'pages.json', 'reviewed-lines.json',
     'geometry.json', 'segmentation-events.json', 'unresolved.json', 'publisher-errors.json',
     'reconstructions.json', 'risk-register.json', 'checks/unsupported-cells.json',
-    'checks/geometry-anomalies.json', 'output-manifest.json', 'exported-pages.json',
+    'checks/geometry-anomalies.json',
+)
+EXPORT_ARTIFACTS = (
+    'output-manifest.json', 'exported-pages.json',
     'exported-review.json', 'export-inputs.json', 'construction/construction-events.json',
     'checks/technical.json', 'checks/geometry-samples.json', 'checks/visual-review.json',
     'checks/findings.json', 'checks/manual-copy/status.json', 'checks/report-todo.json',
     'checks/run-validation.json', 'checks/run-summary.md',
 )
+DERIVED_ARTIFACTS = SEGMENTATION_ARTIFACTS + EXPORT_ARTIFACTS
 
 
 def patch_project(registry, project_id, patch, *, line_id=None):
