@@ -33,8 +33,36 @@ def response(operation, *, project=None, artifacts=None, counts=None,
             'artifacts': artifacts or {}, 'error': error, **extra}
 
 
+def encode_response(value):
+    return (json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
+
+
+def response_size(value):
+    return len(encode_response(value))
+
+
+def paginate_response(result, collection, entries, *, offset, limit, too_large,
+                      prepare_row=None):
+    """Fill a response page within the emitted UTF-8 budget, including metadata."""
+    selected = result[collection]
+    for entry in entries[offset:offset + min(limit, 1000)]:
+        row = prepare_row(entry, result) if prepare_row else entry
+        selected.append(row)
+        result['counts']['returned'] = len(selected)
+        end = offset + len(selected)
+        result['next_offset'] = end if end < len(entries) else None
+        if response_size(result) > MAX_RESPONSE_BYTES:
+            selected.pop()
+            result['counts']['returned'] = len(selected)
+            result['next_offset'] = offset + len(selected)
+            break
+    if not selected and offset < len(entries):
+        raise ProjectError('response_too_large', too_large)
+    return result
+
+
 def emit_response(value):
-    encoded = (json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
+    encoded = encode_response(value)
     if len(encoded) > MAX_RESPONSE_BYTES:
         raise ProjectError('response_too_large', 'Response exceeds 4096 UTF-8 bytes; use a smaller selection.')
     sys.stdout.buffer.write(encoded)
@@ -248,20 +276,10 @@ class ProjectRegistry:
         records = self._read()['projects']
         result = response('list', counts={'total': len(records), 'returned': 0},
                           artifacts={'registry': 'registry.json'}, projects=[], next_offset=None)
-        for record in records[offset:offset + min(limit, 1000)]:
-            project = self.get(record['project']['project_id'])['project']
-            result['projects'].append(project)
-            result['counts']['returned'] = len(result['projects'])
-            end = offset + len(result['projects'])
-            result['next_offset'] = end if end < len(records) else None
-            if len((json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')) > MAX_RESPONSE_BYTES:
-                result['projects'].pop()
-                result['counts']['returned'] = len(result['projects'])
-                result['next_offset'] = offset + len(result['projects'])
-                break
-        if not result['projects'] and offset < len(records):
-            raise ProjectError('response_too_large', 'Project summary exceeds the response limit.')
-        return result
+        return paginate_response(
+            result, 'projects', records, offset=offset, limit=limit,
+            too_large='Project summary exceeds the response limit.',
+            prepare_row=lambda record, result: self.get(record['project']['project_id'])['project'])
 
 
 class ProtocolArgumentParser(argparse.ArgumentParser):
