@@ -202,6 +202,8 @@ class ProjectRegistry:
                     return record
         if record['project']['operation_state'] == 'running':
             record['project']['operation_state'] = 'interrupted'
+            if record['project']['phase'] == 'exporting':
+                record['project']['phase'] = 'export_interrupted'
         marker = self.root / record['artifacts']['workspace'] / 'preparation-checkpoint.json'
         if marker.is_file() or (marker.parent / 'preparation-identity.json').is_file():
             try:
@@ -298,6 +300,13 @@ def build_parser():
     command.add_argument('project_id')
     command.add_argument('--patch', required=True, type=Path)
     command.add_argument('--id', dest='line_id')
+    command = commands.add_parser('export')
+    command.add_argument('project_id')
+    command.add_argument('--environment', type=Path)
+    command.add_argument('--reviewer-root', type=Path)
+    command = commands.add_parser('validate')
+    command.add_argument('project_id')
+    command.add_argument('--environment', type=Path)
     command = commands.add_parser('resume')
     command.add_argument('project_id')
     command.add_argument('--dpi', type=int)
@@ -308,6 +317,7 @@ def build_parser():
 
 def main(argv=None):
     operation = 'request'
+    exit_code = 0
     try:
         args = build_parser().parse_args(argv)
         operation = args.operation
@@ -325,6 +335,15 @@ def main(argv=None):
                 record, created = registry.import_source(args.source, new_run=args.new_run)
                 result = response(args.operation, project=record['project'], artifacts=record['artifacts'],
                                   counts={'created': int(created), 'reused': int(not created)})
+        elif args.operation == 'validate':
+            from ocr_project_export import validate_project
+            record, exit_code = validate_project(registry, args.project_id, environment=args.environment)
+            result = response(args.operation, **record)
+        elif args.operation == 'export':
+            from ocr_project_export import export_project
+            record = export_project(registry, args.project_id, environment=args.environment,
+                                    reviewer_root=args.reviewer_root)
+            result = response(args.operation, **record)
         elif args.operation == 'patch':
             from ocr_project_review import patch_project
             record = patch_project(registry, args.project_id, args.patch, line_id=args.line_id)
@@ -346,10 +365,10 @@ def main(argv=None):
             record = registry.get(args.project_id)
             result = response(args.operation, **record)
         emit_response(result)
-        return 0
+        return exit_code
     except ProjectError as error:
         record = {}
-        if operation in ('prepare', 'resume', 'query', 'patch'):
+        if operation in ('prepare', 'resume', 'query', 'patch', 'export', 'validate'):
             try:
                 record = registry.get(args.project_id)
             except (ProjectError, OSError):
