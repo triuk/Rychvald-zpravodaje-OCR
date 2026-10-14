@@ -56,6 +56,51 @@ Přerušený průchod se neobnovuje implicitním `prepare`: vrátí `resume_requ
 Explicitní obnova používá stejné identity a jednotkové checkpointy a je
 samostatnou navazující operací.
 
+## Pokračování přerušeného průchodu
+
+```bash
+.venv/bin/python tools/ocr_projects.py --root '/cesta/archiv vydání' --json resume PROJECT_ID
+```
+
+`resume` použije původní DPI, jazyk a cestu manifestu prostředí. Nepřejde
+automaticky na výchozí300 DPI/ces nebo jiné prostředí. Volitelné `--dpi`,
+`--language` musí původním hodnotám odpovídat; `--environment` může změnit
+umístění shodného manifestu. Rozdílná sada vyžaduje import `--new-run`.
+Projekt dosud bez zahájené přípravy vrátí `resume_unavailable`; začni `prepare`.
+
+Kontrola zdroje, prostředí a uložené identity předchází přepisu podkladů.
+`configuration_changed`, `environment_changed`, `environment_invalid` nebo
+`source_corrupt` vysvětlí nesoulad v malé odpovědi. Nový běh zachová původní
+pracovní prostor; není potřeba ho mazat. Původní manifest z nedostupného
+umístění lze zadat novou cestou, jeho obsah a identita ale musí zůstat shodné.
+
+`preparation-identity.json` se atomicky zapíše před prvním průběžným checkpointem
+a odděleně zachová identitu přípravy i cestu ověřené sady. Při poškozeném nebo
+chybějícím hlavním checkpointu obnova použije tento záznam; starší projekty lze
+obnovit z platné identity hlavního checkpointu nebo vlastního vstupního
+manifestu. Pokud není žádný důvěryhodný záznam identity, vrátí `checkpoint_invalid`
+a nabídne nový explicitní běh. Rozpor dvou platných identit vrátí
+`checkpoint_conflict`; nepřijme jednu z nich potichu.
+
+Každý dokončený rastr musí mít shodnou identitu, geometrii zdroje, rozměry obrazu
+a hashe rastru/přehledu. Každý kandidátní průchod musí mít shodnou úplnou identitu
+a hashe všech formátů. Obnova nepřepisuje platné jednotky; dopočítá neúplné,
+chybějící nebo poškozené. Stejný vstupní manifest zachová i jeho původní bajty.
+Po neúspěchu lze příčinu odstranit a `resume` opakovat. Další SIGKILL zanechá
+nový checkpoint, který se opět ověří při následující obnově.
+
+Živý Linux zámek vrátí `project_busy`. Soubor zámku bez vlastníka pokračování
+neblokuje; stav odliší `running` od `interrupted`. Obnova chrání poslední
+`review.json`, historii oprav/iterace, doklady nálezů, očekávání i předchozí
+PDF/TXT. Zaznamenanou pozdější fázi revize a její stav zachová také při selhání
+a dalším pokračování; nejde o nově provedenou obsahovou validaci. První
+úspěšná příprava stále vrací `prepared`/`not_run`.
+
+Integrační testy obnovy opravdu ukončují procesovou skupinu SIGKILL mezi
+stránkami a kandidátními průchody, přerušují i další pokračování a ověřují
+znovupoužití dokončených souborů, živý zámek a zachování ruční práce. Nejde
+o simulaci změnou návratové hodnoty workeru.
+
 Další stabilní kódy přípravy jsou `invalid_parameters` (neplatné DPI),
 `environment_invalid` (odmítnutý preflight), `configuration_changed` (změna
 identity již zahájeného průchodu), `source_corrupt`, `invalid_source` a
@@ -68,12 +113,13 @@ platný checkpoint ani schválený model.
 
 ```python
 prepare_project(registry, project_id, *, dpi=300, language='ces', environment=None)
-prepare_artifacts(source, work, *, dpi, language, native)
+resume_project(registry, project_id, *, dpi=None, language=None, environment=None)
+prepare_artifacts(source, work, *, dpi, language, native, resume=False, retained_state=None)
 ```
 
-První funkce provádí preflight, zámek, kontrolu zdroje a aktualizaci malých
-projektových metadat. Druhá používá ověřený `NativeEnvironment` a jednotkové
-checkpointy; nyní přijímá nový nebo již dokončený průchod. Obnova může rozšířit
-její explicitní vstup pro přerušený průchod bez změny rasterizace, cache identity
-nebo ochrany ručních podkladů. Zdroj/parametry se odvozují z uložené identity,
-jednotky se ověřují pomocí checkpointů a poškozené/chybějící se dopočítávají.
+`prepare_project` provádí preflight, zámek, kontrolu zdroje a aktualizaci malých
+projektových metadat. `resume_project` odvodí původní konfiguraci, odmítne živou
+operaci a použije stejnou transakci s explicitní obnovou. `prepare_artifacts`
+používá ověřený `NativeEnvironment` a jednotkové checkpointy bez změny
+rasterizace nebo OCR algoritmu. `retained_state` přenese zaznamenanou pozdější
+fázi projektu přes další přerušení, nový průchod ji nevytváří.

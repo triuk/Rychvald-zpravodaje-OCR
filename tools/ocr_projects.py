@@ -203,9 +203,11 @@ class ProjectRegistry:
         if record['project']['operation_state'] == 'running':
             record['project']['operation_state'] = 'interrupted'
         marker = self.root / record['artifacts']['workspace'] / 'preparation-checkpoint.json'
-        if marker.is_file():
+        if marker.is_file() or (marker.parent / 'preparation-identity.json').is_file():
             try:
                 preparation = json.loads(marker.read_text(encoding='utf-8'))
+                if not isinstance(preparation, dict):
+                    preparation = {'status': 'invalid'}
             except (ValueError, OSError):
                 preparation = {'status': 'invalid'}
             if preparation.get('status') != 'completed':
@@ -296,6 +298,11 @@ def build_parser():
     command.add_argument('project_id')
     command.add_argument('--patch', required=True, type=Path)
     command.add_argument('--id', dest='line_id')
+    command = commands.add_parser('resume')
+    command.add_argument('project_id')
+    command.add_argument('--dpi', type=int)
+    command.add_argument('--language')
+    command.add_argument('--environment', type=Path)
     return parser
 
 
@@ -327,9 +334,10 @@ def main(argv=None):
             result = query_project(registry, args.project_id, args.view, page=args.page,
                                    ids=args.ids, article=args.article, offset=args.offset,
                                    limit=args.limit, text_bytes=args.text_bytes)
-        elif args.operation == 'prepare':
-            from ocr_project_prepare import prepare_project
-            record = prepare_project(registry, args.project_id, dpi=args.dpi,
+        elif args.operation in ('prepare', 'resume'):
+            from ocr_project_prepare import prepare_project, resume_project
+            prepare = resume_project if args.operation == 'resume' else prepare_project
+            record = prepare(registry, args.project_id, dpi=args.dpi,
                                      language=args.language, environment=args.environment)
             result = response(args.operation, **record)
         elif args.operation == 'list':
@@ -341,7 +349,7 @@ def main(argv=None):
         return 0
     except ProjectError as error:
         record = {}
-        if operation in ('prepare', 'query', 'patch'):
+        if operation in ('prepare', 'resume', 'query', 'patch'):
             try:
                 record = registry.get(args.project_id)
             except (ProjectError, OSError):
