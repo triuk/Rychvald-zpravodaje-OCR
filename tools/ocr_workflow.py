@@ -322,7 +322,18 @@ def export(a):
  if (w/'output-manifest.json').exists():
   previous=load(w/'output-manifest.json')
   if any(path.exists() and str(path.resolve())!=previous[name] for name,path in [('pdf',out),('txt',txt)]):raise ValueError('Refuse to replace an unrelated output')
-  print(f'Archived previous export: {snapshot(w)}')
+  prior_snapshot=getattr(a,'previous_snapshot',None)
+  if prior_snapshot:
+   archived=Path(prior_snapshot).resolve()
+   if not archived.is_relative_to((w/'iterations').resolve()):raise ValueError('Previous snapshot must be inside this work directory')
+   frozen=load(archived/'output-manifest.json');snapshot_record=load(archived/'snapshot.json')
+   if any(frozen[name]!=previous[name] for name in ['source_sha256','pdf_sha256','txt_sha256']) or snapshot_record['pdf_sha256']!=previous['pdf_sha256']:raise ValueError('Previous snapshot does not match the previous export')
+   for name in ['pdf','txt']:
+    stored=archived/'external'/Path(previous[name]).name
+    if not stored.is_file():stored=archived/Path(previous[name]).resolve().relative_to(w.resolve())
+    if sha(stored)!=previous[name+'_sha256'] or sha(previous[name])!=previous[name+'_sha256']:raise ValueError('Previous snapshot or output is modified')
+   print(f'Preserved previous export: {archived}')
+  else:print(f'Archived previous export: {snapshot(w)}')
  elif out.exists() or txt.exists():raise ValueError('Refuse to overwrite an existing output without its manifest')
  out.parent.mkdir(parents=True,exist_ok=True);txt.parent.mkdir(parents=True,exist_ok=True)
  # For a rotated source, author the unchanged
@@ -381,6 +392,7 @@ def check(a):
     'decoded_images_identical':[hashlib.sha256(source.xref_stream(x[0])).hexdigest() for x in sp.get_images()]==[hashlib.sha256(out.xref_stream(x[0])).hexdigest() for x in op.get_images()],
     'mupdf_render_identical':im.samples==final.samples,'mupdf_characters_equal':strip(expected)==strip(mu),'poppler_characters_equal':strip(expected)==strip(pop),
     'mupdf_literal_equal':expected==mu,'poppler_literal_equal':expected==pop,
+    'poppler_terminal_lf_omitted':expected.endswith('\n') and not expected.endswith('\n\n') and pop==expected[:-1],
     'mupdf_literal_diff':list(difflib.ndiff(expected.splitlines(keepends=True),mu.splitlines(keepends=True))),
     'poppler_literal_diff':list(difflib.ndiff(expected.splitlines(keepends=True),pop.splitlines(keepends=True)))}
    stream=b'\n'.join(out.xref_stream(x[0]) for x in op.get_xobjects() if x[1]=='fullpage')
@@ -454,6 +466,7 @@ def main():
  x=sub('export',export)
  for name in ['source','pages','pdf','txt']:x.add_argument('--'+name,required=True)
  x.add_argument('--allow-existing-text',action='store_true')
+ x.add_argument('--previous-snapshot')
  x=sub('check',check)
  for name in ['source','pages','pdf','txt']:x.add_argument('--'+name,required=True)
  x.add_argument('--reviewer-root')

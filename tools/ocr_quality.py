@@ -412,7 +412,7 @@ def report_templates(a):
 
     for page in technical['pages']:
         for extractor in ('mupdf', 'poppler'):
-            if page.get(extractor + '_literal_equal') is not True:
+            if page.get(extractor + '_literal_equal') is not True and not (extractor == 'poppler' and page.get('poppler_terminal_lf_omitted') is True):
                 number = page['page']
                 pending(f'literal/{number}/{extractor}',
                         ['checks/technical.json', f'checks/expected-page-{number}.txt', f'checks/{extractor}-page-{number}.txt'],
@@ -594,6 +594,8 @@ def validate_run(a):
     work = Path(a.work).resolve()
     errors, opened, manifest = [], [], {}
     clipboard = {'optional': True, 'status': 'not_tested', 'tested_cases': []}
+    reviewer_coverage = {'optional': True, 'status': 'not_tested', 'tested_pages': []}
+    framing = []
     try:
         manifest = load(work / 'output-manifest.json')
         for name in ('source', 'pdf', 'txt'):
@@ -655,7 +657,20 @@ def validate_run(a):
         for row in technical['pages']:
             for extractor in ('mupdf', 'poppler'):
                 if row.get(extractor + '_literal_equal') is not True:
-                    open_finding(f"literal/{row['page']}/{extractor}")
+                    if extractor == 'poppler' and row.get('poppler_terminal_lf_omitted') is True:
+                        page = next(page for page in exported if page['page'] == row['page'])
+                        expected_text = '\n\n'.join(unit['pdf_text'] for unit in page['units']) + '\n'
+                        expected_path = f"checks/expected-page-{row['page']}.txt"
+                        actual_path = f"checks/poppler-page-{row['page']}.txt"
+                        if (not expected_text.endswith('\n\n') and
+                                work_file(work, expected_path).read_bytes() == expected_text.encode('utf-8') and
+                                work_file(work, actual_path).read_bytes() == expected_text[:-1].encode('utf-8')):
+                            framing.append({'page': row['page'], 'extractor': 'poppler',
+                                            'kind': 'single_terminal_lf_omitted', 'evidence': [expected_path, actual_path]})
+                        else:
+                            errors.append(f"changed_literal_framing/{row['page']}/poppler")
+                    else:
+                        open_finding(f"literal/{row['page']}/{extractor}")
         for key, row in actual.items():
             if row['output_sha256'] != manifest['pdf_sha256']:
                 errors.append('stale_sample/' + key)
@@ -675,8 +690,13 @@ def validate_run(a):
             open_finding('geometry/approximation')
         for entry in review.get('unresolved', []):
             opened.append({'id': 'unresolved/' + entry['id'], 'reason': entry['reason']})
-        if not any('reviewer_render_identical' in row for row in technical['pages']):
-            opened.append({'id': 'reviewer/not_tested', 'reason': 'Optional reviewer was not tested'})
+        tested = [row['page'] for row in technical['pages']
+                  if 'reviewer_render_identical' in row and 'reviewer_characters_equal' in row]
+        if any(('reviewer_render_identical' in row) != ('reviewer_characters_equal' in row)
+               for row in technical['pages']):
+            errors.append('reviewer_incomplete_check')
+        reviewer_coverage.update(status='tested' if len(tested) == len(expected_pages) else 'partial' if tested else 'not_tested',
+                                 tested_pages=tested)
         clipboard = clipboard_validation(work, manifest, errors, open_finding)
         # Keep additional open findings visible even when no automatic check produces them.
         for key, finding in registered.items():
@@ -694,6 +714,8 @@ def validate_run(a):
               'txt_sha256': manifest.get('txt_sha256'), 'inputs': bindings(**report_inputs),
               'status': status, 'errors': errors, 'open_items': opened,
                'ui_clipboard': clipboard,
+              'reviewer_integration': reviewer_coverage,
+              'extractor_framing': framing,
               'acceptance': 'separate_user_decision'}
     dump(work / 'checks/run-validation.json', report)
     summary = [f'OCR validation: {status}', '',
