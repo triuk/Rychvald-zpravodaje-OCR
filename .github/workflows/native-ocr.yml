@@ -1,0 +1,23 @@
+name: Native OCR package (explicit trusted run)
+on:
+  workflow_dispatch:
+jobs:
+  native:
+    # Provisioning is outside this change. No labeled runner means pending,
+    # never proof that package verification passed.
+    runs-on: [self-hosted, Linux, X64, rychvald-ocr-v3]
+    env:
+      OCR_BUNDLE_INPUTS: /opt/rychvald-ocr-inputs
+      OCR_BUNDLE_ARTIFACTS: ${{ runner.temp }}/rychvald-ocr-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and install from frozen offline inputs
+        run: |
+          /usr/bin/python3.14 tools/ocr_bundle.py build --inputs "$OCR_BUNDLE_INPUTS" --output "$OCR_BUNDLE_ARTIFACTS/package.tar.gz"
+          ocr_expected_sha=$(/usr/bin/python3.14 -c 'import os,pathlib; print((pathlib.Path(os.environ["OCR_BUNDLE_ARTIFACTS"])/"package.tar.gz.sha256").read_text().split()[0])')
+          /usr/bin/python3.14 tools/ocr_bundle.py install --archive "$OCR_BUNDLE_ARTIFACTS/package.tar.gz" --sha256 "$ocr_expected_sha" --destination "$OCR_BUNDLE_ARTIFACTS/runtime"
+      - name: Mandatory native regressions and clean installed proof using own Python
+        run: |
+          export LD_LIBRARY_PATH="$OCR_BUNDLE_ARTIFACTS/runtime/lib"
+          "$OCR_BUNDLE_ARTIFACTS/runtime/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "$LD_LIBRARY_PATH" "$OCR_BUNDLE_ARTIFACTS/runtime/bin/python3.14" -I -B -m compileall -q tools tests
+          "$OCR_BUNDLE_ARTIFACTS/runtime/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "$LD_LIBRARY_PATH" "$OCR_BUNDLE_ARTIFACTS/runtime/bin/python3.14" -I -B -m unittest discover -s tests -v

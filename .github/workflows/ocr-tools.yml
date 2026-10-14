@@ -3,14 +3,16 @@ on:
   push:
   pull_request:
 jobs:
-  validate:
+  stdlib:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-      - name: Syntax and quality-gate regression tests
+      - name: Syntax (lightweight hosted checks only)
         run: |
           python -m compileall -q tools tests
-          python -m unittest discover -s tests -v
+      - name: Standard-library quality, registry and query regressions
+        working-directory: tests
+        run: python -m unittest -v test_ocr_quality.QualityTests test_ocr_projects test_ocr_project_review

@@ -4,7 +4,7 @@
   "profile": "verified-development-environment",
   "platform": {"system": "Linux", "machine": "x86_64", "cpu_baseline": "x86-64-v3", "libc": "glibc 2.44"},
   "root": "/",
-  "python": {"path": "usr/bin/python3.14", "version": "3.14.7", "sha256": "dd65a07e8f535525443d63e2bd6dd10efbf22bf22e0b6d65e634266acc7ac976", "source": "https://archive.archlinux.org/packages/p/python/python-3.14.7-2-x86_64.pkg.tar.zst"},
+  "python": {"path": "usr/bin/python3.14", "version": "3.14.7", "sha256": "dd65a07e8f535525443d63e2bd6dd10efbf22bf22e0b6d65e634266acc7ac976", "source": "https://packages.cachyos.org/package/cachyos-v3/x86_64_v3/python#python-3.14.7-2-x86_64_v3.pkg.tar.zst"},
   "packages": {
     "PyMuPDF": {"version": "1.26.7", "tree_sha256": "6d66467c56b10f81349bc89c791c4b4fe58b93e79e9bbbdef7ccac9bd4f91321", "source": "https://pypi.org/project/PyMuPDF/1.26.7/"},
     "Pillow": {"version": "12.3.0", "tree_sha256": "b0b783cf32a196461f62625fb1fefac73adccdfe2320d6cb7499137ff13ad8d8", "source": "https://pypi.org/project/Pillow/12.3.0/"},
