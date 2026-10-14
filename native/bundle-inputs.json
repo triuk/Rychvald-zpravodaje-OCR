@@ -1,0 +1,4466 @@
+{
+  "schema_version": 1,
+  "build_id": "rychvald-ocr-linux-x86_64-v3-2026-10-14-1",
+  "platform": {
+    "os": "Linux",
+    "machine": "x86_64-v3",
+    "glibc": "2.44",
+    "kernel": "Linux 6.1 or newer",
+    "shell": "POSIX /bin/sh"
+  },
+  "python_archive": {
+    "path": "/var/cache/pacman/pkg/python-3.14.7-2-x86_64_v3.pkg.tar.zst",
+    "sha256": "0e9a5d3e712ce85578a6eb452c74b0df898c2bb71b780a2b42f432a617e98043",
+    "source": "https://packages.cachyos.org/package/cachyos-v3/x86_64_v3/python",
+    "filename": "python-3.14.7-2-x86_64_v3.pkg.tar.zst",
+    "signature_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47"
+  },
+  "files": {
+    "/lib64/ld-linux-x86-64.so.2": {
+      "sha256": "2a950d46575efa0210d22440988f5a6b4507ebddc6c86d9a42e6e7ef6f01463e",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/bin/bash": {
+      "sha256": "917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2",
+      "owner": "bash",
+      "version": "5.3.20-2"
+    },
+    "/usr/bin/pdffonts": {
+      "sha256": "3178b6ab6aabfc4d8bb7a3fff5a7f7435743764e8cf7c545e05943c0a1bc4adf",
+      "owner": "poppler",
+      "version": "26.08.0-1.1"
+    },
+    "/usr/bin/pdftoppm": {
+      "sha256": "29a82745aabcaf059836f056bafa37febbb4c884fe95a68299741b8f3de01bca",
+      "owner": "poppler",
+      "version": "26.08.0-1.1"
+    },
+    "/usr/bin/pdftotext": {
+      "sha256": "69399fac44ed4c454f69f040ed2ead51959f6986b103c6b37e1674f046266f5e",
+      "owner": "poppler",
+      "version": "26.08.0-1.1"
+    },
+    "/usr/bin/python3.14": {
+      "sha256": "dd65a07e8f535525443d63e2bd6dd10efbf22bf22e0b6d65e634266acc7ac976",
+      "owner": "python",
+      "version": "3.14.7-2"
+    },
+    "/usr/bin/qpdf": {
+      "sha256": "7ad66cd7333a0548667c10171d5871c1273530495408eb5ef15d78a73a950acc",
+      "owner": "qpdf",
+      "version": "12.4.2-1.1"
+    },
+    "/usr/bin/tesseract": {
+      "sha256": "037aac252011c50f005b6c98d879154a64f1b78511b9ae5c5200ac9d5f9f4b45",
+      "owner": "tesseract",
+      "version": "5.5.3-1.1"
+    },
+    "/usr/lib/libX11.so.6": {
+      "sha256": "78ae0d184e434dad256a1cbd6d8fe569de9b9a4e131c6019c04da880d3544f1f",
+      "owner": "libx11",
+      "version": "1.8.13-2.1"
+    },
+    "/usr/lib/libXau.so.6": {
+      "sha256": "7336830145541e30e97108e103d794be559bea610f09740a1941371334b6aef0",
+      "owner": "libxau",
+      "version": "1.0.12-1.1"
+    },
+    "/usr/lib/libXdmcp.so.6": {
+      "sha256": "812b1b8a5551862ada50da7badd503572e8b5a540082001895ead6ebd8386d30",
+      "owner": "libxdmcp",
+      "version": "1.1.5-2.1"
+    },
+    "/usr/lib/libXext.so.6": {
+      "sha256": "0a7ec12ca5aa62835a61214560727bf09ba1513a571bfbd927d71b6940ac0172",
+      "owner": "libxext",
+      "version": "1.3.7-1.1"
+    },
+    "/usr/lib/libXft.so.2": {
+      "sha256": "088a21455d00558460d1e8d0f7e5f19c1ef3ff6972d006e2c7d781b26f5fc583",
+      "owner": "libxft",
+      "version": "2.3.9-1.2"
+    },
+    "/usr/lib/libXrender.so.1": {
+      "sha256": "d6543fefd50efbc2483b7f4eecf7126f7ac7dcfad3f071e137213077e51681ea",
+      "owner": "libxrender",
+      "version": "0.9.12-1.1"
+    },
+    "/usr/lib/libXss.so.1": {
+      "sha256": "c311bb4b886edbec4dd0d68add2220b1e556f424f8219db96e7e2c9675101027",
+      "owner": "libxss",
+      "version": "1.2.5-1.1"
+    },
+    "/usr/lib/libacl.so.1": {
+      "sha256": "01d327bda0694d3277ad39a253eb9c9673992eff93cb3a37087034949259e4e9",
+      "owner": "acl",
+      "version": "2.4.0-1.1"
+    },
+    "/usr/lib/libarchive.so.13": {
+      "sha256": "652699822573860743a3765ab4d833f389c8f2a564f090fda71a5816c0b62bb9",
+      "owner": "libarchive",
+      "version": "3.8.9-1.1"
+    },
+    "/usr/lib/libassuan.so.9": {
+      "sha256": "da066eddd95078da13c29e7eadad5e52d60c2e86e5eff1b3c695d35eb26bf14b",
+      "owner": "libassuan",
+      "version": "3.0.0-1.1"
+    },
+    "/usr/lib/libbrotlicommon.so.1": {
+      "sha256": "0a5a0d15264043c6cb99d3076501d4503bafde11eaea28f353e399b4ce6b2981",
+      "owner": "brotli",
+      "version": "1.2.0-1.1"
+    },
+    "/usr/lib/libbrotlidec.so.1": {
+      "sha256": "f747ed8ca1a29c53744f6e2b12dbd70d78838682a5914505b173c1ad50db4ca9",
+      "owner": "brotli",
+      "version": "1.2.0-1.1"
+    },
+    "/usr/lib/libbrotlienc.so.1": {
+      "sha256": "dd19bedf12100d84f6a490af2017a49c8a5dff098dd4f2d03dea501ffaf47d56",
+      "owner": "brotli",
+      "version": "1.2.0-1.1"
+    },
+    "/usr/lib/libbz2.so.1.0": {
+      "sha256": "c208e149de372d9aca88f752849b33dea032b8054d1718d662666bd3bad33f8b",
+      "owner": "bzip2",
+      "version": "1.0.8-6.1"
+    },
+    "/usr/lib/libc.so.6": {
+      "sha256": "071e34179e645b25f8a8c2e7108894dc665caa9f5f8c939cd579a75b6638bc3f",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/lib/libcom_err.so.2": {
+      "sha256": "d08452c4fc1ff493f1ff2a5a37203672e60c040bae88c7f4081c9e87e987e5bc",
+      "owner": "e2fsprogs",
+      "version": "1.47.4-1.1"
+    },
+    "/usr/lib/libcrypto.so.3": {
+      "sha256": "ecbe60559ed67946cf526aeba3fad8103f3a1de31ad389ca6684d201e10c63b3",
+      "owner": "openssl",
+      "version": "3.6.5-1.1"
+    },
+    "/usr/lib/libcurl.so.4": {
+      "sha256": "4872e5fc0e10e413fd2c84cd455903fff62dcba452491de4798aeaf44f56d0bc",
+      "owner": "curl",
+      "version": "8.22.0-1.1"
+    },
+    "/usr/lib/libdeflate.so.0": {
+      "sha256": "bbc5540f60756b483088b70dae9cdff9ddba3b53ef5277f5c264c8f949d51102",
+      "owner": "libdeflate",
+      "version": "1.26-1.1"
+    },
+    "/usr/lib/libdl.so.2": {
+      "sha256": "336a6874f359104ec9bef6d2f2948f11e0f079d347e986880a240f1156a42d4d",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/lib/libexpat.so.1": {
+      "sha256": "fed5805d579adfeb84191d33c28efd6906df61581fa2c4b3b2879c3abc457d94",
+      "owner": "expat",
+      "version": "2.9.0-1.1"
+    },
+    "/usr/lib/libffi.so.8": {
+      "sha256": "ea7da6217398e85e0a83ae367e70cde716ec626c782d29221907b893fc43866e",
+      "owner": "libffi",
+      "version": "3.8.0-1.1"
+    },
+    "/usr/lib/libfontconfig.so.1": {
+      "sha256": "fc3a03d0f608f688bf06e4cda7c55031eb3725a375a46994de28f766f364cc04",
+      "owner": "fontconfig",
+      "version": "2:2.18.3-2.1"
+    },
+    "/usr/lib/libfreetype.so.6": {
+      "sha256": "e49945daa8a2edf7a9595748cac258e7c73b9edd52c58c17a4a40e5d0afb7c8b",
+      "owner": "freetype2",
+      "version": "2.14.3-1.2"
+    },
+    "/usr/lib/libgcc_s.so.1": {
+      "sha256": "571745fb27883c763315fab54a536906064c1df6804d1a7884713dac259da68d",
+      "owner": "libgcc",
+      "version": "16.2.1+r23+gd564253eb6c8-1"
+    },
+    "/usr/lib/libgdbm.so.6": {
+      "sha256": "26f8a282caf9890d1e774e26057e6c6bb0f42527876a4d60021b5011eea1c26c",
+      "owner": "gdbm",
+      "version": "1.26-2.1"
+    },
+    "/usr/lib/libgdbm_compat.so.4": {
+      "sha256": "a731aa31687e79e6825effb1805ac3335963f58307fd3a7caa45598fbe381d0b",
+      "owner": "gdbm",
+      "version": "1.26-2.1"
+    },
+    "/usr/lib/libgif.so.7": {
+      "sha256": "4046c02938762f7b2248d2488a5929342ac28a842e70c6b0a2af216d3eb81036",
+      "owner": "giflib",
+      "version": "6.1.3-2.1"
+    },
+    "/usr/lib/libgmp.so.10": {
+      "sha256": "638e7ca56edc6dfbdc19d2f21976c82060eb88d533ccedc1660a806c44602b5c",
+      "owner": "gmp",
+      "version": "6.3.0-3.1"
+    },
+    "/usr/lib/libgnutls.so.30": {
+      "sha256": "93d782df146b5d38a5b9769cea57a55fd2eff48cf47194ff31694787e9b55d72",
+      "owner": "gnutls",
+      "version": "3.8.13-3.1"
+    },
+    "/usr/lib/libgomp.so.1": {
+      "sha256": "843e95ac19bdc9c450e8b090204cf01aafaf680ab9ca64bf1ec5e3674c3a776f",
+      "owner": "libgomp",
+      "version": "16.2.1+r23+gd564253eb6c8-1"
+    },
+    "/usr/lib/libgpg-error.so.0": {
+      "sha256": "9e66ac0c97920d39e035718b1781b07921f35b5feea05f443c7a7271569b5260",
+      "owner": "libgpg-error",
+      "version": "1.61-1.1"
+    },
+    "/usr/lib/libgpgme.so.45": {
+      "sha256": "cd9ae3f1faafaa4106812a05f66dfcf8d92b1deefd1d870e3b915b1fd6df7e84",
+      "owner": "gpgme",
+      "version": "2.2.0-1.1"
+    },
+    "/usr/lib/libgpgmepp.so.7": {
+      "sha256": "2ee0f7e269489c67b26c74c35b901978d44e453a86d7a9dafd130fd184d42355",
+      "owner": "gpgmepp",
+      "version": "2.2.0-1.1"
+    },
+    "/usr/lib/libgssapi_krb5.so.2": {
+      "sha256": "d34e47082433f2c2d76739a5dc4be34abafdee619e16cdcd9453cd6bf92466e4",
+      "owner": "krb5",
+      "version": "1.22.2-1.1"
+    },
+    "/usr/lib/libhogweed.so.7": {
+      "sha256": "9f8bb0ef6d7c0533222d2a3dca5bef0d9977409551c8ca3a70e99dd137d53108",
+      "owner": "nettle",
+      "version": "4.0-1.1"
+    },
+    "/usr/lib/libicudata.so.78": {
+      "sha256": "d72003b08760852bee4c80cff32c1e6248ae6b1fda5bd313482733a4d5e70dc9",
+      "owner": "icu",
+      "version": "78.3-1.1"
+    },
+    "/usr/lib/libicuuc.so.78": {
+      "sha256": "a02f9e1ab2419219f990b416f981f20f779f5c6f301424c5d1948e52001c555c",
+      "owner": "icu",
+      "version": "78.3-1.1"
+    },
+    "/usr/lib/libidn2.so.0": {
+      "sha256": "d5ed33d85ffb9a8a8d592bb6418963c7752636725e19890e68aac517f93593d8",
+      "owner": "libidn2",
+      "version": "2.3.8-1.1"
+    },
+    "/usr/lib/libjbig.so.2.1": {
+      "sha256": "b6e5b06cdd6d55c3604e0d125fb7c41103d9eb00fb6d5f84f95109af328ad844",
+      "owner": "jbigkit",
+      "version": "2.1-8.1"
+    },
+    "/usr/lib/libjpeg.so.8": {
+      "sha256": "d6cd94abf2b7a9aa59a0e056c83bbfdf8900fbf7101bfba8ea0ee1ca45958665",
+      "owner": "libjpeg-turbo",
+      "version": "3.2.0-2"
+    },
+    "/usr/lib/libk5crypto.so.3": {
+      "sha256": "6285765ef3634be251b55a35d0bb0f32984f8dd8414be99d247d1b36dbe4fcda",
+      "owner": "krb5",
+      "version": "1.22.2-1.1"
+    },
+    "/usr/lib/libkeyutils.so.1": {
+      "sha256": "728c0221c28e6f463774c0e88f1b5c07d90678b81af5c3f7892683dc56dd9340",
+      "owner": "keyutils",
+      "version": "1.6.3-4.1"
+    },
+    "/usr/lib/libkrb5.so.3": {
+      "sha256": "8476242d0d92bce62dbe5421a4ce3efb5a87029a06ceec0373f263da3c523ea0",
+      "owner": "krb5",
+      "version": "1.22.2-1.1"
+    },
+    "/usr/lib/libkrb5support.so.0": {
+      "sha256": "acad85ce0348ebad410afcf104ce69521c0b8a6315a19f3aac4cc11d657173af",
+      "owner": "krb5",
+      "version": "1.22.2-1.1"
+    },
+    "/usr/lib/liblcms2.so.2": {
+      "sha256": "9f6c4f8aebfba8be49a4d271da1e8e405a7bc151af271632e617a6c7c4e7cf87",
+      "owner": "lcms2",
+      "version": "2.19.1-1.1"
+    },
+    "/usr/lib/libleancrypto.so.1.9": {
+      "sha256": "9ab8ad2678cf14292c02a7e4f09212dc162170118fa4e53a3692b549240280b2",
+      "owner": "leancrypto",
+      "version": "1.9.1-1.1"
+    },
+    "/usr/lib/libleptonica.so.6": {
+      "sha256": "4e40a2049305643b681ad3d17b942e225f2e22b56152c8ae68910f64344ffbb6",
+      "owner": "leptonica",
+      "version": "1.87.0-2.1"
+    },
+    "/usr/lib/liblz4.so.1": {
+      "sha256": "da290fa94e84e498895ce2a8a22ff1fa253a25a95e016f103d132a3c178c8327",
+      "owner": "lz4",
+      "version": "1:1.10.0-3"
+    },
+    "/usr/lib/liblzma.so.5": {
+      "sha256": "b6d8fd9301c8cb98e38d2798fb2d0f179b61da12e0690c7fb39dcbf86fd3b6b0",
+      "owner": "xz",
+      "version": "5.8.3-1"
+    },
+    "/usr/lib/libm.so.6": {
+      "sha256": "58b6b82e39d59d7810d402ba4ec34359fde058204fdb7cd5a269fda256a35421",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/lib/libmpdec.so.4": {
+      "sha256": "858c71d3afda6e65d89aee9c4c2f6c9646db3135df964a124f7906d35852df19",
+      "owner": "mpdecimal",
+      "version": "4.0.1-3.1"
+    },
+    "/usr/lib/libncursesw.so.6": {
+      "sha256": "f58d9552e04abc427fb21bd7118eee77e3f216b64b2aaafd768d74bf26507153",
+      "owner": "ncurses",
+      "version": "6.6-2.1"
+    },
+    "/usr/lib/libnettle.so.9": {
+      "sha256": "4553f7c2a2488e99179e2c5250197298157a8122596de0cdb25bbd0673926e7e",
+      "owner": "nettle",
+      "version": "4.0-1.1"
+    },
+    "/usr/lib/libnghttp2.so.14": {
+      "sha256": "91c61845d03c19a251802a8292272301d8338538671ee117abcd6a4d37f13c5a",
+      "owner": "libnghttp2",
+      "version": "1.70.0-1.1"
+    },
+    "/usr/lib/libnghttp3.so.9": {
+      "sha256": "d90c3ca6a102231f1cb28e85392cc67834afcac711ec0f8fc4aa3dd75c8813bf",
+      "owner": "libnghttp3",
+      "version": "1.18.0-1.1"
+    },
+    "/usr/lib/libngtcp2.so.16": {
+      "sha256": "799ff588c662ba4d7b571079671fd1501c90dc83d6b7ba371393c6ed63e164df",
+      "owner": "libngtcp2",
+      "version": "1.25.0-1.1"
+    },
+    "/usr/lib/libngtcp2_crypto_ossl.so.0": {
+      "sha256": "157e5be3af0e36e9bb178b417068eca837942fe192a88cd96f897fb826b95c08",
+      "owner": "libngtcp2",
+      "version": "1.25.0-1.1"
+    },
+    "/usr/lib/libnspr4.so": {
+      "sha256": "16d5075dabe505d30ade167bf3958d97da6feb373a19b5c771085b6677fd81f1",
+      "owner": "nspr",
+      "version": "4.40-1.1"
+    },
+    "/usr/lib/libnss3.so": {
+      "sha256": "45725dffc061f4f209a00672d937589b0b883b0bad01bc082fa824ef74d8dd19",
+      "owner": "nss",
+      "version": "3.131-1.1"
+    },
+    "/usr/lib/libnssutil3.so": {
+      "sha256": "20aa32087ec0687726ebf64e015f09ef42c2c36882b282fa96b02df28306c03e",
+      "owner": "nss",
+      "version": "3.131-1.1"
+    },
+    "/usr/lib/libopenjp2.so.7": {
+      "sha256": "375cc9b7d0a2b1030e724dbf4d712e8554e9103fb9d5076773dfb80848b760e3",
+      "owner": "openjpeg2",
+      "version": "2.5.4-1.1"
+    },
+    "/usr/lib/libp11-kit.so.0": {
+      "sha256": "abf4594c79af46f90d5abb7e13cf47ba0f64a45d52c9307efc4b328def24e5ae",
+      "owner": "libp11-kit",
+      "version": "0.26.5-1.1"
+    },
+    "/usr/lib/libpanelw.so.6": {
+      "sha256": "b170e988ded53093cbe1a72cb9de14173330607bda285d4665a75629d7e2d9e3",
+      "owner": "ncurses",
+      "version": "6.6-2.1"
+    },
+    "/usr/lib/libplc4.so": {
+      "sha256": "f1eaa69d9466db139114840541fe696daf943280f8db2f6a4568bce2ccde59f8",
+      "owner": "nspr",
+      "version": "4.40-1.1"
+    },
+    "/usr/lib/libplds4.so": {
+      "sha256": "0ecbf93470b79baaa195ffed1e7efaf8e82807893e888c8e3db55f10c1be623e",
+      "owner": "nspr",
+      "version": "4.40-1.1"
+    },
+    "/usr/lib/libpng16.so.16": {
+      "sha256": "778b85f05e157b6ea5d3d257c28e19c6c19273db8c34fbc2344f26cdd073efdd",
+      "owner": "libpng",
+      "version": "1.6.59-1.1"
+    },
+    "/usr/lib/libpoppler.so.163": {
+      "sha256": "907b5126e05c27d59472c612cb47b2350ac1c27258317fb435702e05ae5f9ae5",
+      "owner": "poppler",
+      "version": "26.08.0-1.1"
+    },
+    "/usr/lib/libpsl.so.5": {
+      "sha256": "5c77653099a359403697bb3ce2d3d455c8ea44b5e5ea904f1e9d96ec9cc96081",
+      "owner": "libpsl",
+      "version": "0.21.5-2.1"
+    },
+    "/usr/lib/libpthread.so.0": {
+      "sha256": "bcdf5c8472353bd04780314cee7d27e07594153332ac526a390d6e5b38792ee4",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/lib/libpython3.14.so.1.0": {
+      "sha256": "db4e8c8d56faaab4c8ca4c7315811f94e876881ffff08411ffeed08602922750",
+      "owner": "python",
+      "version": "3.14.7-2"
+    },
+    "/usr/lib/libqpdf.so.30": {
+      "sha256": "db7f3afb1e405852eae6420ef5fa9a48189d011aed437f528e72fd4162cecf29",
+      "owner": "qpdf",
+      "version": "12.4.2-1.1"
+    },
+    "/usr/lib/libreadline.so.8": {
+      "sha256": "0a4a775df47a19d2407ba2b2eb2a1fb37b59b1b1608074987e5fa36f6be04ef7",
+      "owner": "readline",
+      "version": "8.3.6-1.1"
+    },
+    "/usr/lib/libresolv.so.2": {
+      "sha256": "2d7d7eeb48ccdaacc79f0d74ea3d8633b08d27548b0df8b9cef3c78aff21bc9e",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/lib/librt.so.1": {
+      "sha256": "3a34174e94af447fab7b67e96ac7fe44ea12e6238683e3de8420ae397fdea458",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/lib/libsharpyuv.so.0": {
+      "sha256": "7a2d7df43192d772bb27aba96d9eceac7342ce138b507f99998f637eeda8c6b4",
+      "owner": "libwebp",
+      "version": "1.6.0-2.1"
+    },
+    "/usr/lib/libsmime3.so": {
+      "sha256": "87b334c3511fdefdf8722b96a04199a2a718bdd3c3789e079defabe398fa6fa3",
+      "owner": "nss",
+      "version": "3.131-1.1"
+    },
+    "/usr/lib/libsqlite3.so.0": {
+      "sha256": "2035e9746f06022310b8c36646b936f012effb8f4f42b81c62ae4443e0a7f733",
+      "owner": "sqlite",
+      "version": "3.53.4-1"
+    },
+    "/usr/lib/libssh2.so.1": {
+      "sha256": "542afac11b8e892122fbbe0f46ed182381d165b3876b2d5fc04f26c43ba531cb",
+      "owner": "libssh2",
+      "version": "1.11.1-7.1"
+    },
+    "/usr/lib/libssl.so.3": {
+      "sha256": "0dbcac8fcce57c08d2a1999a5a5cc0667e9685972c871a86a7d08bc4175fa2f9",
+      "owner": "openssl",
+      "version": "3.6.5-1.1"
+    },
+    "/usr/lib/libstdc++.so.6": {
+      "sha256": "412e0fc561a10581aaff2d101206939a31fa12c696590d8d4a5ec3655953ffe0",
+      "owner": "libstdc++",
+      "version": "16.2.1+r23+gd564253eb6c8-1"
+    },
+    "/usr/lib/libtasn1.so.6": {
+      "sha256": "10048b9e24c8eb5fb30d6a2d72f50d222d8a85b833d8406f4e7151b18684a777",
+      "owner": "libtasn1",
+      "version": "4.21.0-1.1"
+    },
+    "/usr/lib/libtcl8.6.so": {
+      "sha256": "393d9e06ea15ac960caca21c8eb010e5a3f8a1b37d8e20b7c8249f66c541c1e7",
+      "owner": "tcl",
+      "version": "8.6.16-1.1"
+    },
+    "/usr/lib/libtesseract.so.5": {
+      "sha256": "57370c75e370b6246a0091345f06b9100905f8b0b5edc9c6a297af873a3a4949",
+      "owner": "tesseract",
+      "version": "5.5.3-1.1"
+    },
+    "/usr/lib/libtiff.so.6": {
+      "sha256": "4972108eb848c57e7803e09d5f3c442dbc0e1077137f6e69d462fbde19b85307",
+      "owner": "libtiff",
+      "version": "4.7.2-1.1"
+    },
+    "/usr/lib/libtk8.6.so": {
+      "sha256": "4aa944d051b6655c2a48932e88d9c4ef22c1398839bcb9735b441be6e52fa44a",
+      "owner": "tk",
+      "version": "8.6.16-1.1"
+    },
+    "/usr/lib/libunistring.so.5": {
+      "sha256": "9c87875051cffdbc4376ba6f81e8d697ec93125c9606c1d026d50817c1cfc939",
+      "owner": "libunistring",
+      "version": "1.4.2-1.1"
+    },
+    "/usr/lib/libutil.so.1": {
+      "sha256": "815016550791325af7163bf5d377d06233557b7c7ffb353b95ba8f92ee0b29ac",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/lib/libuuid.so.1": {
+      "sha256": "b9042cfd960c1f40dff3eee304545c36fd276bd1c0c03497af80f23b55210761",
+      "owner": "util-linux-libs",
+      "version": "2.42.4-1.1"
+    },
+    "/usr/lib/libwebp.so.7": {
+      "sha256": "de630a9ded74750635a9048d7b651e20cd9b3814ed88492d1201588366b8afa9",
+      "owner": "libwebp",
+      "version": "1.6.0-2.1"
+    },
+    "/usr/lib/libwebpmux.so.3": {
+      "sha256": "9d9735daa3aafafd959c3c1c78af0e88110ef84d95ff694577c9d3d0edbfd5d1",
+      "owner": "libwebp",
+      "version": "1.6.0-2.1"
+    },
+    "/usr/lib/libxcb.so.1": {
+      "sha256": "a28eaad3641660452c0dd421d9d4fe9ab0564db5e7e4705e61cd791681b0e7c7",
+      "owner": "libxcb",
+      "version": "1.17.0-1.2"
+    },
+    "/usr/lib/libxml2.so.16": {
+      "sha256": "d5e78d2e770a0b0960f720682c447811b8643057d5c36a3495c82b000c2e65b9",
+      "owner": "libxml2",
+      "version": "2.15.4-1.1"
+    },
+    "/usr/lib/libz.so.1": {
+      "sha256": "63e814634983bfa53890b48cb56760ca38840fbcf91f66a51222eef85eaa08b7",
+      "owner": "zlib-ng-compat",
+      "version": "2.3.3-2"
+    },
+    "/usr/lib/libzstd.so.1": {
+      "sha256": "4e61afdf04d80cd25d7689e2fa75f63e53b6fd2029d1edcc683f779e23042121",
+      "owner": "zstd",
+      "version": "1.5.7-2"
+    },
+    "/usr/lib64/ld-linux-x86-64.so.2": {
+      "sha256": "2a950d46575efa0210d22440988f5a6b4507ebddc6c86d9a42e6e7ef6f01463e",
+      "owner": "glibc",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "/usr/share/fonts/TTF/DejaVuSans.ttf": {
+      "sha256": "6038a160b491e121c1f12c7bccb4a9c8730296e3adc1086a059404ed84b7451c",
+      "owner": "ttf-dejavu",
+      "version": "2.37+18+g9b5d1b2f-8"
+    },
+    "/usr/share/fonts/noto/NotoSerif-Regular.ttf": {
+      "sha256": "19e72cd8d595fae5bd74a5206f5d938512e1183d4fed7abb1ec1be1d7efa5f88",
+      "owner": "noto-fonts",
+      "version": "1:2026.10.01-1"
+    },
+    "/usr/share/tessdata/ces.traineddata": {
+      "sha256": "ce861ed1dc20e74db449c4636d44a83042cd2aeb8cd95c9008293b5d0f79023a",
+      "owner": "tesseract-data-ces",
+      "version": "2:4.1.0-5"
+    },
+    "/usr/share/tessdata/configs/hocr": {
+      "sha256": "d6a7ec7c5143317a59fce2393054f6b7a8261824b934e7426fdd24febc929ad6",
+      "owner": "tesseract",
+      "version": "5.5.3-1.1"
+    },
+    "/usr/share/tessdata/configs/makebox": {
+      "sha256": "a8fe20a2bc9ff1e9e8ed06d56845336c978627b8e965600abd63f1f412c18ffe",
+      "owner": "tesseract",
+      "version": "5.5.3-1.1"
+    },
+    "/usr/share/tessdata/configs/tsv": {
+      "sha256": "59d079bb75d8b3d7c839a3564580cb559e362c93a9d70f234e421c0c3e767e04",
+      "owner": "tesseract",
+      "version": "5.5.3-1.1"
+    },
+    "/usr/share/tessdata/configs/txt": {
+      "sha256": "9bcbdbe285fd3a024be563cb237751ceb3435d86610e231f08894023321af5d7",
+      "owner": "tesseract",
+      "version": "5.5.3-1.1"
+    },
+    "/usr/share/tessdata/eng.traineddata": {
+      "sha256": "daa0c97d651c19fba3b25e81317cd697e9908c8208090c94c3905381c23fc047",
+      "owner": "tesseract-data-eng",
+      "version": "2:4.1.0-5"
+    },
+    "/usr/share/tessdata/osd.traineddata": {
+      "sha256": "e19f2ae860792fdf372cf48d8ce70ae5da3c4052962fe22e9de1f680c374bb0e",
+      "owner": "tesseract-data-osd",
+      "version": "2:4.1.0-5"
+    }
+  },
+  "wheels": [
+    {
+      "url": "https://files.pythonhosted.org/packages/2a/6b/3de1714d734ff949be1e90a22375d0598d3540b22ae73eb85c2d7d1f36a9/pymupdf-1.26.7-cp310-abi3-manylinux_2_28_x86_64.whl",
+      "sha256": "69dfc78f206a96e5b3ac22741263ebab945fdf51f0dbe7c5757c3511b23d9d72",
+      "filename": "pymupdf-1.26.7-cp310-abi3-manylinux_2_28_x86_64.whl"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/5c/44/c85361f65dbe00eea8576ee467c768d25129989efb76e94f205e9ca9bb46/pillow-12.3.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "251bf95b67017e27b13d82f5b326234ca62d70f9cf4c2b9032de2358a3b12c7b",
+      "filename": "pillow-12.3.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/45/8f/9beacf79ca7c650688ad0baa80931adb988fe6e6e5d5903c23cc3dbd70eb/numpy-2.5.3-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "b0521d0f4aebb6e06189451025fa17a913287b13c03d5fe05c017333b654ea5b",
+      "filename": "numpy-2.5.3-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/e9/44/27e3cee3dcdb3b7bc09727b642bdbfcd098490ea77df04611db9060d7722/lxml-6.1.3-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "a7eb78ba28b187e1e9203a55c60fcf70df2d22cb205fe6d51b9383d6097419f0",
+      "filename": "lxml-6.1.3-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/6a/db/9ac5c6773feec1b40e57eac106d869886f66a1e44082d343ac1e1e1fb773/fonttools-4.66.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sha256": "9261ef507f2dd74203443a472b65b5a26429eb378f975016dec7dc7305b24898",
+      "filename": "fonttools-4.66.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/e0/91/39c3af510b0aa32bbda03374259200f28430febfd1bf5e511fe765282ce5/charset_normalizer-3.5.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "15f024313246a4ed976c60f440bb8d257815513a681d212ff74fd46f7d715a90",
+      "filename": "charset_normalizer-3.5.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+    },
+    {
+      "url": "https://files.pythonhosted.org/packages/db/cb/dacbc268cb68d0428ea2cbd85266195a9ab3e677449589ddae59bd7542ac/reportlab-5.0.1-py3-none-any.whl",
+      "sha256": "1c36e6bb0e71780c72331eba60da7f602e8d4389a8723825af71342e49d791e8",
+      "filename": "reportlab-5.0.1-py3-none-any.whl"
+    }
+  ],
+  "licenses": {
+    "/usr/lib/python3.14/LICENSE.txt": {
+      "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231",
+      "owners": [
+        "python"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/doc/acl/COPYING": {
+      "sha256": "a45a845012742796534f7e91fe623262ccfb99460a2bd04015bd28d66fba95b8",
+      "owners": [
+        "acl"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/doc/acl/COPYING.LGPL": {
+      "sha256": "01b1f9f2c8ee648a7a596a1abe8aa4ed7899b1c9e5551bda06da6e422b04aa55",
+      "owners": [
+        "acl"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/doc/libjpeg-turbo/LICENSE.md": {
+      "sha256": "ba6bceebcba0fdd35488477c2cca8c4632ce82c74dbfbc87d886ce6fc4433579",
+      "owners": [
+        "libjpeg-turbo"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/doc/mpdecimal/COPYRIGHT.txt": {
+      "sha256": "8d99282e76b6de2247323d6fe7cc45700872b9b761f9a644ba8db7c15a984c49",
+      "owners": [
+        "mpdecimal"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/doc/xz/COPYING": {
+      "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8",
+      "owners": [
+        "xz"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/doc/xz/COPYING.0BSD": {
+      "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1",
+      "owners": [
+        "xz"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/doc/xz/COPYING.GPLv2": {
+      "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6",
+      "owners": [
+        "xz"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/icu/78.3/LICENSE": {
+      "sha256": "e55522d81edc687a341a4411e0776e54ca654e90147f354a90458aaced4116af",
+      "owners": [
+        "icu"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/brotli/LICENSE": {
+      "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94",
+      "owners": [
+        "brotli"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/bzip2/LICENSE": {
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+      "owners": [
+        "bzip2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/curl/COPYING": {
+      "sha256": "82f2f4427d6545ee5aaac4f0b80428da6cc8ba41c2cf5da3a03680ec327b9681",
+      "owners": [
+        "curl"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/expat/COPYING": {
+      "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87",
+      "owners": [
+        "expat"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/fontconfig/COPYING": {
+      "sha256": "51a51aa9823704fd90bccc616cdd17ebabb5b2b3e9cbde886ca02c7002288067",
+      "owners": [
+        "fontconfig"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/freetype2/FTL.TXT": {
+      "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f",
+      "owners": [
+        "freetype2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/giflib/COPYING": {
+      "sha256": "ed5d90cb4a041bddad679470a071302ab05ae5d0ec2cf8f9c97ad7b2708751e6",
+      "owners": [
+        "giflib"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/gpgme/MIT.txt": {
+      "sha256": "950fbc07a2b8e34514936ad591544e6857b8e68079c92b78b5f8e997f415208a",
+      "owners": [
+        "gpgme"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/icu/LICENSE": {
+      "sha256": "e55522d81edc687a341a4411e0776e54ca654e90147f354a90458aaced4116af",
+      "owners": [
+        "icu"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/krb5/LICENSE": {
+      "sha256": "d37fcb886de2ad1c602f61c99c6893bcbd9a1949f54d9a6bb40d191204eb605e",
+      "owners": [
+        "krb5"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/lcms2/LICENSE": {
+      "sha256": "6dbd60437f8ef91d8de1f08ad75882547fd4931bfcc3566a0735f28db1484d31",
+      "owners": [
+        "lcms2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/leancrypto/LICENSE": {
+      "sha256": "6eace59ee3c3e03069b2f5bd2c18e61a555c48bd38ae0930f73cfebe513b24cb",
+      "owners": [
+        "leancrypto"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/leancrypto/LICENSE.bsd": {
+      "sha256": "13aa749a5b0a454917a944ed8fffc530b784f5ead522b1aacaf4ec8aa55a6239",
+      "owners": [
+        "leancrypto"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/leancrypto/LICENSE.gplv2": {
+      "sha256": "e6d6a009505e345fe949e1310334fcb0747f28dae2856759de102ab66b722cb4",
+      "owners": [
+        "leancrypto"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/leptonica/leptonica-license.txt": {
+      "sha256": "87829abb5bbb00b55a107365da89e9a33f86c4250169e5a1e5588505be7d5806",
+      "owners": [
+        "leptonica"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libarchive/BSD-2-Clause.txt": {
+      "sha256": "0f9c97a2f7a75d3303d6b3cbf61d782a5f242ca7f510deaf220b4ba3e89952eb",
+      "owners": [
+        "libarchive"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libarchive/BSD-4-Clause-UC.txt": {
+      "sha256": "e2d8e88f20fc73195792b45502399fa7c012a91bf07ec6c9ee015b5f78a8b709",
+      "owners": [
+        "libarchive"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libdeflate/COPYING": {
+      "sha256": "4ad69099cb4374836fd27583d9991e2838cd86b6e4666ab26b2d32582c91e73a",
+      "owners": [
+        "libdeflate"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libffi/LICENSE": {
+      "sha256": "17b64dc60f3b6897a60f971e288b973f655c2edcdf08b25f3c3dd5549857881c",
+      "owners": [
+        "libffi"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libgcc/RUNTIME.LIBRARY.EXCEPTION": {
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "owners": [
+        "libgcc"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libgomp/RUNTIME.LIBRARY.EXCEPTION": {
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "owners": [
+        "libgomp"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libgpg-error/COPYING": {
+      "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c",
+      "owners": [
+        "libgpg-error"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libgpg-error/COPYING.LIB": {
+      "sha256": "a9bdde5616ecdd1e980b44f360600ee8783b1f99b8cc83a2beb163a0a390e861",
+      "owners": [
+        "libgpg-error"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libjpeg-turbo/LICENSE.md": {
+      "sha256": "ba6bceebcba0fdd35488477c2cca8c4632ce82c74dbfbc87d886ce6fc4433579",
+      "owners": [
+        "libjpeg-turbo"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libjpeg-turbo/README.ijg": {
+      "sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6",
+      "owners": [
+        "libjpeg-turbo"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libnghttp2/COPYING": {
+      "sha256": "6b94f3abc1aabd0c72a7c7d92a77f79dda7c8a0cb3df839a97890b4116a2de2a",
+      "owners": [
+        "libnghttp2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libnghttp3/COPYING": {
+      "sha256": "58cc3fc8c6d6cb2485ab35eb5918e849b5bf1e56522974e106d7a39a88d61dcd",
+      "owners": [
+        "libnghttp3"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libngtcp2/COPYING": {
+      "sha256": "542dd526d2ea23565f0571cc68df6f05ed11248a90ff0f32de19d8ba589db513",
+      "owners": [
+        "libngtcp2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libp11-kit/COPYING": {
+      "sha256": "2e1ba993904df807a10c3eda1e5c272338edc35674b679773a8b3ad460731054",
+      "owners": [
+        "libp11-kit"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libpng/LICENSE": {
+      "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526",
+      "owners": [
+        "libpng"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libpsl/COPYING": {
+      "sha256": "322392e6001b2b3b0fca705dc9f11f26e12441188ecde50eb1d22909980b2925",
+      "owners": [
+        "libpsl"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libssh2/COPYING": {
+      "sha256": "f7f9633cf9ff2f1333f3d7ce46973a8716a4d2a2815ad56f30d437d5fea7bafe",
+      "owners": [
+        "libssh2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libstdc++/RUNTIME.LIBRARY.EXCEPTION": {
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "owners": [
+        "libstdc++"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libtasn1/COPYING": {
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "owners": [
+        "libtasn1"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libtiff/LICENSE.md": {
+      "sha256": "0e27c2382d7b8147972bbb746e04059a1152c8d0fda9d03ef1399d1a433c4ade",
+      "owners": [
+        "libtiff"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libwebp/COPYING": {
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+      "owners": [
+        "libwebp"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libx11/COPYING": {
+      "sha256": "eda0c2ed1cae0280c7fe79762eaad8ad31c044afc64e71e92ef2c6f3cd7bc395",
+      "owners": [
+        "libx11"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxau/COPYING": {
+      "sha256": "56abe29bb1d9806a9e04fa9f80fed2c0f18027594df3f098148d814aef6bddfa",
+      "owners": [
+        "libxau"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxcb/COPYING": {
+      "sha256": "c5ffbfeaa501071ceeb97b7de2c0d703fdaa35de01c0fb6cbac1c28453a3e9fd",
+      "owners": [
+        "libxcb"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxdmcp/COPYING": {
+      "sha256": "8a3c3f35b0dbcb60a4e242b9e4394a352a65bb27deb2938ea1e2e62a626e16e9",
+      "owners": [
+        "libxdmcp"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxext/COPYING": {
+      "sha256": "fd62910be4b13829d94e76c1447cf840953f0e225c4dc6c79349c84dd0557f22",
+      "owners": [
+        "libxext"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxft/COPYING": {
+      "sha256": "7cda22286b1379b9b73df695f72cbad36595e65b039a5fbc5c89b69ecc44438c",
+      "owners": [
+        "libxft"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxml2/Copyright": {
+      "sha256": "5d4873884a890122a4b9b20ad56ac6f7da1d796a5bfcf04a427970ac96217626",
+      "owners": [
+        "libxml2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxrender/COPYING": {
+      "sha256": "bbe1db89c48816c48248796adac91defd8fbde1141b145f01511781ab87f29a1",
+      "owners": [
+        "libxrender"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/libxss/COPYING": {
+      "sha256": "5cf3e16f5dd753a4c0853e8227134ab65f5562d9ef89b1a2d7681f5c8ac9feb5",
+      "owners": [
+        "libxss"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/mpdecimal/COPYRIGHT.txt": {
+      "sha256": "dba079e24a0286052f9f36a5e0b4f6cc95bc83ada657eb26bef8c0b6473f6512",
+      "owners": [
+        "mpdecimal"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/ncurses/COPYING": {
+      "sha256": "708999f95527e1ffa670c6fce288c6c600cb477dd04afcc1171422b3dd4ee226",
+      "owners": [
+        "ncurses"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/noto-fonts/LICENSE": {
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "owners": [
+        "noto-fonts"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/openjpeg2/LICENSE": {
+      "sha256": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6",
+      "owners": [
+        "openjpeg2"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/openssl/LICENSE.txt": {
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+      "owners": [
+        "openssl"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/poppler/COPYING": {
+      "sha256": "ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6",
+      "owners": [
+        "poppler"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/poppler/COPYING3": {
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "owners": [
+        "poppler"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/poppler/README-XPDF": {
+      "sha256": "c8c3915181d5003f9cec6b2b88b01b612cbd109287aeb0f7e741feca2d983502",
+      "owners": [
+        "poppler"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/poppler/README.contributors": {
+      "sha256": "f88fa437aa92a91542da067a5aa10799f588fd9a513085b80ba61ce510d75ebf",
+      "owners": [
+        "poppler"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/qpdf/Artistic-2.0": {
+      "sha256": "fb929ac30decb4dc3a2eea2bec6c43296a797c5d2d602deb3784ee39430583d5",
+      "owners": [
+        "qpdf"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/qpdf/LICENSE.txt": {
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "owners": [
+        "qpdf"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/spdx/Apache-2.0.txt": {
+      "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+      "owners": [
+        "libarchive",
+        "openssl",
+        "qpdf"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/Artistic-2.0.txt": {
+      "sha256": "bae466ac8d7100c304fe76632ccc627203a3897d3f7166f3cce00fb9df8c2074",
+      "owners": [
+        "qpdf"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/CC0-1.0.txt": {
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+      "owners": [
+        "libarchive"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/GFDL-1.3-or-later.txt": {
+      "sha256": "d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929",
+      "owners": [
+        "libgcc",
+        "libgomp",
+        "libstdc++",
+        "libtasn1"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/GPL-2.0-only.txt": {
+      "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3",
+      "owners": [
+        "poppler",
+        "util-linux-libs",
+        "zstd"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/GPL-2.0-or-later.txt": {
+      "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3",
+      "owners": [
+        "acl",
+        "freetype2",
+        "glibc",
+        "gmp",
+        "gpgme",
+        "jbigkit",
+        "keyutils",
+        "leancrypto",
+        "libassuan",
+        "libgpg-error",
+        "libunistring",
+        "lz4",
+        "nettle",
+        "util-linux-libs"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/GPL-3.0-or-later.txt": {
+      "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0",
+      "owners": [
+        "bash",
+        "gdbm",
+        "gnutls",
+        "libgcc",
+        "libgomp",
+        "libstdc++",
+        "libtasn1",
+        "poppler",
+        "readline",
+        "util-linux-libs"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/LGPL-2.0-or-later.txt": {
+      "sha256": "86dc99d7e5060915ab1dfc1378b7dd351c62088bfa74067e8aa1868c6fdba7d8",
+      "owners": [
+        "gpgme",
+        "gpgmepp",
+        "poppler"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt": {
+      "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2",
+      "owners": [
+        "acl",
+        "glibc",
+        "gnutls",
+        "gpgme",
+        "keyutils",
+        "libassuan",
+        "libgpg-error",
+        "libtasn1",
+        "poppler",
+        "util-linux-libs"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/LGPL-3.0-or-later.txt": {
+      "sha256": "996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1",
+      "owners": [
+        "gmp",
+        "libunistring",
+        "nettle"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/MPL-2.0.txt": {
+      "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172",
+      "owners": [
+        "nspr",
+        "nss"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/spdx/PSF-2.0.txt": {
+      "sha256": "ab745c5061d1dea43a3885e5b4b6befc7e983954954775c5736debeefcdfd89b",
+      "owners": [
+        "python"
+      ],
+      "type": "common SPDX text"
+    },
+    "/usr/share/licenses/sqlite/license.txt": {
+      "sha256": "4e57d9ac979f1c9872e69799c2597eeef4c6ce7224f3ede0bf9dc8d217b1e65d",
+      "owners": [
+        "sqlite"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/tcl/license.terms": {
+      "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16",
+      "owners": [
+        "tcl"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/tk/license.terms": {
+      "sha256": "2cde822b93ca16ae535c954b7dfe658b4ad10df2a193628d1b358f1765e8b198",
+      "owners": [
+        "tk"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/ttf-dejavu/LICENSE": {
+      "sha256": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93",
+      "owners": [
+        "ttf-dejavu"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/util-linux-libs/COPYING.BSD-2-Clause": {
+      "sha256": "527f738966ca396cd5a68c1509390de2a780c6b614d9ee57f7544a6161938ed1",
+      "owners": [
+        "util-linux-libs"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/util-linux-libs/COPYING.BSD-3-Clause": {
+      "sha256": "9b718a9460fed5952466421235bc79eb49d4e9eacc920d7a9dd6285ab8fd6c6d",
+      "owners": [
+        "util-linux-libs"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/util-linux-libs/COPYING.BSD-4-Clause-UC": {
+      "sha256": "ba7640f00d93e72e92b94b9d71f25ec53bac2f1682f5c4adcccb0018359f60f8",
+      "owners": [
+        "util-linux-libs"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/util-linux-libs/COPYING.ISC": {
+      "sha256": "e53348ce276358e9997014071c5294b36a18c4b34f32f00ee57b9acce0aafd63",
+      "owners": [
+        "util-linux-libs"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/util-linux-libs/util-linux-BSD-2-Clause.txt": {
+      "sha256": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a",
+      "owners": [
+        "util-linux-libs"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/xz/COPYING": {
+      "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8",
+      "owners": [
+        "xz"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/zlib-ng-compat/LICENSE.md": {
+      "sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee",
+      "owners": [
+        "zlib-ng-compat"
+      ],
+      "type": "package-provided"
+    },
+    "/usr/share/licenses/zstd/LICENSE": {
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+      "owners": [
+        "zstd"
+      ],
+      "type": "package-provided"
+    }
+  },
+  "package_provenance": {
+    "native_packages": [
+      {
+        "name": "acl",
+        "version": "2.4.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "LGPL-2.1-or-later AND GPL-2.0-or-later"
+        ],
+        "upstream_home": "https://savannah.nongnu.org/projects/acl",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libacl.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/doc/acl/COPYING",
+            "sha256": "a45a845012742796534f7e91fe623262ccfb99460a2bd04015bd28d66fba95b8"
+          },
+          {
+            "path": "/usr/share/doc/acl/COPYING.LGPL",
+            "sha256": "01b1f9f2c8ee648a7a596a1abe8aa4ed7899b1c9e5551bda06da6e422b04aa55"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/acl-2.4.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "6b2aa6d64ebb87205b4e41040ee043f881a6b8e64033f86eaa14739a43c626ad",
+            "signature_path": "/var/cache/pacman/pkg/acl-2.4.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "90068194cd4a5c9bc1a94e2a34cea6b34cde8a44ef1c0207bfe388493f2325bc",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "bash",
+        "version": "5.3.20-2",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later"
+        ],
+        "upstream_home": "https://www.gnu.org/software/bash/bash.html",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/bin/bash"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/bash-5.3.20-2-x86_64_v3.pkg.tar.zst",
+            "sha256": "c4c0d15d664d2dcc708e741d9a8951dc466f35819702dadfe474865a143af286",
+            "signature_path": "/var/cache/pacman/pkg/bash-5.3.20-2-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "0be9915dbedbda0cd9792cd3aaa3983f636897dcc2017ef3345f3bd96c5a203b",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "brotli",
+        "version": "1.2.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://github.com/google/brotli",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libbrotlicommon.so.1",
+          "/usr/lib/libbrotlidec.so.1",
+          "/usr/lib/libbrotlienc.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/brotli/LICENSE",
+            "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/brotli-1.2.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "124443e4dcbb94983e11c457f629ed5dcb5060d110fb619535c11201e5c94051",
+            "signature_path": "/var/cache/pacman/pkg/brotli-1.2.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "32d5f0162fc84ab30ccca0e5d0e88d5d0b8feb27ad064b529d8ea27c27a5afcf",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "bzip2",
+        "version": "1.0.8-6.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "BSD"
+        ],
+        "upstream_home": "https://sourceware.org/bzip2/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libbz2.so.1.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/bzip2/LICENSE",
+            "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "curl",
+        "version": "8.22.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "curl"
+        ],
+        "upstream_home": "https://curl.se/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libcurl.so.4"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/curl/COPYING",
+            "sha256": "82f2f4427d6545ee5aaac4f0b80428da6cc8ba41c2cf5da3a03680ec327b9681"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/curl-8.22.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "4d8405df1f7fcca35e4bf87925dc581cc77eae24bd0999c5eb2fe5d81b1d10c2",
+            "signature_path": "/var/cache/pacman/pkg/curl-8.22.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "8719298bb28288a4ea2b3b7f4c04a6c34a988007945ce396f62532bcc4593868",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "e2fsprogs",
+        "version": "1.47.4-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL",
+          "LGPL",
+          "MIT"
+        ],
+        "upstream_home": "http://e2fsprogs.sourceforge.net",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libcom_err.so.2"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/e2fsprogs-1.47.4-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "07fb5672de65c979789a5978d332c5dd316f928fba7bccdc6012240bfc589c6f",
+            "signature_path": "/var/cache/pacman/pkg/e2fsprogs-1.47.4-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "074cf853cfbc72b16bb852449f51c7dac684772216449a05418b546836512913",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "expat",
+        "version": "2.9.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://libexpat.github.io/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libexpat.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/expat/COPYING",
+            "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/expat-2.9.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "484dcb7f9d61ad1d754233d665ca3434611f720a6d808b8931a05d8419a5d5af",
+            "signature_path": "/var/cache/pacman/pkg/expat-2.9.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "aa093abfea97d0a1b9d54d769954c361725b6e3badb72c94c1cdafa6958789a0",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "fontconfig",
+        "version": "2:2.18.3-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "HPND AND Unicode-DFS-2016"
+        ],
+        "upstream_home": "https://www.freedesktop.org/wiki/Software/fontconfig/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libfontconfig.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/fontconfig/COPYING",
+            "sha256": "51a51aa9823704fd90bccc616cdd17ebabb5b2b3e9cbde886ca02c7002288067"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/fontconfig-2:2.18.3-2.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "c2be2de3f16834bc90bc968e6963e750dfacfad7497c182ace273a12ab7a0fc1",
+            "signature_path": "/var/cache/pacman/pkg/fontconfig-2:2.18.3-2.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "0c03b564978cc5aee7bfe28f9d18d2f13982c5aaf98179c01a7c0811da38200a",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "freetype2",
+        "version": "2.14.3-1.2",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "FTL OR GPL-2.0-or-later"
+        ],
+        "upstream_home": "https://www.freetype.org/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libfreetype.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/freetype2/FTL.TXT",
+            "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/freetype2-2.14.3-1.2-x86_64_v3.pkg.tar.zst",
+            "sha256": "db0b34057ec5619a4dc0ca17c11469595e7efcef92ba09cca42c4b5922c9d206",
+            "signature_path": "/var/cache/pacman/pkg/freetype2-2.14.3-1.2-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "06dec8586a66e08a895c71626a52f1bf12ee4ab52bd6466f075131ea05e85fac",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "gdbm",
+        "version": "1.26-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later"
+        ],
+        "upstream_home": "https://www.gnu.org/software/gdbm/gdbm.html",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgdbm.so.6",
+          "/usr/lib/libgdbm_compat.so.4"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/gdbm-1.26-2.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "e18053788d21819c6bfdbb2ac6df312596b0beda44a1a20c9873c5cf7632f33e",
+            "signature_path": "/var/cache/pacman/pkg/gdbm-1.26-2.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "fff6cd95e1138677ec9f0df28540ca7e60a25a464d6acd926f514b5ee6caf1e9",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "giflib",
+        "version": "6.1.3-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://giflib.sourceforge.net/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgif.so.7"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/giflib/COPYING",
+            "sha256": "ed5d90cb4a041bddad679470a071302ab05ae5d0ec2cf8f9c97ad7b2708751e6"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/giflib-6.1.3-2.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "32a89f5b269c6594d7d4bf0f01d4d551353ce898896cae1f773a1d69aa1244c8",
+            "signature_path": "/var/cache/pacman/pkg/giflib-6.1.3-2.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "8a404e0326b6331ef6d934a99e74dc01e8c71f5bc2df420b11c4dcfa8fcca6fa",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "glibc",
+        "version": "2.44+r50+g1848099f063e-3",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-or-later",
+          "LGPL-2.1-or-later"
+        ],
+        "upstream_home": "https://www.gnu.org/software/libc",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/lib64/ld-linux-x86-64.so.2",
+          "/usr/lib/libc.so.6",
+          "/usr/lib/libdl.so.2",
+          "/usr/lib/libm.so.6",
+          "/usr/lib/libpthread.so.0",
+          "/usr/lib/libresolv.so.2",
+          "/usr/lib/librt.so.1",
+          "/usr/lib/libutil.so.1",
+          "/usr/lib64/ld-linux-x86-64.so.2"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/glibc-2.44+r50+g1848099f063e-3-x86_64_v3.pkg.tar.zst",
+            "sha256": "071d807f4d3bf6b921f86b9a91e83a47ecc026c5821634efa46b09d890e06785",
+            "signature_path": "/var/cache/pacman/pkg/glibc-2.44+r50+g1848099f063e-3-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "0b9c0abc4a8033e7a7324d2fcc3f6ccd12e8ab4cf853c8d36ffb1fb2fbb2b966",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "gmp",
+        "version": "6.3.0-3.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-or-later",
+          "LGPL-3.0-or-later"
+        ],
+        "upstream_home": "https://gmplib.org/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgmp.so.10"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-3.0-or-later.txt",
+            "sha256": "996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/gmp-6.3.0-3.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "7c9d571ae792fd37c4e735a8621ce9815feda3b912a2559cd2aaf7c801136fb7",
+            "signature_path": "/var/cache/pacman/pkg/gmp-6.3.0-3.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "f58db12200ce55d5c400800084556f42408bae4740c9fdaf8a91569cef780c98",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "gnutls",
+        "version": "3.8.13-3.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later AND LGPL-2.1-or-later"
+        ],
+        "upstream_home": "https://www.gnutls.org/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgnutls.so.30"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/gnutls-3.8.13-3.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "bf0b15a99d8ec86a75c7e95126d70659a02ffe324736f5ed678365be3388bb50",
+            "signature_path": "/var/cache/pacman/pkg/gnutls-3.8.13-3.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "05788e695f3101a97903baa13b9b6417c8f8d68b73c1c173b663171cc9a80e16",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "gpgme",
+        "version": "2.2.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-or-later",
+          "LGPL-2.0-or-later",
+          "LGPL-2.1-or-later",
+          "MIT"
+        ],
+        "upstream_home": "https://www.gnupg.org/related_software/gpgme/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgpgme.so.45"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/gpgme/MIT.txt",
+            "sha256": "950fbc07a2b8e34514936ad591544e6857b8e68079c92b78b5f8e997f415208a"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.0-or-later.txt",
+            "sha256": "86dc99d7e5060915ab1dfc1378b7dd351c62088bfa74067e8aa1868c6fdba7d8"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/gpgme-2.2.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "bad1128814e616c9978e3513db8ffda97f07fe4181d5ad313474a29433bd3926",
+            "signature_path": "/var/cache/pacman/pkg/gpgme-2.2.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "7d48eb8bc2b9c66f2a17d4f8ead458b87ca9356312efe2d166e7dda598144659",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "gpgmepp",
+        "version": "2.2.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "LGPL-2.0-or-later"
+        ],
+        "upstream_home": "https://gnupg.org/software/gpgme/index.html",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgpgmepp.so.7"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.0-or-later.txt",
+            "sha256": "86dc99d7e5060915ab1dfc1378b7dd351c62088bfa74067e8aa1868c6fdba7d8"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/gpgmepp-2.2.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "88685d815e3acce403a9efc9fa010dc899ff2167824f8e67dfd516bbf6b3e73c",
+            "signature_path": "/var/cache/pacman/pkg/gpgmepp-2.2.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "a3c7c5cb7473d6de56d52c638e24d7392cb8c3b458cea0ead26973389136a09e",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "icu",
+        "version": "78.3-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "LicenseRef-Unicode-3.0",
+          "BSD-2-Clause",
+          "BSD-3-Clause",
+          "NAIST-2003"
+        ],
+        "upstream_home": "https://icu.unicode.org",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libicudata.so.78",
+          "/usr/lib/libicuuc.so.78"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/icu/78.3/LICENSE",
+            "sha256": "e55522d81edc687a341a4411e0776e54ca654e90147f354a90458aaced4116af"
+          },
+          {
+            "path": "/usr/share/licenses/icu/LICENSE",
+            "sha256": "e55522d81edc687a341a4411e0776e54ca654e90147f354a90458aaced4116af"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/icu-78.3-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "d5c9d41c716c918ffe21ba9c82fdb1e14d9fad02816714699e6655aae55b07e2",
+            "signature_path": "/var/cache/pacman/pkg/icu-78.3-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "29696bd0b2c41f80953852d5db169cd99a37d19c321d9870a2af32d4c9e5cabb",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "jbigkit",
+        "version": "2.1-8.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "GPL-2.0-or-later"
+        ],
+        "upstream_home": "https://www.cl.cam.ac.uk/~mgk25/jbigkit/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libjbig.so.2.1"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          }
+        ],
+        "cached_archives": []
+      },
+      {
+        "name": "keyutils",
+        "version": "1.6.3-4.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-or-later",
+          "LGPL-2.1-or-later"
+        ],
+        "upstream_home": "https://www.kernel.org/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libkeyutils.so.1"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/keyutils-1.6.3-4.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "d14beabda320a2b1aaeb5f7e3cc44dfbe5fa9630e0f6e761ed509584631c4e9c",
+            "signature_path": "/var/cache/pacman/pkg/keyutils-1.6.3-4.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "3188085cc215b2355436af38984d551bea2168b194052c538b166f4bfcc29af5",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "krb5",
+        "version": "1.22.2-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "custom"
+        ],
+        "upstream_home": "https://web.mit.edu/kerberos/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgssapi_krb5.so.2",
+          "/usr/lib/libk5crypto.so.3",
+          "/usr/lib/libkrb5.so.3",
+          "/usr/lib/libkrb5support.so.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/krb5/LICENSE",
+            "sha256": "d37fcb886de2ad1c602f61c99c6893bcbd9a1949f54d9a6bb40d191204eb605e"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/krb5-1.22.2-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "a9194133d6358bdcfeb472f732c9120b57a3d3bb3acde197d500f73c58f0a4e3",
+            "signature_path": "/var/cache/pacman/pkg/krb5-1.22.2-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "2b1066c2ef98dcbd64374c7b7be74d8ea5d845d3d903810a71ade4623527e7f7",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "lcms2",
+        "version": "2.19.1-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "http://www.littlecms.com/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/liblcms2.so.2"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/lcms2/LICENSE",
+            "sha256": "6dbd60437f8ef91d8de1f08ad75882547fd4931bfcc3566a0735f28db1484d31"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/lcms2-2.19.1-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "3d5cea8b14c3e078f2515abd0592900ab729db81bedd93ec31daafddcaac3992",
+            "signature_path": "/var/cache/pacman/pkg/lcms2-2.19.1-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "50b6185da1e7d02810b0f45c9406323b3c31e149d603d5059fc554718325412a",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "leancrypto",
+        "version": "1.9.1-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-or-later",
+          "LicenseRef-BSDvariant",
+          "LicenseRef-leancrypto"
+        ],
+        "upstream_home": "https://leancrypto.org",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libleancrypto.so.1.9"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/leancrypto/LICENSE",
+            "sha256": "6eace59ee3c3e03069b2f5bd2c18e61a555c48bd38ae0930f73cfebe513b24cb"
+          },
+          {
+            "path": "/usr/share/licenses/leancrypto/LICENSE.bsd",
+            "sha256": "13aa749a5b0a454917a944ed8fffc530b784f5ead522b1aacaf4ec8aa55a6239"
+          },
+          {
+            "path": "/usr/share/licenses/leancrypto/LICENSE.gplv2",
+            "sha256": "e6d6a009505e345fe949e1310334fcb0747f28dae2856759de102ab66b722cb4"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/leancrypto-1.9.1-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "a9e2ea2a4d7f75dcb65d4a767719f52323af72c655ab0534f8dc8e36b4967659",
+            "signature_path": "/var/cache/pacman/pkg/leancrypto-1.9.1-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "910d83948600c57d28a41bf649d0b8775dd8448a2e7e1fce6bfde13541d60220",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "leptonica",
+        "version": "1.87.0-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "custom"
+        ],
+        "upstream_home": "http://www.leptonica.com",
+        "installed_repository": [],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libleptonica.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/leptonica/leptonica-license.txt",
+            "sha256": "87829abb5bbb00b55a107365da89e9a33f86c4250169e5a1e5588505be7d5806"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/leptonica-1.87.0-2.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "bd70b1551299763494b293951bf9ae8a7464f67ff5aad3cf2c07a69787d1bdba",
+            "signature_path": "/var/cache/pacman/pkg/leptonica-1.87.0-2.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "8437b0913d753a26dd39200219e0841c00e68604383fc451a8f7f612a1794308",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libarchive",
+        "version": "3.8.9-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "BSD-2-Clause",
+          "BSD-4-Clause-UC",
+          "Apache-2.0 OR CC0-1.0 OR OpenSSL"
+        ],
+        "upstream_home": "https://libarchive.org/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libarchive.so.13"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libarchive/BSD-2-Clause.txt",
+            "sha256": "0f9c97a2f7a75d3303d6b3cbf61d782a5f242ca7f510deaf220b4ba3e89952eb"
+          },
+          {
+            "path": "/usr/share/licenses/libarchive/BSD-4-Clause-UC.txt",
+            "sha256": "e2d8e88f20fc73195792b45502399fa7c012a91bf07ec6c9ee015b5f78a8b709"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/Apache-2.0.txt",
+            "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/CC0-1.0.txt",
+            "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libarchive-3.8.9-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "1b25a5774e00d9fdfe4cd8e79ae0987da78d91a47b7fad5f8d6ce8e9e41ad725",
+            "signature_path": "/var/cache/pacman/pkg/libarchive-3.8.9-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "c59ee70d37d3311ec721147213c3319d7db32833d062000f4f5a16ac8c623433",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libassuan",
+        "version": "3.0.0-1.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "FSFULLR",
+          "GPL-2.0-or-later",
+          "LGPL-2.1-or-later"
+        ],
+        "upstream_home": "https://www.gnupg.org/related_software/libassuan/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libassuan.so.9"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": []
+      },
+      {
+        "name": "libdeflate",
+        "version": "1.26-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://github.com/ebiggers/libdeflate",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libdeflate.so.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libdeflate/COPYING",
+            "sha256": "4ad69099cb4374836fd27583d9991e2838cd86b6e4666ab26b2d32582c91e73a"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libdeflate-1.26-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "1c395e264a9f39b8fa2b087a40572da7c451edbf74d9acc8770260749b08a333",
+            "signature_path": "/var/cache/pacman/pkg/libdeflate-1.26-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "6002c6d4934ddb9030332e034683c9f2eb88051d561c3706f66eb4ad04a0fb5b",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libffi",
+        "version": "3.8.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://sourceware.org/libffi/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libffi.so.8"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libffi/LICENSE",
+            "sha256": "17b64dc60f3b6897a60f971e288b973f655c2edcdf08b25f3c3dd5549857881c"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libffi-3.8.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "bde1158f05e78560bcdf88e22ad659aebae4004727f6a26086d15f481646468d",
+            "signature_path": "/var/cache/pacman/pkg/libffi-3.8.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "84b4d12f88684f72d7db1dfdf0b613694f24d6d5a052d9908b0e8c557100509a",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libgcc",
+        "version": "16.2.1+r23+gd564253eb6c8-1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "GFDL-1.3-or-later"
+        ],
+        "upstream_home": "https://gcc.gnu.org",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libgcc_s.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libgcc/RUNTIME.LIBRARY.EXCEPTION",
+            "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GFDL-1.3-or-later.txt",
+            "sha256": "d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libgcc-16.2.1+r23+gd564253eb6c8-1-x86_64_v3.pkg.tar.zst",
+            "sha256": "3aec33a69f3d89354c1f8d69acf51b784c9c37b012d09f774b840d3e08170018",
+            "signature_path": "/var/cache/pacman/pkg/libgcc-16.2.1+r23+gd564253eb6c8-1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "03509cd244169ef09ef3b288328ba5e5f41f4e18098f4d88ae56bff6b1a8736a",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libgomp",
+        "version": "16.2.1+r23+gd564253eb6c8-1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "GFDL-1.3-or-later"
+        ],
+        "upstream_home": "https://gcc.gnu.org",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libgomp.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libgomp/RUNTIME.LIBRARY.EXCEPTION",
+            "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GFDL-1.3-or-later.txt",
+            "sha256": "d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libgomp-16.2.1+r23+gd564253eb6c8-1-x86_64_v3.pkg.tar.zst",
+            "sha256": "e5d171f00b25dd96cbf044fce1801a9af3bfa5b570da98a9b7170e91eb0a5fc5",
+            "signature_path": "/var/cache/pacman/pkg/libgomp-16.2.1+r23+gd564253eb6c8-1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "03509cd244169ef09ef3b288328ba5e5f41f4e18098f4d88ae56bff6b1a8736a",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libgpg-error",
+        "version": "1.61-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "LGPL-2.1-or-later",
+          "BSD-3-Clause OR LGPL-2.1-or-later",
+          "FSFULLR",
+          "GPL-2.0-or-later"
+        ],
+        "upstream_home": "https://www.gnupg.org",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libgpg-error.so.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libgpg-error/COPYING",
+            "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c"
+          },
+          {
+            "path": "/usr/share/licenses/libgpg-error/COPYING.LIB",
+            "sha256": "a9bdde5616ecdd1e980b44f360600ee8783b1f99b8cc83a2beb163a0a390e861"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libgpg-error-1.61-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "f7a4e86851fb70e662d6fabd93cbee9b8b02b1cdd97c22c18a437db85eebb701",
+            "signature_path": "/var/cache/pacman/pkg/libgpg-error-1.61-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "54132368f98f186a6bae86b9fb407a32aacab15b719a826d5bff471a5776770d",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libidn2",
+        "version": "2.3.8-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL2",
+          "LGPL3"
+        ],
+        "upstream_home": "https://www.gnu.org/software/libidn/#libidn2",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libidn2.so.0"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "libjpeg-turbo",
+        "version": "3.2.0-2",
+        "arch": "x86_64",
+        "license_ids": [
+          "BSD-3-Clause",
+          "IJG"
+        ],
+        "upstream_home": "https://libjpeg-turbo.org/",
+        "installed_repository": [
+          "extra"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libjpeg.so.8"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/doc/libjpeg-turbo/LICENSE.md",
+            "sha256": "ba6bceebcba0fdd35488477c2cca8c4632ce82c74dbfbc87d886ce6fc4433579"
+          },
+          {
+            "path": "/usr/share/licenses/libjpeg-turbo/LICENSE.md",
+            "sha256": "ba6bceebcba0fdd35488477c2cca8c4632ce82c74dbfbc87d886ce6fc4433579"
+          },
+          {
+            "path": "/usr/share/licenses/libjpeg-turbo/README.ijg",
+            "sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libjpeg-turbo-3.2.0-2-x86_64.pkg.tar.zst",
+            "sha256": "14e743e58bbab35665d3e59ea71bd411f81a01d995e0101442f5f4c82c9de0ab",
+            "signature_path": "/var/cache/pacman/pkg/libjpeg-turbo-3.2.0-2-x86_64.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "817b6755f75a863e02f2816074ece5a41d7a47a5fe9b27e8f68725254ec7e204",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libnghttp2",
+        "version": "1.70.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://nghttp2.org/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libnghttp2.so.14"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libnghttp2/COPYING",
+            "sha256": "6b94f3abc1aabd0c72a7c7d92a77f79dda7c8a0cb3df839a97890b4116a2de2a"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libnghttp2-1.70.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "1ab60ebf0caa5829acd22d88269caa8c13c2168439b020aa45701c5c52fa0fdd",
+            "signature_path": "/var/cache/pacman/pkg/libnghttp2-1.70.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "9d8347f39d2ede8d3deb6cc260e60516ad2230daddcfe1407597954a45841651",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libnghttp3",
+        "version": "1.18.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://github.com/ngtcp2/nghttp3",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libnghttp3.so.9"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libnghttp3/COPYING",
+            "sha256": "58cc3fc8c6d6cb2485ab35eb5918e849b5bf1e56522974e106d7a39a88d61dcd"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libnghttp3-1.18.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "ad08828537f4ad272e53562ea4e390e4a791232d9c11f0cf4e30bc60a58c1878",
+            "signature_path": "/var/cache/pacman/pkg/libnghttp3-1.18.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "c276ec0e0aa6493085ebde6fbcc80a130ba2fb02ad1bc1c9ab3b06e7d4778c7a",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libngtcp2",
+        "version": "1.25.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://github.com/ngtcp2/ngtcp2",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libngtcp2.so.16",
+          "/usr/lib/libngtcp2_crypto_ossl.so.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libngtcp2/COPYING",
+            "sha256": "542dd526d2ea23565f0571cc68df6f05ed11248a90ff0f32de19d8ba589db513"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libngtcp2-1.25.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "b8381bf9054064db94e4f6c6c885e715829705d7d62d208c049b53cf343d511c",
+            "signature_path": "/var/cache/pacman/pkg/libngtcp2-1.25.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "3ecacb19a5d907da4b21bd691ae19595e99ce11b344465b285be93e6f4a1af73",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libp11-kit",
+        "version": "0.26.5-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "BSD-3-Clause"
+        ],
+        "upstream_home": "https://p11-glue.freedesktop.org",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libp11-kit.so.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libp11-kit/COPYING",
+            "sha256": "2e1ba993904df807a10c3eda1e5c272338edc35674b679773a8b3ad460731054"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libp11-kit-0.26.5-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "a4b3cc4af2d9d25ba74730a787f9e057e45851fe1058aa0ad0c94ac10eb4d764",
+            "signature_path": "/var/cache/pacman/pkg/libp11-kit-0.26.5-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "cfcd1be762e3b6b4d695c25c83f5299ddb6d514da160fd54a05670fb779fa689",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libpng",
+        "version": "1.6.59-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "libpng-2.0"
+        ],
+        "upstream_home": "http://www.libpng.org/pub/png/libpng.html",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libpng16.so.16"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libpng/LICENSE",
+            "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libpng-1.6.59-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "57b105ad661bb67d11c45de3c9c576dac50bf48ab9de80a01c6f7bf5d17e3e16",
+            "signature_path": "/var/cache/pacman/pkg/libpng-1.6.59-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "c1c09ffd9d23be1b5b5f7b077b453fe962cacf3cac5cffa65ae261e5700c98d2",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libpsl",
+        "version": "0.21.5-2.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://github.com/rockdaboot/libpsl",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libpsl.so.5"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libpsl/COPYING",
+            "sha256": "322392e6001b2b3b0fca705dc9f11f26e12441188ecde50eb1d22909980b2925"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "libssh2",
+        "version": "1.11.1-7.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "BSD-3-Clause"
+        ],
+        "upstream_home": "https://www.libssh2.org/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libssh2.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libssh2/COPYING",
+            "sha256": "f7f9633cf9ff2f1333f3d7ce46973a8716a4d2a2815ad56f30d437d5fea7bafe"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libssh2-1.11.1-7.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "7909cf1deff0a45bba17ef8c7ef38b4a19be875d3bfe1fc4fe4868135529cefd",
+            "signature_path": "/var/cache/pacman/pkg/libssh2-1.11.1-7.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "ee7ddbbfc8103e0db8b47e3feff63b835eed638deb4f061affd15e61f8385403",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libstdc++",
+        "version": "16.2.1+r23+gd564253eb6c8-1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "GFDL-1.3-or-later"
+        ],
+        "upstream_home": "https://gcc.gnu.org",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libstdc++.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libstdc++/RUNTIME.LIBRARY.EXCEPTION",
+            "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GFDL-1.3-or-later.txt",
+            "sha256": "d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libstdc++-16.2.1+r23+gd564253eb6c8-1-x86_64_v3.pkg.tar.zst",
+            "sha256": "9e5a736001eafa74985e0042e7e93f8e1852580f4f7cdf8806310d86a748fe19",
+            "signature_path": "/var/cache/pacman/pkg/libstdc++-16.2.1+r23+gd564253eb6c8-1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "03509cd244169ef09ef3b288328ba5e5f41f4e18098f4d88ae56bff6b1a8736a",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libtasn1",
+        "version": "4.21.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later",
+          "LGPL-2.1-or-later",
+          "GFDL-1.3-or-later"
+        ],
+        "upstream_home": "https://www.gnu.org/software/libtasn1/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libtasn1.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libtasn1/COPYING",
+            "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GFDL-1.3-or-later.txt",
+            "sha256": "d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libtasn1-4.21.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "0bf5b5d3147331017a7363c800661e49a73383f3060a926e9ea56102ca002387",
+            "signature_path": "/var/cache/pacman/pkg/libtasn1-4.21.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "7153361d9490c263b7ad5822bfb351542f00cf57cc82beae625abad0ad968138",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libtiff",
+        "version": "4.7.2-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "libtiff"
+        ],
+        "upstream_home": "http://www.simplesystems.org/libtiff/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libtiff.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libtiff/LICENSE.md",
+            "sha256": "0e27c2382d7b8147972bbb746e04059a1152c8d0fda9d03ef1399d1a433c4ade"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libtiff-4.7.2-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "b329cb4e5ba8feb5de5b7ebeb3254967595fbe73e2cc81f03ee9b65abf7104ea",
+            "signature_path": "/var/cache/pacman/pkg/libtiff-4.7.2-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "efae20bdc09b597686ecac44d81b6bac196dd3d864855db27c1a7af9ca808924",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libunistring",
+        "version": "1.4.2-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-or-later",
+          "LGPL-3.0-or-later"
+        ],
+        "upstream_home": "https://www.gnu.org/software/libunistring/",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libunistring.so.5"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-3.0-or-later.txt",
+            "sha256": "996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libunistring-1.4.2-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "03a5db504feb89d1e4b47a804b67c264d46100b74a50475f2ffddb881b8d9600",
+            "signature_path": "/var/cache/pacman/pkg/libunistring-1.4.2-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "ac20423127cbc2bc56b38c9138ebf1eb84f710da60bc682a546f8936d508e859",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libwebp",
+        "version": "1.6.0-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "BSD-3-Clause"
+        ],
+        "upstream_home": "https://developers.google.com/speed/webp/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libsharpyuv.so.0",
+          "/usr/lib/libwebp.so.7",
+          "/usr/lib/libwebpmux.so.3"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libwebp/COPYING",
+            "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "libx11",
+        "version": "1.8.13-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT AND X11"
+        ],
+        "upstream_home": "https://gitlab.freedesktop.org/xorg/lib/libx11",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libX11.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libx11/COPYING",
+            "sha256": "eda0c2ed1cae0280c7fe79762eaad8ad31c044afc64e71e92ef2c6f3cd7bc395"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libx11-1.8.13-2.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "f245fd2a92d8a414d0241261d5e036e713ef20ad5a0edf1b23f98403ac608da5",
+            "signature_path": "/var/cache/pacman/pkg/libx11-1.8.13-2.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "41bcb69575ec35025085da59be52968590de7a4c1c92384d79d46f3bdac82f0d",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libxau",
+        "version": "1.0.12-1.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "MIT-open-group"
+        ],
+        "upstream_home": "https://xorg.freedesktop.org/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libXau.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxau/COPYING",
+            "sha256": "56abe29bb1d9806a9e04fa9f80fed2c0f18027594df3f098148d814aef6bddfa"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "libxcb",
+        "version": "1.17.0-1.2",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "X11"
+        ],
+        "upstream_home": "https://gitlab.freedesktop.org/xorg/lib/libxcb",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libxcb.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxcb/COPYING",
+            "sha256": "c5ffbfeaa501071ceeb97b7de2c0d703fdaa35de01c0fb6cbac1c28453a3e9fd"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "libxdmcp",
+        "version": "1.1.5-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT-open-group"
+        ],
+        "upstream_home": "https://gitlab.freedesktop.org/xorg/lib/libxdmcp",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libXdmcp.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxdmcp/COPYING",
+            "sha256": "8a3c3f35b0dbcb60a4e242b9e4394a352a65bb27deb2938ea1e2e62a626e16e9"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libxdmcp-1.1.5-2.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "b6e04a5c5f0786245dc19a3e8ec5715568e39023e594a743ddeb046c087b26b5",
+            "signature_path": "/var/cache/pacman/pkg/libxdmcp-1.1.5-2.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "7f10582d4ac29aebec6f99c607ebf37f9f705f10a26b0f5159c06248af7d2370",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libxext",
+        "version": "1.3.7-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "LicenseRef-libxext"
+        ],
+        "upstream_home": "https://gitlab.freedesktop.org/xorg/lib/libxext",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libXext.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxext/COPYING",
+            "sha256": "fd62910be4b13829d94e76c1447cf840953f0e225c4dc6c79349c84dd0557f22"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libxext-1.3.7-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "54ba46723549683d292ae658f96af7732c520ef144b44ad0d8f2ab4802665236",
+            "signature_path": "/var/cache/pacman/pkg/libxext-1.3.7-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "8fd60fc79f71fd4b8f044db59015f799d9fed48df6970cbce628e07bd06563a3",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libxft",
+        "version": "2.3.9-1.2",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "HPND-sell-variant"
+        ],
+        "upstream_home": "https://xorg.freedesktop.org/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libXft.so.2"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxft/COPYING",
+            "sha256": "7cda22286b1379b9b73df695f72cbad36595e65b039a5fbc5c89b69ecc44438c"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "libxml2",
+        "version": "2.15.4-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT"
+        ],
+        "upstream_home": "https://gitlab.gnome.org/GNOME/libxml2/-/wikis/home",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libxml2.so.16"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxml2/Copyright",
+            "sha256": "5d4873884a890122a4b9b20ad56ac6f7da1d796a5bfcf04a427970ac96217626"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/libxml2-2.15.4-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "6c00718cb422a7eff837fc61937237ed54d96bf0aa6d286338a639db761b5ac8",
+            "signature_path": "/var/cache/pacman/pkg/libxml2-2.15.4-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "ed0e62872f6050d2fc0cc09c6340006a8334aea8489725c3decdd82db6a421a3",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "libxrender",
+        "version": "0.9.12-1.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "HPND-sell-variant"
+        ],
+        "upstream_home": "https://xorg.freedesktop.org/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libXrender.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxrender/COPYING",
+            "sha256": "bbe1db89c48816c48248796adac91defd8fbde1141b145f01511781ab87f29a1"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "libxss",
+        "version": "1.2.5-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "X11"
+        ],
+        "upstream_home": "https://gitlab.freedesktop.org/xorg/lib/libxscrnsaver",
+        "installed_repository": [],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libXss.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/libxss/COPYING",
+            "sha256": "5cf3e16f5dd753a4c0853e8227134ab65f5562d9ef89b1a2d7681f5c8ac9feb5"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "lz4",
+        "version": "1:1.10.0-3",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-or-later"
+        ],
+        "upstream_home": "https://lz4.github.io/lz4/",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/liblz4.so.1"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          }
+        ],
+        "cached_archives": []
+      },
+      {
+        "name": "mpdecimal",
+        "version": "4.0.1-3.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "BSD-2-Clause"
+        ],
+        "upstream_home": "https://www.bytereef.org/mpdecimal/index.html",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libmpdec.so.4"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/doc/mpdecimal/COPYRIGHT.txt",
+            "sha256": "8d99282e76b6de2247323d6fe7cc45700872b9b761f9a644ba8db7c15a984c49"
+          },
+          {
+            "path": "/usr/share/licenses/mpdecimal/COPYRIGHT.txt",
+            "sha256": "dba079e24a0286052f9f36a5e0b4f6cc95bc83ada657eb26bef8c0b6473f6512"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/mpdecimal-4.0.1-3.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "e1657b55f9a56e9556ace774bef73908a092ed5e12e54e678d5042ca1c1bfbca",
+            "signature_path": "/var/cache/pacman/pkg/mpdecimal-4.0.1-3.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "bbf7803fcd54d7ef810e10db9f0aa06f321e01788f346811ff3e2110561a3ec1",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "ncurses",
+        "version": "6.6-2.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MIT-open-group"
+        ],
+        "upstream_home": "https://invisible-island.net/ncurses/ncurses.html",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libncursesw.so.6",
+          "/usr/lib/libpanelw.so.6"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/ncurses/COPYING",
+            "sha256": "708999f95527e1ffa670c6fce288c6c600cb477dd04afcc1171422b3dd4ee226"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/ncurses-6.6-2.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "7f179735d0bba612d31a3272d237e7eb28a2b6c01a0eca935b92df4a22d0c0a2",
+            "signature_path": "/var/cache/pacman/pkg/ncurses-6.6-2.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "8cf617e7891e809a6fba360499ec8f6067cc1971876334f652e8830726f83ea7",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "nettle",
+        "version": "4.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "LGPL-3.0-or-later OR GPL-2.0-or-later"
+        ],
+        "upstream_home": "https://www.lysator.liu.se/~nisse/nettle",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libhogweed.so.7",
+          "/usr/lib/libnettle.so.9"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-3.0-or-later.txt",
+            "sha256": "996af0513df21f7496288951c41428a03c174e9e4a9d63665c57d670f845ccb1"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/nettle-4.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "3be8280ea74863f3208eaf40c3ce6f4b292f5001891b338e6ab0dcbf2ff5d7b5",
+            "signature_path": "/var/cache/pacman/pkg/nettle-4.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "53f99534e638552381f399904f5d0fe00eb8ed0fabe0daf8f3321b666d82b176",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "noto-fonts",
+        "version": "1:2026.10.01-1",
+        "arch": "any",
+        "license_ids": [
+          "OFL-1.1-no-RFN"
+        ],
+        "upstream_home": "https://fonts.google.com/noto",
+        "installed_repository": [
+          "extra"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/share/fonts/noto/NotoSerif-Regular.ttf"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/noto-fonts/LICENSE",
+            "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/noto-fonts-1:2026.10.01-1-any.pkg.tar.zst",
+            "sha256": "3cf6de13b1f3600ed782ff5e22eb6b3827fcc0ab5ee407bc0b121239fe19d949",
+            "signature_path": "/var/cache/pacman/pkg/noto-fonts-1:2026.10.01-1-any.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "d46da321dd0a9564fd8ffc5d2125d2d9ffe47dc7bef91075409a6340345663dc",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "nspr",
+        "version": "4.40-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MPL-2.0"
+        ],
+        "upstream_home": "https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSPR",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libnspr4.so",
+          "/usr/lib/libplc4.so",
+          "/usr/lib/libplds4.so"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/MPL-2.0.txt",
+            "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/nspr-4.40-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "00420e3cc1dbb011f52c02da06ceae6be3d3c9e06dfaedcabe0efb66eebbdd54",
+            "signature_path": "/var/cache/pacman/pkg/nspr-4.40-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "3bc9031ce46b01b8dc0c3b2cf1ba1aaccefc2510db4bbb3094bb3182ad2db0dd",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "nss",
+        "version": "3.131-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "MPL-2.0"
+        ],
+        "upstream_home": "https://firefox-source-docs.mozilla.org/security/nss/index.html",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libnss3.so",
+          "/usr/lib/libnssutil3.so",
+          "/usr/lib/libsmime3.so"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/MPL-2.0.txt",
+            "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/nss-3.131-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "902bc7af97d92cb2ca0aaaf52448f3a715987e65fef8dc7e05d9726d62c05a96",
+            "signature_path": "/var/cache/pacman/pkg/nss-3.131-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "d7f562c694e5e30eb27d5bf7e40004d87834d4010de64428ede86ef16395d1b5",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "openjpeg2",
+        "version": "2.5.4-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "BSD-2-Clause",
+          "MIT"
+        ],
+        "upstream_home": "https://github.com/uclouvain/openjpeg",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libopenjp2.so.7"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/openjpeg2/LICENSE",
+            "sha256": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "openssl",
+        "version": "3.6.5-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "Apache-2.0"
+        ],
+        "upstream_home": "https://www.openssl.org",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libcrypto.so.3",
+          "/usr/lib/libssl.so.3"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/openssl/LICENSE.txt",
+            "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/Apache-2.0.txt",
+            "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/openssl-3.6.5-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "54ce7e4a068df85513f5cf0da63828cff4984ab56c0661156a0b0adc22402bb8",
+            "signature_path": "/var/cache/pacman/pkg/openssl-3.6.5-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "ff6bbbaf921c97f98f7002ffbee206e22d23dd51c2c0c41ab12e9e2eea173351",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "poppler",
+        "version": "26.08.0-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-2.0-only",
+          "GPL-3.0-or-later",
+          "LGPL-2.0-or-later",
+          "LGPL-2.1-or-later",
+          "MIT",
+          "HPND-sell-variant"
+        ],
+        "upstream_home": "https://poppler.freedesktop.org/",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/bin/pdffonts",
+          "/usr/bin/pdftoppm",
+          "/usr/bin/pdftotext",
+          "/usr/lib/libpoppler.so.163"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/poppler/COPYING",
+            "sha256": "ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6"
+          },
+          {
+            "path": "/usr/share/licenses/poppler/COPYING3",
+            "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+          },
+          {
+            "path": "/usr/share/licenses/poppler/README-XPDF",
+            "sha256": "c8c3915181d5003f9cec6b2b88b01b612cbd109287aeb0f7e741feca2d983502"
+          },
+          {
+            "path": "/usr/share/licenses/poppler/README.contributors",
+            "sha256": "f88fa437aa92a91542da067a5aa10799f588fd9a513085b80ba61ce510d75ebf"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-only.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.0-or-later.txt",
+            "sha256": "86dc99d7e5060915ab1dfc1378b7dd351c62088bfa74067e8aa1868c6fdba7d8"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/poppler-26.08.0-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "3f62bbdf3df5e8aa9f7a10125b0a611c1c560fca99cf810bd0b30cb5398fd444",
+            "signature_path": "/var/cache/pacman/pkg/poppler-26.08.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "a7dd996962659c8674234f2cc6d27b6acc87293442eb16064cd50c3a611ebb9b",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "python",
+        "version": "3.14.7-2",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "PSF-2.0"
+        ],
+        "upstream_home": "https://www.python.org/",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/bin/python3.14",
+          "/usr/lib/libpython3.14.so.1.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/lib/python3.14/LICENSE.txt",
+            "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/PSF-2.0.txt",
+            "sha256": "ab745c5061d1dea43a3885e5b4b6befc7e983954954775c5736debeefcdfd89b"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/python-3.14.7-2-x86_64_v3.pkg.tar.zst",
+            "sha256": "0e9a5d3e712ce85578a6eb452c74b0df898c2bb71b780a2b42f432a617e98043",
+            "signature_path": "/var/cache/pacman/pkg/python-3.14.7-2-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "ef1e61860d09525063cbf445aef6cf659bd411cbe87f90d778c8836b9016f72a",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "qpdf",
+        "version": "12.4.2-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "Apache-2.0",
+          "Artistic-2.0"
+        ],
+        "upstream_home": "https://github.com/qpdf/qpdf",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/bin/qpdf",
+          "/usr/lib/libqpdf.so.30"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/qpdf/Artistic-2.0",
+            "sha256": "fb929ac30decb4dc3a2eea2bec6c43296a797c5d2d602deb3784ee39430583d5"
+          },
+          {
+            "path": "/usr/share/licenses/qpdf/LICENSE.txt",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/Apache-2.0.txt",
+            "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/Artistic-2.0.txt",
+            "sha256": "bae466ac8d7100c304fe76632ccc627203a3897d3f7166f3cce00fb9df8c2074"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/qpdf-12.4.2-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "0ac58a0bd681f39c95e6bcb4837e186d81ff930fa82066b7ad3559fb8cad933c",
+            "signature_path": "/var/cache/pacman/pkg/qpdf-12.4.2-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "c5b931cbac88df1e4c604c1af72e59e521a07862812fea78baacb04bfe5ff5d2",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "readline",
+        "version": "8.3.6-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL-3.0-or-later"
+        ],
+        "upstream_home": "https://tiswww.case.edu/php/chet/readline/rltop.html",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libreadline.so.8"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/readline-8.3.6-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "883869a04bf39b3a849a753d1a9bbdd2c84ed5c086c3ac538081f25918892f93",
+            "signature_path": "/var/cache/pacman/pkg/readline-8.3.6-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "5f638aa0634ad22c1f8c15672d772005532c7608a85d8023c0cb6ca8d62aee3a",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "sqlite",
+        "version": "3.53.4-1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "LicenseRef-Sqlite"
+        ],
+        "upstream_home": "https://www.sqlite.org/",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libsqlite3.so.0"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/sqlite/license.txt",
+            "sha256": "4e57d9ac979f1c9872e69799c2597eeef4c6ce7224f3ede0bf9dc8d217b1e65d"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/sqlite-3.53.4-1-x86_64_v3.pkg.tar.zst",
+            "sha256": "c5907d2b37cd4f93f2e7831581c6df759a44cbcbb0af246a86c8871c03f65990",
+            "signature_path": "/var/cache/pacman/pkg/sqlite-3.53.4-1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "0cb622205f6b4821a03c70e23945e5bff1ff43f0ca1402e5d9170d86b037fc71",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "tcl",
+        "version": "8.6.16-1.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "TCL"
+        ],
+        "upstream_home": "http://tcl.sourceforge.net/",
+        "installed_repository": [],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libtcl8.6.so"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/tcl/license.terms",
+            "sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "tesseract",
+        "version": "5.5.3-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "APACHE"
+        ],
+        "upstream_home": "https://github.com/tesseract-ocr/tesseract",
+        "installed_repository": [
+          "cachyos-extra-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/bin/tesseract",
+          "/usr/lib/libtesseract.so.5",
+          "/usr/share/tessdata/configs/hocr",
+          "/usr/share/tessdata/configs/makebox",
+          "/usr/share/tessdata/configs/tsv",
+          "/usr/share/tessdata/configs/txt"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/tesseract-5.5.3-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "f10ceb57f046c594de5c5fe8577fd91501d1e3d86b20e63b3e7ef9a1cce52b73",
+            "signature_path": "/var/cache/pacman/pkg/tesseract-5.5.3-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "9761bb5ae1522f7179e0e7db4f5b40218863bcd17c33418c8c35cb9ea87eac61",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "tesseract-data-ces",
+        "version": "2:4.1.0-5",
+        "arch": "any",
+        "license_ids": [
+          "Apache"
+        ],
+        "upstream_home": "https://github.com/tesseract-ocr/tessdata",
+        "installed_repository": [
+          "extra"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/share/tessdata/ces.traineddata"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/tesseract-data-ces-2:4.1.0-5-any.pkg.tar.zst",
+            "sha256": "70b4df708373e3bcb319bc88fd283058668ee316dc0730886c3434ede6b9d858",
+            "signature_path": "/var/cache/pacman/pkg/tesseract-data-ces-2:4.1.0-5-any.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "2f9876ff0f2ee4a4bbb8723930c4e5bdf790b2ff7a074e435ef7368e9648142d",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "tesseract-data-eng",
+        "version": "2:4.1.0-5",
+        "arch": "any",
+        "license_ids": [
+          "Apache"
+        ],
+        "upstream_home": "https://github.com/tesseract-ocr/tessdata",
+        "installed_repository": [
+          "extra"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/share/tessdata/eng.traineddata"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/tesseract-data-eng-2:4.1.0-5-any.pkg.tar.zst",
+            "sha256": "f6dfc8fd7f70295ce74901b1d1e1a80aaead6430680901ad212074c5bbb68323",
+            "signature_path": "/var/cache/pacman/pkg/tesseract-data-eng-2:4.1.0-5-any.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "2f9876ff0f2ee4a4bbb8723930c4e5bdf790b2ff7a074e435ef7368e9648142d",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "tesseract-data-osd",
+        "version": "2:4.1.0-5",
+        "arch": "any",
+        "license_ids": [
+          "Apache"
+        ],
+        "upstream_home": "https://github.com/tesseract-ocr/tessdata",
+        "installed_repository": [],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/share/tessdata/osd.traineddata"
+        ],
+        "package_notices": [],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/tesseract-data-osd-2:4.1.0-5-any.pkg.tar.zst",
+            "sha256": "985ba497693eaab62bb71f47bd1625b907f8feacc29edb6b94579f82c38ace67",
+            "signature_path": "/var/cache/pacman/pkg/tesseract-data-osd-2:4.1.0-5-any.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "2f9876ff0f2ee4a4bbb8723930c4e5bdf790b2ff7a074e435ef7368e9648142d",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "tk",
+        "version": "8.6.16-1.1",
+        "arch": "x86_64",
+        "license_ids": [
+          "TCL"
+        ],
+        "upstream_home": "http://tcl.sourceforge.net/",
+        "installed_repository": [],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libtk8.6.so"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/tk/license.terms",
+            "sha256": "2cde822b93ca16ae535c954b7dfe658b4ad10df2a193628d1b358f1765e8b198"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": []
+      },
+      {
+        "name": "ttf-dejavu",
+        "version": "2.37+18+g9b5d1b2f-8",
+        "arch": "any",
+        "license_ids": [
+          "custom"
+        ],
+        "upstream_home": "https://dejavu-fonts.github.io",
+        "installed_repository": [
+          "extra"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/share/fonts/TTF/DejaVuSans.ttf"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/ttf-dejavu/LICENSE",
+            "sha256": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/ttf-dejavu-2.37+18+g9b5d1b2f-8-any.pkg.tar.zst",
+            "sha256": "d46da489e776dd3d74def85d6d613509db408e9de7a7e3445c63832fd3798e65",
+            "signature_path": "/var/cache/pacman/pkg/ttf-dejavu-2.37+18+g9b5d1b2f-8-any.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "e277025f511c4acfbcfa3637b0b6cc7e5f376e29757245291e457596967eb0d4",
+            "signature_verified_in_audit": true,
+            "signature_verification_scope": "packaging-inputs.md or 2026-10-14 notice audit"
+          }
+        ]
+      },
+      {
+        "name": "util-linux-libs",
+        "version": "2.42.4-1.1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "BSD-2-Clause",
+          "BSD-3-Clause",
+          "BSD-4-Clause-UC",
+          "GPL-2.0-only",
+          "GPL-2.0-or-later",
+          "GPL-3.0-or-later",
+          "ISC",
+          "LGPL-2.1-or-later",
+          "LicenseRef-PublicDomain"
+        ],
+        "upstream_home": "https://github.com/util-linux/util-linux",
+        "installed_repository": [
+          "cachyos-core-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libuuid.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/util-linux-libs/COPYING.BSD-2-Clause",
+            "sha256": "527f738966ca396cd5a68c1509390de2a780c6b614d9ee57f7544a6161938ed1"
+          },
+          {
+            "path": "/usr/share/licenses/util-linux-libs/COPYING.BSD-3-Clause",
+            "sha256": "9b718a9460fed5952466421235bc79eb49d4e9eacc920d7a9dd6285ab8fd6c6d"
+          },
+          {
+            "path": "/usr/share/licenses/util-linux-libs/COPYING.BSD-4-Clause-UC",
+            "sha256": "ba7640f00d93e72e92b94b9d71f25ec53bac2f1682f5c4adcccb0018359f60f8"
+          },
+          {
+            "path": "/usr/share/licenses/util-linux-libs/COPYING.ISC",
+            "sha256": "e53348ce276358e9997014071c5294b36a18c4b34f32f00ee57b9acce0aafd63"
+          },
+          {
+            "path": "/usr/share/licenses/util-linux-libs/util-linux-BSD-2-Clause.txt",
+            "sha256": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-only.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-or-later.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/GPL-3.0-or-later.txt",
+            "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+          },
+          {
+            "path": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+            "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+          }
+        ],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/util-linux-libs-2.42.4-1.1-x86_64_v3.pkg.tar.zst",
+            "sha256": "c0e1aadc239451dc75eb6237d81bfd227257955e168bc6fe6b0f23bc7e1f10df",
+            "signature_path": "/var/cache/pacman/pkg/util-linux-libs-2.42.4-1.1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "75564dd4b41f36524de45589945b1d2632b9b35a884656cce57a9b248e9d9262",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "xz",
+        "version": "5.8.3-1",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "GPL",
+          "LGPL",
+          "custom"
+        ],
+        "upstream_home": "https://tukaani.org/xz/",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/liblzma.so.5"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/doc/xz/COPYING",
+            "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8"
+          },
+          {
+            "path": "/usr/share/doc/xz/COPYING.0BSD",
+            "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1"
+          },
+          {
+            "path": "/usr/share/doc/xz/COPYING.GPLv2",
+            "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+          },
+          {
+            "path": "/usr/share/licenses/xz/COPYING",
+            "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/xz-5.8.3-1-x86_64_v3.pkg.tar.zst",
+            "sha256": "e675df69df51185665055c05b131bb55998acd350d311b1597c3aedc6295d849",
+            "signature_path": "/var/cache/pacman/pkg/xz-5.8.3-1-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "d34ee045db3f2c9237515d9f55269134b76d8fcf4525655909b584deefe2802c",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "zlib-ng-compat",
+        "version": "2.3.3-2",
+        "arch": "x86_64_v3",
+        "license_ids": [
+          "Zlib"
+        ],
+        "upstream_home": "https://github.com/zlib-ng/zlib-ng",
+        "installed_repository": [
+          "cachyos-v3"
+        ],
+        "package_provenance": [
+          "pkgtype=split"
+        ],
+        "input_files": [
+          "/usr/lib/libz.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/zlib-ng-compat/LICENSE.md",
+            "sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee"
+          }
+        ],
+        "exact_common_spdx_texts": [],
+        "cached_archives": [
+          {
+            "path": "/var/cache/pacman/pkg/zlib-ng-compat-2.3.3-2-x86_64_v3.pkg.tar.zst",
+            "sha256": "91707231c0caf57c5fc62f934e9ab8ce3b1c5c12c4f4be12ffc594983b710219",
+            "signature_path": "/var/cache/pacman/pkg/zlib-ng-compat-2.3.3-2-x86_64_v3.pkg.tar.zst.sig",
+            "pkgbuild_sha256": "595e556eb584157adfd3a47739fc80c2af45291573fc7275e15bd92c945efca0",
+            "signature_verified_in_audit": false,
+            "signature_verification_scope": "signature file inventoried, not independently verified in this audit"
+          }
+        ]
+      },
+      {
+        "name": "zstd",
+        "version": "1.5.7-2",
+        "arch": "x86_64",
+        "license_ids": [
+          "BSD-3-Clause",
+          "GPL-2.0-only"
+        ],
+        "upstream_home": "https://facebook.github.io/zstd/",
+        "installed_repository": [],
+        "package_provenance": [
+          "pkgtype=pkg"
+        ],
+        "input_files": [
+          "/usr/lib/libzstd.so.1"
+        ],
+        "package_notices": [
+          {
+            "path": "/usr/share/licenses/zstd/LICENSE",
+            "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+          }
+        ],
+        "exact_common_spdx_texts": [
+          {
+            "path": "/usr/share/licenses/spdx/GPL-2.0-only.txt",
+            "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+          }
+        ],
+        "cached_archives": []
+      }
+    ],
+    "python_wheels": [
+      {
+        "name": "PyMuPDF",
+        "version": "1.26.7",
+        "metadata_path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/pymupdf-1.26.7.dist-info/METADATA",
+        "license_fields": [
+          "License: Dual Licensed - GNU AFFERO GPL 3.0 or Artifex Commercial License"
+        ],
+        "source_fields": [
+          "Project-URL: Documentation, https://pymupdf.readthedocs.io/",
+          "Project-URL: Source, https://github.com/pymupdf/pymupdf",
+          "Project-URL: Tracker, https://github.com/pymupdf/PyMuPDF/issues",
+          "Project-URL: Changelog, https://pymupdf.readthedocs.io/en/latest/changes.html"
+        ],
+        "exact_wheel_url": "https://files.pythonhosted.org/packages/2a/6b/3de1714d734ff949be1e90a22375d0598d3540b22ae73eb85c2d7d1f36a9/pymupdf-1.26.7-cp310-abi3-manylinux_2_28_x86_64.whl",
+        "wheel_sha256": "69dfc78f206a96e5b3ac22741263ebab945fdf51f0dbe7c5757c3511b23d9d72",
+        "notices": [
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/pymupdf-1.26.7.dist-info/COPYING",
+            "relative_to_distribution": "COPYING",
+            "sha256": "40e60697600535eabfb5ae05f72829d88cfe8d02dd4792f5a754f6f51dabe55b"
+          }
+        ]
+      },
+      {
+        "name": "pillow",
+        "version": "12.3.0",
+        "metadata_path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/pillow-12.3.0.dist-info/METADATA",
+        "license_fields": [
+          "License-Expression: MIT-CMU",
+          "License-File: LICENSE"
+        ],
+        "source_fields": [
+          "Project-URL: Release notes, https://pillow.readthedocs.io/en/stable/releasenotes/index.html",
+          "Project-URL: Changelog, https://github.com/python-pillow/Pillow/releases",
+          "Project-URL: Documentation, https://pillow.readthedocs.io",
+          "Project-URL: Funding, https://tidelift.com/subscription/pkg/pypi-pillow?utm_source=pypi-pillow&utm_medium=pypi",
+          "Project-URL: Homepage, https://python-pillow.github.io",
+          "Project-URL: Mastodon, https://fosstodon.org/@pillow",
+          "Project-URL: Source, https://github.com/python-pillow/Pillow"
+        ],
+        "exact_wheel_url": "https://files.pythonhosted.org/packages/5c/44/c85361f65dbe00eea8576ee467c768d25129989efb76e94f205e9ca9bb46/pillow-12.3.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "wheel_sha256": "251bf95b67017e27b13d82f5b326234ca62d70f9cf4c2b9032de2358a3b12c7b",
+        "notices": [
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/pillow-12.3.0.dist-info/licenses/LICENSE",
+            "relative_to_distribution": "licenses/LICENSE",
+            "sha256": "dda12a98c1979cf3d94df1cff45d27a4cb3f04a60c76f76902ac54cac03ec0ce"
+          }
+        ]
+      },
+      {
+        "name": "numpy",
+        "version": "2.5.3",
+        "metadata_path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/METADATA",
+        "license_fields": [
+          "License-Expression: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+          "License-File: LICENSE.txt",
+          "License-File: numpy/_core/include/numpy/libdivide/LICENSE.txt",
+          "License-File: numpy/_core/src/common/pythoncapi-compat/COPYING",
+          "License-File: numpy/_core/src/highway/LICENSE",
+          "License-File: numpy/_core/src/multiarray/dragon4_LICENSE.txt",
+          "License-File: numpy/_core/src/npysort/x86-simd-sort/LICENSE.md",
+          "License-File: numpy/_core/src/umath/svml/LICENSE",
+          "License-File: numpy/fft/pocketfft/LICENSE.md",
+          "License-File: numpy/linalg/lapack_lite/LICENSE.txt",
+          "License-File: numpy/ma/LICENSE",
+          "License-File: numpy/random/LICENSE.md",
+          "License-File: numpy/random/src/distributions/LICENSE.md",
+          "License-File: numpy/random/src/mt19937/LICENSE.md",
+          "License-File: numpy/random/src/pcg64/LICENSE.md",
+          "License-File: numpy/random/src/philox/LICENSE.md",
+          "License-File: numpy/random/src/sfc64/LICENSE.md",
+          "License-File: numpy/random/src/splitmix64/LICENSE.md"
+        ],
+        "source_fields": [
+          "Project-URL: homepage, https://numpy.org",
+          "Project-URL: documentation, https://numpy.org/doc/",
+          "Project-URL: source, https://github.com/numpy/numpy",
+          "Project-URL: download, https://pypi.org/project/numpy/#files",
+          "Project-URL: tracker, https://github.com/numpy/numpy/issues",
+          "Project-URL: release notes, https://numpy.org/doc/stable/release"
+        ],
+        "exact_wheel_url": "https://files.pythonhosted.org/packages/45/8f/9beacf79ca7c650688ad0baa80931adb988fe6e6e5d5903c23cc3dbd70eb/numpy-2.5.3-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "wheel_sha256": "b0521d0f4aebb6e06189451025fa17a913287b13c03d5fe05c017333b654ea5b",
+        "notices": [
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/LICENSE.txt",
+            "relative_to_distribution": "licenses/LICENSE.txt",
+            "sha256": "4860083caa0de2ac3292ca98bd074bd8f45d8b32624e37b1e70a240bff61e488"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt",
+            "relative_to_distribution": "licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt",
+            "sha256": "fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING",
+            "relative_to_distribution": "licenses/numpy/_core/src/common/pythoncapi-compat/COPYING",
+            "sha256": "3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/_core/src/highway/LICENSE",
+            "relative_to_distribution": "licenses/numpy/_core/src/highway/LICENSE",
+            "sha256": "e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt",
+            "relative_to_distribution": "licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt",
+            "sha256": "f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md",
+            "sha256": "211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE",
+            "relative_to_distribution": "licenses/numpy/_core/src/umath/svml/LICENSE",
+            "sha256": "c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/fft/pocketfft/LICENSE.md",
+            "sha256": "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt",
+            "relative_to_distribution": "licenses/numpy/linalg/lapack_lite/LICENSE.txt",
+            "sha256": "a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/ma/LICENSE",
+            "relative_to_distribution": "licenses/numpy/ma/LICENSE",
+            "sha256": "05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/random/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/random/LICENSE.md",
+            "sha256": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/random/src/distributions/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/random/src/distributions/LICENSE.md",
+            "sha256": "469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/random/src/mt19937/LICENSE.md",
+            "sha256": "0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/random/src/pcg64/LICENSE.md",
+            "sha256": "e7d4f4fb20358f314210a892ae17351e04993813646f697ec387385ca2a36918"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/random/src/philox/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/random/src/philox/LICENSE.md",
+            "sha256": "6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/random/src/sfc64/LICENSE.md",
+            "sha256": "9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/numpy-2.5.3.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md",
+            "relative_to_distribution": "licenses/numpy/random/src/splitmix64/LICENSE.md",
+            "sha256": "268b0ca06759d31ea3ca68dd35f20e877916e927b1c2a835e4592a3c4354b1f9"
+          }
+        ]
+      },
+      {
+        "name": "lxml",
+        "version": "6.1.3",
+        "metadata_path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/lxml-6.1.3.dist-info/METADATA",
+        "license_fields": [
+          "License: BSD-3-Clause",
+          "License-File: LICENSE.txt",
+          "License-File: LICENSES.txt"
+        ],
+        "source_fields": [
+          "Home-page: https://lxml.de/",
+          "Project-URL: Source, https://github.com/lxml/lxml",
+          "Project-URL: Bug Tracker, https://bugs.launchpad.net/lxml"
+        ],
+        "exact_wheel_url": "https://files.pythonhosted.org/packages/e9/44/27e3cee3dcdb3b7bc09727b642bdbfcd098490ea77df04611db9060d7722/lxml-6.1.3-cp314-cp314-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl",
+        "wheel_sha256": "a7eb78ba28b187e1e9203a55c60fcf70df2d22cb205fe6d51b9383d6097419f0",
+        "notices": [
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/lxml-6.1.3.dist-info/licenses/LICENSE.txt",
+            "relative_to_distribution": "licenses/LICENSE.txt",
+            "sha256": "8fc2b568133516e46845d2147917adeee1648e70ae9ab5ed6c5417afef4ce855"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/lxml-6.1.3.dist-info/licenses/LICENSES.txt",
+            "relative_to_distribution": "licenses/LICENSES.txt",
+            "sha256": "388fa99f3bde4447cd5a4cbb114037be026854db6cfe89e112691c1d8abdcf3c"
+          }
+        ]
+      },
+      {
+        "name": "fonttools",
+        "version": "4.66.1",
+        "metadata_path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/fonttools-4.66.1.dist-info/METADATA",
+        "license_fields": [
+          "License: MIT",
+          "License-File: LICENSE",
+          "License-File: LICENSE.external"
+        ],
+        "source_fields": [
+          "Home-page: http://github.com/fonttools/fonttools"
+        ],
+        "exact_wheel_url": "https://files.pythonhosted.org/packages/6a/db/9ac5c6773feec1b40e57eac106d869886f66a1e44082d343ac1e1e1fb773/fonttools-4.66.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+        "wheel_sha256": "9261ef507f2dd74203443a472b65b5a26429eb378f975016dec7dc7305b24898",
+        "notices": [
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/fonttools-4.66.1.dist-info/licenses/LICENSE",
+            "relative_to_distribution": "licenses/LICENSE",
+            "sha256": "6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383"
+          },
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/fonttools-4.66.1.dist-info/licenses/LICENSE.external",
+            "relative_to_distribution": "licenses/LICENSE.external",
+            "sha256": "94a83aaee0729a0f302d34acc4acecbd9d58366f262429075fe557e4a54b2e69"
+          }
+        ]
+      },
+      {
+        "name": "charset-normalizer",
+        "version": "3.5.1",
+        "metadata_path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/charset_normalizer-3.5.1.dist-info/METADATA",
+        "license_fields": [
+          "License: MIT",
+          "License-File: LICENSE"
+        ],
+        "source_fields": [
+          "Project-URL: Changelog, https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md",
+          "Project-URL: Documentation, https://charset-normalizer.readthedocs.io/",
+          "Project-URL: Code, https://github.com/jawah/charset_normalizer",
+          "Project-URL: Issue tracker, https://github.com/jawah/charset_normalizer/issues"
+        ],
+        "exact_wheel_url": "https://files.pythonhosted.org/packages/e0/91/39c3af510b0aa32bbda03374259200f28430febfd1bf5e511fe765282ce5/charset_normalizer-3.5.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+        "wheel_sha256": "15f024313246a4ed976c60f440bb8d257815513a681d212ff74fd46f7d715a90",
+        "notices": [
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/charset_normalizer-3.5.1.dist-info/licenses/LICENSE",
+            "relative_to_distribution": "licenses/LICENSE",
+            "sha256": "6d0d41bfe170ac6c7dc248c9a63e254d0fb45a60d50a8257d0af92c6e249b887"
+          }
+        ]
+      },
+      {
+        "name": "reportlab",
+        "version": "5.0.1",
+        "metadata_path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/reportlab-5.0.1.dist-info/METADATA",
+        "license_fields": [
+          "License: BSD license (see license.txt for details), Copyright (c) 2000-2025, ReportLab Inc.",
+          "License-File: LICENSE"
+        ],
+        "source_fields": [
+          "Home-page: https://www.reportlab.com/"
+        ],
+        "exact_wheel_url": "https://files.pythonhosted.org/packages/db/cb/dacbc268cb68d0428ea2cbd85266195a9ab3e677449589ddae59bd7542ac/reportlab-5.0.1-py3-none-any.whl",
+        "wheel_sha256": "1c36e6bb0e71780c72331eba60da7f602e8d4389a8723825af71342e49d791e8",
+        "notices": [
+          {
+            "path": "/tmp/rychvald-package-probe/bundle/lib/python3.14/site-packages/reportlab-5.0.1.dist-info/licenses/LICENSE",
+            "relative_to_distribution": "licenses/LICENSE",
+            "sha256": "ef831761646313921375fc2cb888e8eeaf7da213d0b92852c10c42f3a0b4d138"
+          }
+        ]
+      }
+    ],
+    "external_notices": [
+      {
+        "name": "Tesseract5.5.3 LICENSE",
+        "url": "https://raw.githubusercontent.com/tesseract-ocr/tesseract/5.5.3/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "bytes": 11358,
+        "verified_body": true
+      },
+      {
+        "name": "tessdata4.1.0 LICENSE",
+        "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata/4.1.0/LICENSE",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "bytes": 11358,
+        "verified_body": true
+      }
+    ]
+  }
+}
