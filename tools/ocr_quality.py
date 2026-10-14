@@ -190,7 +190,17 @@ def save_review(a, review, changed):
     summary = validate_review(a.work, changed)
     backup = Path(a.work) / 'review-history' / (sha(a.review) + '.json')
     if not backup.exists():
-        dump(backup, review)
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(dir=backup.parent, prefix='.' + backup.name)
+        try:
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(Path(a.review).read_bytes())
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, backup)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
     dump(a.review, changed)
     print(json.dumps({'review': str(a.review), 'previous': str(backup), 'validation': summary}, ensure_ascii=False))
 
@@ -202,9 +212,8 @@ def update_line(a):
     save_review(a, review, changed)
 
 
-def update_review(a):
-    """Apply a batch once; archive and write only after whole-review validation."""
-    review, patch = load(a.review), load(a.patch)
+def patched_review(review, patch):
+    """Apply the existing structured batch schema without mutating its inputs."""
     if not patch or set(patch) - {'lines', 'drop_lines', 'units', 'dropped_candidates'}:
         raise ValueError('Batch accepts lines, drop_lines, units and dropped_candidates')
     changed = copy.deepcopy(review)
@@ -222,7 +231,13 @@ def update_review(a):
     for name in ('units', 'dropped_candidates'):
         if name in patch:
             changed[name] = patch[name]
-    save_review(a, review, changed)
+    return changed
+
+
+def update_review(a):
+    """Apply a batch once; archive and write only after whole-review validation."""
+    review = load(a.review)
+    save_review(a, review, patched_review(review, load(a.patch)))
 
 
 def validate_clipboard_expectations(work, expectations):
