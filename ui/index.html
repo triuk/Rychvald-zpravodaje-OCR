@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rychvaldský zpravodaj · OCR</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/webui.js"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div><span class="eyebrow">RYCHVALDSKÝ ZPRAVODAJ</span><h1>Pracovna OCR</h1></div>
+    <span class="local-label">Místní evidence vydání</span>
+  </header>
+  <form id="registry-form" class="registry-bar">
+    <label for="registry-root">Adresář evidence</label>
+    <input id="registry-root" name="root" type="text" spellcheck="false" placeholder="Adresář obsahující registry.json">
+    <button type="submit">Otevřít evidenci</button>
+    <button id="refresh" type="button" class="secondary">Obnovit</button>
+  </form>
+  <div id="message" role="status" aria-live="polite">Připojování k aplikaci…</div>
+  <div class="workspace">
+    <aside aria-label="Projekty vydání">
+      <div class="section-heading"><h2>Projekty vydání</h2><span id="edition-count">0</span></div>
+      <p class="hint">Průchody stejného zdrojového skenu jsou seskupené pod jedním vydáním.</p>
+      <div id="editions"></div>
+    </aside>
+    <main id="detail" tabindex="-1">
+      <div class="empty"><span class="eyebrow">PŘEHLED PRŮCHODU</span><h2>Vyberte průchod OCR</h2>
+        <p>U každého průchodu uvidíte skutečnou fázi, výsledky kontrol a dostupné soubory.</p></div>
+    </main>
+  </div>
+</body>
+</html>

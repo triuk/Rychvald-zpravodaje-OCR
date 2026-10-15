@@ -1,0 +1,51 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #202c32; background: #f3f5f4; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.app-header { min-height: 110px; padding: 22px 32px; background: #183e3b; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .14em; color: #59736d; }
+.app-header .eyebrow { color: #acc6bd; }
+h1 { font-size: 26px; margin: 4px 0 0; font-weight: 600; }
+h2 { font-size: 19px; margin: 0; font-weight: 650; }
+h3 { font-size: 15px; }
+.local-label { font-size: 13px; color: #cbdcd6; }
+.registry-bar { display: flex; align-items: center; gap: 12px; padding: 16px 32px; border-bottom: 1px solid #d6dfda; background: #fff; }
+label { font-size: 13px; font-weight: 600; }
+input { flex: 1; min-width: 100px; padding: 10px; background: #f7f9f8; border: 1px solid #c6d2cb; border-radius: 5px; font: inherit; font-size: 13px; }
+button { border: 1px solid #285a4e; border-radius: 5px; background: #285a4e; color: white; padding: 10px 14px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
+button:hover { filter: brightness(.94); }
+button:focus-visible, input:focus-visible { outline: 3px solid #d7ad53; outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: wait; }
+button.secondary { color: #285a4e; background: #fff; border-color: #c6d2cb; }
+#message { font-size: 13px; padding: 10px 32px; min-height: 39px; color: #52665c; }
+#message.error { color: #9c3122; background: #fff1eb; }
+.workspace { display: grid; grid-template-columns: 325px minmax(0, 1fr); min-height: calc(100vh - 222px); border-top: 1px solid #d6dfda; }
+aside { padding: 24px 20px; background: #fff; border-right: 1px solid #d6dfda; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.section-heading span { background: #edf2ee; font-size: 12px; padding: 4px 9px; border-radius: 20px; }
+.hint { font-size: 12px; line-height: 1.6; color: #6b7872; }
+.edition { padding: 20px 0 6px; border-top: 1px solid #e4e9e5; margin-top: 18px; }
+.edition h3 { margin: 0 0 5px; overflow-wrap: anywhere; }
+.source-id { font: 11px ui-monospace, monospace; color: #697b72; overflow-wrap: anywhere; }
+.run { display: block; width: 100%; text-align: left; color: #31473d; background: #f6f8f6; border-color: transparent; margin-top: 9px; font-weight: 500; }
+.run[aria-pressed="true"] { border-color: #285a4e; background: #e6f0e9; }
+.run span { display: block; margin-top: 4px; color: #60736a; font-size: 11px; }
+main { padding: 32px; }
+.empty { max-width: 550px; margin: 90px auto; text-align: center; }
+.empty h2 { margin: 12px 0; font-size: 26px; }
+.empty p { color: #66756d; line-height: 1.8; font-size: 14px; }
+.detail-title { margin: 10px 0; font-size: 25px; overflow-wrap: anywhere; }
+.run-id { margin-bottom: 26px; color: #67776d; font: 12px ui-monospace, monospace; overflow-wrap: anywhere; }
+.statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
+.status-card { border: 1px solid #d6dfda; background: #fff; border-radius: 7px; padding: 18px; }
+.status-card dt { color: #6b7972; font-size: 12px; margin-bottom: 8px; }
+.status-card dd { margin: 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.status-code { display: block; margin-top: 7px; color: #7a8680; font: 11px ui-monospace, monospace; }
+.artifact-section { margin-top: 30px; }
+.artifacts { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; text-align: left; }
+.artifacts th { font-weight: 500; color: #64766a; }
+.artifacts th, .artifacts td { padding: 12px 8px; border-bottom: 1px solid #dce4de; }
+.artifacts td:nth-child(2) { font: 11px ui-monospace, monospace; overflow-wrap: anywhere; }
+.availability { color: #285a4e; white-space: nowrap; }
+.availability.missing { color: #7f807b; }
+@media (max-width: 850px) { .registry-bar { flex-wrap: wrap; padding: 16px; } .registry-bar label { width: 100%; } .workspace { grid-template-columns: 260px minmax(0, 1fr); } main { padding: 22px; } .statuses { grid-template-columns: 1fr; } .local-label { display: none; } }
+@media (max-width: 600px) { .workspace { display: block; } aside { border-right: 0; border-bottom: 1px solid #d6dfda; } .app-header { padding: 22px; } .empty { margin: 40px auto; } }
