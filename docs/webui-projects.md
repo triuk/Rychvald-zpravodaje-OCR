@@ -9,6 +9,8 @@ Stávající OCR CLI, jeho prostředí a souhrnný JSON protokol zůstávají za
 
 Import PDF a složek, výběr externích profilů a vytváření pojmenovaných průchodů
 popisuje [návod k profilům](webui-profiles.md).
+Spouštění skutečné místní přípravy a její živé checkpointy popisuje
+[návod k místní přípravě](webui-preparation.md).
 
 Do pole „Adresář evidence“ patří pracovní kořen se souborem `registry.json`,
 nikoli adresář zdrojových PDF. Po otevření se vlevo zobrazí projekty vydání a jejich

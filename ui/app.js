@@ -19,6 +19,9 @@ let selectedRun = null;
 let selectedProfile = null;
 let connected = false;
 let requestQueue = Promise.resolve();
+let progressRequestPending = false;
+let displayedPreparation = null;
+const preparationEnvironments = new Map();
 const rootInput = document.querySelector('#registry-root');
 const message = document.querySelector('#message');
 window.addEventListener('error', event => {
@@ -129,6 +132,43 @@ function renderRun(data) {
   table.append(body);
   section.append(table);
   detail.append(section);
+  const preparation = element('section', undefined, 'preparation-panel');
+  preparation.append(element('h3', 'Místní příprava'));
+  const controls = element('form', undefined, 'input-row');
+  controls.id = 'preparation-form';
+  const environment = element('input');
+  environment.id = 'preparation-environment';
+  environment.type = 'text';
+  environment.placeholder = 'Manifest prostředí (volitelné; jinak prostředí OCR procesu)';
+  environment.value = preparationEnvironments.get(project.run_id) || '';
+  environment.setAttribute('aria-label', 'Manifest nativního OCR prostředí');
+  const start = element('button', 'Spustit místní přípravu');
+  start.id = 'start-preparation';
+  start.type = 'submit';
+  start.disabled = !data.run;
+  controls.append(environment, start);
+  controls.addEventListener('submit', event => {
+    event.preventDefault();
+    perform(async () => {
+      const payload = { run_id: project.run_id };
+      preparationEnvironments.set(project.run_id, environment.value);
+      if (environment.value.trim()) payload.environment = environment.value;
+      const status = await request('start_preparation', payload);
+      renderPreparation(status);
+      return 'Místní příprava byla spuštěna. Přehled a výběr průchodů zůstávají dostupné.';
+    });
+  });
+  preparation.append(controls);
+  if (!data.run) preparation.append(element('p', 'Pro spuštění založte pojmenovaný průchod s profilem.', 'hint'));
+  const status = element('p', 'Zjišťování stavu…');
+  status.id = 'preparation-state';
+  status.setAttribute('aria-live', 'polite');
+  const units = element('p', '', 'hint');
+  units.id = 'preparation-counts';
+  const events = element('ol', undefined, 'preparation-events');
+  events.id = 'preparation-events';
+  preparation.append(status, units, events);
+  detail.append(preparation);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
     profile.id = 'run-profile';
@@ -141,8 +181,10 @@ function renderRun(data) {
     profile.append(content);
     const history = element('ul', undefined, 'run-history');
     history.id = 'run-history';
+    const summaries = { run_created: 'Průchod založen', attempt_started: 'Místní příprava zahájena',
+      attempt_completed: 'Místní příprava dokončena', attempt_failed: 'Místní příprava selhala', attempt_interrupted: 'Místní příprava přerušena' };
     for (const event of data.history) {
-      history.append(element('li', `${event.type === 'run_created' ? 'Průchod založen' : event.type} · ${event.timestamp}`));
+      if (summaries[event.type]) history.append(element('li', `${summaries[event.type]} · ${event.timestamp}`));
     }
     profile.append(element('h3', 'Historie průchodu'), history);
     detail.append(profile);
@@ -158,6 +200,74 @@ async function selectRun(runId) {
   });
   renderRun(data);
 }
+
+function stepLabel(step) {
+  if (step.startsWith('raster:page:')) return `Rastr · strana ${step.split(':')[2]}`;
+  if (step.startsWith('ocr:page:')) return `OCR · strana ${step.split(':')[2]}, PSM ${step.split(':')[4]}`;
+  return { environment: 'Ověření prostředí', candidates: 'Kandidátní text',
+    artifact_validation: 'Kontrola hashů podkladů', preparation: 'Místní příprava' }[step] || step;
+}
+
+function renderPreparation(status) {
+  const state = document.querySelector('#preparation-state');
+  if (!state || status.run_id !== selectedRun) return;
+  const names = { not_started: 'Dosud nespouštěna', starting: 'Spouští se', running: 'Probíhá',
+    completed: 'Dokončena; podklady ověřeny', failed: 'Poslední pokus selhal',
+    interrupted: 'Přerušena', invalidated: 'Podklady se změnily; kontrola neprošla' };
+  state.dataset.state = status.state;
+  state.dataset.attemptId = status.attempt_id || '';
+  state.dataset.activeSteps = (status.active_steps || []).join(' ');
+  if (status.environment && !preparationEnvironments.has(selectedRun)) {
+    preparationEnvironments.set(selectedRun, status.environment);
+    document.querySelector('#preparation-environment').value = status.environment;
+  }
+  const active = status.active_steps?.map(stepLabel).join(' · ');
+  state.textContent = `${names[status.state] || status.state}${active ? ` · ${active}` : ''}${status.elapsed_seconds !== undefined ? ` · ${status.elapsed_seconds.toFixed(1)} s` : ''}`;
+  if (status.error) state.textContent += ` · ${status.error.message} (${status.error.code})`;
+  const failureDetail = [...status.events].reverse().find(event => event.error?.detail)?.error.detail;
+  if (failureDetail) state.textContent += ` · ${failureDetail}`;
+  const counts = status.counts;
+  const countDisplay = document.querySelector('#preparation-counts');
+  countDisplay.dataset.pagesTotal = counts.pages_total || 0;
+  countDisplay.textContent = counts.pages_total === undefined ? '' : counts.totals_known ?
+    `Ověřené rastry stránek: ${counts.pages_completed}/${counts.pages_total}. Ověřené úlohy OCR: ${counts.ocr_completed}/${counts.ocr_total}. Převzato z platné cache: ${counts.rasters_cached} rastrů, ${counts.ocr_cached} úloh OCR.` :
+    'Počet stránek a úloh nebyl dosud zjištěn; dokončené jednotky: 0.';
+  const list = document.querySelector('#preparation-events');
+  list.replaceChildren();
+  const eventNames = { attempt_started: 'Pokus zahájen', step_started: 'Zahájeno', unit_started: 'Jednotka zahájena',
+    step_completed: 'Dokončeno', unit_completed: 'Jednotka ověřena', unit_cached: 'Ověřená cache',
+    units_planned: 'Načten počet stránek', checkpoint_completed: 'Checkpoint ověřen',
+    attempt_completed: 'Pokus dokončen', step_failed: 'Krok selhal', attempt_failed: 'Pokus selhal', attempt_interrupted: 'Pokus přerušen' };
+  for (const event of status.events.slice(-12)) {
+    const row = element('li', `${eventNames[event.type] || event.type} · ${stepLabel(event.step_id)}${event.duration_seconds !== undefined ? ` · ${event.duration_seconds.toFixed(2)} s` : ''}`);
+    row.title = event.event_id;
+    list.append(row);
+  }
+  const button = document.querySelector('#start-preparation');
+  if (button) button.disabled = ['starting', 'running'].includes(status.state) || !document.querySelector('#run-profile');
+}
+
+async function pollPreparation() {
+  if (!connected || !selectedRun || progressRequestPending) return;
+  const runId = selectedRun;
+  progressRequestPending = true;
+  try {
+    const status = await request('preparation_status', { run_id: runId });
+    if (selectedRun !== runId) return;
+    renderPreparation(status);
+    if (['completed', 'failed', 'interrupted', 'invalidated'].includes(status.state) && status.attempt_id !== displayedPreparation) {
+      displayedPreparation = status.attempt_id;
+      await selectRun(runId);
+      renderPreparation(status);
+    }
+  } catch (error) {
+    const state = document.querySelector('#preparation-state');
+    if (state && selectedRun === runId) state.textContent = error.message;
+  } finally {
+    progressRequestPending = false;
+  }
+}
+setInterval(pollPreparation, 350);
 
 async function refresh() {
   const data = await request('projects');

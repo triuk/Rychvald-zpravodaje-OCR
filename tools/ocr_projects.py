@@ -354,6 +354,8 @@ def build_parser():
     command.add_argument('--dpi', type=int, default=300)
     command.add_argument('--language', default='ces')
     command.add_argument('--environment', type=Path)
+    command.add_argument('--progress-events', type=Path)
+    command.add_argument('--attempt-id')
     command = commands.add_parser('query')
     command.add_argument('project_id')
     command.add_argument('view', choices=['transcript', 'candidates', 'findings', 'unresolved', 'publisher-errors', 'reconstructions', 'units'])
@@ -379,6 +381,8 @@ def build_parser():
     command.add_argument('--dpi', type=int)
     command.add_argument('--language')
     command.add_argument('--environment', type=Path)
+    command.add_argument('--progress-events', type=Path)
+    command.add_argument('--attempt-id')
     return parser
 
 
@@ -429,7 +433,8 @@ def main(argv=None):
             from ocr_project_prepare import prepare_project, resume_project
             prepare = resume_project if args.operation == 'resume' else prepare_project
             record = prepare(registry, args.project_id, dpi=args.dpi,
-                                     language=args.language, environment=args.environment)
+                                     language=args.language, environment=args.environment,
+                                     progress_events=args.progress_events, attempt_id=args.attempt_id)
             result = response(args.operation, **record)
         elif args.operation == 'list':
             result = registry.list_projects(offset=args.offset, limit=args.limit)
