@@ -13,6 +13,7 @@ import sys
 import threading
 
 from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_run_name
+from .jobs import JobError, PreparationJobs, read_history
 
 
 class ApplicationError(Exception):
@@ -63,6 +64,7 @@ class Application:
         self._lock = threading.RLock()
         self._events = deque(maxlen=1000)
         self._sequence = 0
+        self.preparation = PreparationJobs(self.process.command, self.publish)
 
     def dispatch(self, operation, payload=None):
         with self._lock:
@@ -82,6 +84,10 @@ class Application:
                     data = self.inspect_profile(payload.get('path'))
                 elif operation == 'create_run':
                     data = self.create_run(payload)
+                elif operation == 'start_preparation':
+                    data = self.start_preparation(payload)
+                elif operation == 'preparation_status':
+                    data = self.preparation_status(payload.get('run_id'))
                 elif operation == 'events':
                     after = payload.get('after', 0)
                     if not isinstance(after, int) or isinstance(after, bool) or after < 0:
@@ -95,16 +101,19 @@ class Application:
                 return {'ok': False, 'data': None,
                         'error': {'code': error.code, 'message': str(error)},
                         'event_cursor': self._sequence}
-            except ProfileError as error:
+            except (ProfileError, JobError) as error:
                 return {'ok': False, 'data': None,
                         'error': {'code': error.code, 'message': str(error)},
                         'event_cursor': self._sequence}
 
     def publish(self, event_type, **data):
-        self._sequence += 1
-        self._events.append({'sequence': self._sequence, 'type': event_type, **data})
+        with self._lock:
+            self._sequence += 1
+            self._events.append({'sequence': self._sequence, 'type': event_type, **data})
 
     def open_registry(self, root):
+        if self.preparation.busy():
+            raise ApplicationError('operation_active', 'Local preparation is active; wait before opening another registry.')
         if not isinstance(root, str) or not root.strip():
             raise ApplicationError('invalid_request', 'Choose the OCR registry directory.')
         candidate = Path(root).expanduser().resolve()
@@ -167,6 +176,34 @@ class Application:
         self.publish('run_created', run_id=run_id, edition_id=edition_id)
         return self.select_run(run_id)
 
+    def start_preparation(self, payload):
+        if self.preparation.busy():
+            raise ApplicationError('operation_active', 'A local preparation is already active.')
+        run = self.select_run(payload.get('run_id'))
+        if 'run' not in run:
+            raise ApplicationError('run_profile_required', 'Create a named run with a profile before starting preparation.')
+        if run['project']['operation_state'] == 'running':
+            raise ApplicationError('project_busy', 'Another process is active for this run.')
+        parameters = run['run']['profile']['parameters']
+        if any(key in payload and payload[key] != parameters[key] for key in ('dpi', 'language')):
+            raise ApplicationError('configuration_changed', 'Create an explicit new named run to change profile parameters.')
+        environment = payload.get('environment')
+        if environment is not None:
+            if not isinstance(environment, str) or not environment.strip():
+                raise ApplicationError('invalid_request', 'Environment manifest must be a file path.')
+            environment = str(Path(environment).expanduser().resolve())
+        return self.preparation.start(self.root, run, environment)
+
+    def preparation_status(self, run_id):
+        if not isinstance(run_id, str) or not run_id:
+            raise ApplicationError('invalid_request', 'Choose an OCR run.')
+        result = self.process.request(self.root, 'status', run_id)
+        work = self.root / result['artifacts']['workspace']
+        return self.preparation.status(self.root, run_id, work)
+
+    def close(self):
+        self.preparation.close()
+
     def projects(self):
         editions = {}
         offset = 0
@@ -209,8 +246,7 @@ class Application:
                                        expected_sha256=manifest['profile_sha256'])
                 if manifest['run_id'] != run_id or manifest['edition_id'] != data['edition_id']:
                     raise ValueError('Run manifest identity differs from the registered run.')
-                history = [json.loads(line) for line in
-                           (self.root / artifacts['history']['path']).read_text(encoding='utf-8').splitlines() if line.strip()]
+                history = read_history(self.root / artifacts['history']['path'])
                 data.update(run={**manifest, 'profile': profile['profile']}, history=history)
             except (OSError, ValueError, KeyError, TypeError, ProfileError) as error:
                 raise ApplicationError('run_metadata_invalid', f'Cannot load named run metadata: {error}') from None

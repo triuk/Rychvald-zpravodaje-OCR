@@ -42,4 +42,7 @@ class WebUIApplication:
             shown = self.window.show('index.html')
         if shown is False:
             raise RuntimeError('WebUI nedokázalo otevřít okno aplikace.')
-        webui.wait()
+        try:
+            webui.wait()
+        finally:
+            self.api.close()

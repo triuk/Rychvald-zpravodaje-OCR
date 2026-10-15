@@ -26,6 +26,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflo
 .run-form .hint { grid-column: 1 / -1; margin: 0; }
 .run-profile { margin-top: 24px; }
 .run-history { font-size: 13px; line-height: 1.7; padding-left: 18px; }
+.preparation-panel { margin-top: 24px; border: 1px solid #d6dfda; border-radius: 6px; background: #fff; padding: 18px; }
+.preparation-panel input { font-size: 12px; }
+#preparation-state { font-size: 13px; line-height: 1.7; }
+.preparation-events { max-height: 190px; overflow: auto; font-size: 12px; line-height: 1.7; padding-left: 20px; color: #52665c; }
 button { border: 1px solid #285a4e; border-radius: 5px; background: #285a4e; color: white; padding: 10px 14px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
 button:hover { filter: brightness(.94); }
 button:focus-visible, input:focus-visible { outline: 3px solid #d7ad53; outline-offset: 2px; }
