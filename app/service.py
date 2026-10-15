@@ -12,6 +12,8 @@ import subprocess
 import sys
 import threading
 
+from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_run_name
+
 
 class ApplicationError(Exception):
     def __init__(self, code, message):
@@ -74,6 +76,12 @@ class Application:
                     data = self.open_registry(payload.get('root'))
                 elif operation == 'select_run':
                     data = self.select_run(payload.get('run_id'))
+                elif operation == 'import_sources':
+                    data = self.import_sources(payload.get('path'))
+                elif operation == 'inspect_profile':
+                    data = self.inspect_profile(payload.get('path'))
+                elif operation == 'create_run':
+                    data = self.create_run(payload)
                 elif operation == 'events':
                     after = payload.get('after', 0)
                     if not isinstance(after, int) or isinstance(after, bool) or after < 0:
@@ -84,6 +92,10 @@ class Application:
                     raise ApplicationError('unknown_operation', 'Unknown application operation.')
                 return {'ok': True, 'data': data, 'error': None, 'event_cursor': self._sequence}
             except ApplicationError as error:
+                return {'ok': False, 'data': None,
+                        'error': {'code': error.code, 'message': str(error)},
+                        'event_cursor': self._sequence}
+            except ProfileError as error:
                 return {'ok': False, 'data': None,
                         'error': {'code': error.code, 'message': str(error)},
                         'event_cursor': self._sequence}
@@ -105,6 +117,55 @@ class Application:
         except ApplicationError:
             self.root = previous
             raise
+
+    def import_sources(self, path):
+        if not isinstance(path, str) or not path.strip():
+            raise ApplicationError('invalid_request', 'Choose a source PDF or directory.')
+        source = Path(path).expanduser().resolve()
+        try:
+            if not source.exists():
+                raise ApplicationError('source_missing', 'Source PDF or directory does not exist.')
+            files = sorted(p for p in source.iterdir() if p.is_file() and p.suffix.lower() == '.pdf') if source.is_dir() else [source]
+            if not files:
+                raise ApplicationError('source_empty', 'Directory contains no PDF files.')
+            # Validate every selected input before the process can publish any
+            # project. A bad last PDF must not cause a partial folder import.
+            for pdf in files:
+                if not pdf.is_file() or pdf.suffix.lower() != '.pdf':
+                    raise ApplicationError('invalid_source', 'Source must be a PDF file.')
+                with pdf.open('rb') as stream:
+                    if b'%PDF-' not in stream.read(1024):
+                        raise ApplicationError('invalid_source', f'Source has no PDF header: {pdf.name}')
+        except OSError as error:
+            raise ApplicationError('source_unreadable', str(error)) from None
+        result = self.process.request(self.root, 'import', source)
+        counts = {'sources': len(files), **result['counts']}
+        data = self.projects()
+        self.publish('sources_imported', **counts)
+        return {**data, 'counts': counts}
+
+    def inspect_profile(self, path):
+        return load_profile(path)
+
+    def create_run(self, payload):
+        name = validate_run_name(payload.get('name'))
+        expected = payload.get('profile_sha256')
+        if not isinstance(expected, str) or len(expected) != 64 or any(c not in '0123456789abcdef' for c in expected):
+            raise ApplicationError('invalid_request', 'Inspect the profile before creating a run.')
+        profile = load_profile(payload.get('profile_path'), expected_sha256=expected)
+        edition_id = payload.get('edition_id')
+        editions = self.projects()['editions']
+        edition = next((item for item in editions if item['edition_id'] == edition_id), None)
+        if edition is None:
+            raise ApplicationError('edition_not_found', 'Choose an existing edition before creating a run.')
+        representative = self.process.request(self.root, 'status', edition['runs'][0]['run_id'])
+        source = self.root / representative['artifacts']['source']
+        result = self.process.request(self.root, 'import', source, '--new-run',
+                                      '--run-name=' + name, '--profile=' + profile['path'],
+                                      '--profile-sha256=' + profile['sha256'], '--source-sha256=' + edition_id)
+        run_id = result['project']['run_id']
+        self.publish('run_created', run_id=run_id, edition_id=edition_id)
+        return self.select_run(run_id)
 
     def projects(self):
         editions = {}
@@ -139,5 +200,19 @@ class Application:
                                'kind': 'directory' if safe and path.is_dir() else 'file'}
         data = {'edition_id': result['project']['source_sha256'],
                 'project': result['project'], 'counts': result['counts'], 'artifacts': artifacts}
+        if 'run_manifest' in artifacts:
+            try:
+                if not all(artifacts[name]['available'] for name in ('run_manifest', 'profile_snapshot', 'history')):
+                    raise ValueError('Named run artifacts are missing or outside the registry.')
+                manifest = json.loads((self.root / artifacts['run_manifest']['path']).read_text(encoding='utf-8'))
+                profile = load_profile(self.root / artifacts['profile_snapshot']['path'],
+                                       expected_sha256=manifest['profile_sha256'])
+                if manifest['run_id'] != run_id or manifest['edition_id'] != data['edition_id']:
+                    raise ValueError('Run manifest identity differs from the registered run.')
+                history = [json.loads(line) for line in
+                           (self.root / artifacts['history']['path']).read_text(encoding='utf-8').splitlines() if line.strip()]
+                data.update(run={**manifest, 'profile': profile['profile']}, history=history)
+            except (OSError, ValueError, KeyError, TypeError, ProfileError) as error:
+                raise ApplicationError('run_metadata_invalid', f'Cannot load named run metadata: {error}') from None
         self.publish('run_selected', run_id=run_id, edition_id=data['edition_id'])
         return data

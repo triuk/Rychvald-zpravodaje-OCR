@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "name": "Věrné vizuální čtení",
+  "parameters": {
+    "dpi": 300,
+    "language": "ces",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "high"
+  },
+  "prompts": {
+    "read": "Vizuálně přečti všechny stránky zdrojového skenu a všechny jejich články, tabulky a popisky. Zdrojový sken je předloha; místní OCR jsou pomocné kandidáty. Zachovej věrné znění včetně čitelných chyb vydavatele, správné pořadí čtení a návaznosti článků. Špatně čitelná místa řeš obrazem a doloženým kontextem; nejisté znění nevydávej za jisté a eviduj nevyřešená místa. Pro rozsáhlé podklady používej context-mode.",
+    "repair": "Proveď cílenou opravu doložených nálezů podle zdrojového skenu. Oprav přepis, pořadí čtení nebo geometrii pouze tam, kde to podporuje předloha. Zachovej čitelné chyby vydavatele; nejistoty a použité doklady zaznamenej. Nezaměňuj programové potvrzení přepisu za skutečné vizuální čtení.",
+    "final_check": "Porovnej výsledné OCR PDF a text článků se zdrojovým skenem. Ověř znění, pořadí čtení, návaznosti, geometrii výběrů a soulad artefaktů. Rozliš chyby OCR, chyby vydavatele a nevyřešená místa. Nepotvrzuj přijetí zadavatelem a nepovyšuj neprovedené kontroly na úspěšné."
+  }
+}
