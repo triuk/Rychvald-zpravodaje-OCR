@@ -14,6 +14,7 @@ import threading
 
 from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_run_name
 from .jobs import JobError, PreparationJobs, read_history
+from .codex import CodexJobs
 
 
 class ApplicationError(Exception):
@@ -58,13 +59,14 @@ class Application:
     error code and an event cursor. events(after) returns changes since a cursor.
     """
 
-    def __init__(self, root, *, process_command=None):
+    def __init__(self, root, *, process_command=None, codex_runtime=None):
         self.root = Path(root).expanduser().resolve()
         self.process = OcrProcess(process_command)
         self._lock = threading.RLock()
         self._events = deque(maxlen=1000)
         self._sequence = 0
         self.preparation = PreparationJobs(self.process.command, self.publish)
+        self.codex = CodexJobs(self.publish, codex_runtime)
 
     def dispatch(self, operation, payload=None):
         with self._lock:
@@ -88,6 +90,12 @@ class Application:
                     data = self.start_preparation(payload)
                 elif operation == 'preparation_status':
                     data = self.preparation_status(payload.get('run_id'))
+                elif operation == 'start_model_diagnostic':
+                    data = self.start_model_diagnostic(payload)
+                elif operation == 'model_diagnostic_status':
+                    data = self.model_diagnostic_status(payload.get('run_id'))
+                elif operation in ('check_codex_account', 'start_codex_login'):
+                    data = self.start_model_diagnostic(payload, operation='check_account' if operation == 'check_codex_account' else 'login')
                 elif operation == 'events':
                     after = payload.get('after', 0)
                     if not isinstance(after, int) or isinstance(after, bool) or after < 0:
@@ -112,8 +120,8 @@ class Application:
             self._events.append({'sequence': self._sequence, 'type': event_type, **data})
 
     def open_registry(self, root):
-        if self.preparation.busy():
-            raise ApplicationError('operation_active', 'Local preparation is active; wait before opening another registry.')
+        if self.preparation.busy() or self.codex.busy():
+            raise ApplicationError('operation_active', 'A preparation or Codex operation is active; wait before opening another registry.')
         if not isinstance(root, str) or not root.strip():
             raise ApplicationError('invalid_request', 'Choose the OCR registry directory.')
         candidate = Path(root).expanduser().resolve()
@@ -177,8 +185,8 @@ class Application:
         return self.select_run(run_id)
 
     def start_preparation(self, payload):
-        if self.preparation.busy():
-            raise ApplicationError('operation_active', 'A local preparation is already active.')
+        if self.preparation.busy() or self.codex.busy():
+            raise ApplicationError('operation_active', 'A preparation or Codex operation is already active.')
         run = self.select_run(payload.get('run_id'))
         if 'run' not in run:
             raise ApplicationError('run_profile_required', 'Create a named run with a profile before starting preparation.')
@@ -203,6 +211,26 @@ class Application:
 
     def close(self):
         self.preparation.close()
+        self.codex.close()
+
+    def start_model_diagnostic(self, payload, operation='vision_diagnostic'):
+        if self.preparation.busy() or self.codex.busy():
+            raise ApplicationError('operation_active', 'Another preparation or Codex operation is active.')
+        run = self.select_run(payload.get('run_id'))
+        if 'run' not in run:
+            raise ApplicationError('run_profile_required', 'Create a named run with a profile before image diagnostics.')
+        if run['project']['operation_state'] == 'running':
+            raise ApplicationError('project_busy', 'Another process is active for this run.')
+        try:
+            return self.codex.start(self.root, run, payload.get('image_path'), operation)
+        except OSError as error:
+            raise ApplicationError('diagnostic_artifact_failed', f'Cannot preserve diagnostic input: {error}') from None
+
+    def model_diagnostic_status(self, run_id):
+        if not isinstance(run_id, str) or not run_id:
+            raise ApplicationError('invalid_request', 'Choose an OCR run.')
+        result = self.process.request(self.root, 'status', run_id)
+        return self.codex.status(self.root, run_id, self.root / result['artifacts']['workspace'])
 
     def projects(self):
         editions = {}
