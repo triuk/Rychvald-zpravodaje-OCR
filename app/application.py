@@ -1,0 +1,45 @@
+"""Thin native WebUI adapter for the public application request interface."""
+
+import json
+from pathlib import Path
+
+from .service import Application
+
+
+class WebUIApplication:
+    def __init__(self, root, *, process_command=None, browser=None):
+        self.api = Application(root, process_command=process_command)
+        self.window = None
+        self.browser = browser
+
+    def request(self, event):
+        try:
+            request = json.loads(event.get_string())
+            if not isinstance(request, dict) or not isinstance(request.get('operation'), str):
+                raise ValueError()
+            result = self.api.dispatch(request['operation'], request.get('payload'))
+        except (ValueError, TypeError):
+            result = {'ok': False, 'data': None, 'event_cursor': self.api._sequence,
+                      'error': {'code': 'invalid_request', 'message': 'Request must be a JSON object with an operation.'}}
+        event.return_string(json.dumps(result, ensure_ascii=False))
+
+    def run(self):
+        try:
+            from webui import webui
+        except ImportError:
+            raise RuntimeError('Chybí webui2. Nainstalujte requirements-gui.txt.') from None
+        window_factory = getattr(webui, 'Window', None) or getattr(webui, 'window', None)
+        if window_factory is None:
+            raise RuntimeError('Nainstalované WebUI neposkytuje nativní okno.')
+        self.window = window_factory()
+        self.window.set_public(False)
+        self.window.set_size(1280, 900)
+        self.window.bind('requestB', self.request)
+        self.window.set_root_folder(str(Path(__file__).resolve().parents[1] / 'ui'))
+        if self.browser:
+            shown = self.window.show_browser('index.html', getattr(webui.Browser, self.browser))
+        else:
+            shown = self.window.show('index.html')
+        if shown is False:
+            raise RuntimeError('WebUI nedokázalo otevřít okno aplikace.')
+        webui.wait()
