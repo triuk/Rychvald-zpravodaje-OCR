@@ -142,11 +142,23 @@ class ProjectRegistry:
             fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
             yield
 
-    def import_source(self, source, *, new_run=False):
+    def import_source(self, source, *, new_run=False, run_name=None, profile_path=None,
+                      profile_sha256=None, source_sha256=None):
+        profile = None
+        if run_name is not None or profile_path is not None or profile_sha256 is not None:
+            if not new_run or run_name is None or profile_path is None:
+                raise ProjectError('invalid_arguments', 'A named run requires --new-run, --run-name and --profile.')
+            from ocr_profiles import ProfileError, load_profile, run_name as validate_name
+            try:
+                validate_name(run_name)
+                profile = load_profile(profile_path, expected_sha256=profile_sha256)
+            except ProfileError as error:
+                raise ProjectError(error.code, str(error)) from None
         with self._registry_lock():
-            return self._import_source(source, new_run=new_run)
+            return self._import_source(source, new_run=new_run, run_name=run_name, profile=profile,
+                                       source_sha256=source_sha256)
 
-    def _import_source(self, source, *, new_run=False):
+    def _import_source(self, source, *, new_run=False, run_name=None, profile=None, source_sha256=None):
         source = Path(source)
         if not source.exists():
             raise ProjectError('source_missing', 'Source PDF does not exist.')
@@ -156,7 +168,19 @@ class ProjectRegistry:
             if b'%PDF-' not in stream.read(1024):
                 raise ProjectError('invalid_source', 'Source has no PDF header.')
         digest = source_hash(source)
+        if source_sha256 is not None and source_sha256 != digest:
+            raise ProjectError('source_changed', 'Selected source differs from the edition content identity.')
         registry = self._read()
+        original_name = source.name
+        if run_name is not None:
+            original_name = next((record['project']['original_name'] for record in registry['projects']
+                                  if record['project']['source_sha256'] == digest), original_name)
+        if run_name is not None:
+            for record in registry['projects']:
+                project = record['project']
+                if (project['source_sha256'] == digest and
+                        project.get('run_name', '').casefold() == run_name.casefold()):
+                    raise ProjectError('run_name_conflict', 'A run with this name already exists for this edition. Choose a different name.')
         if not new_run:
             for record in registry['projects']:
                 if record['project']['source_sha256'] == digest:
@@ -170,9 +194,14 @@ class ProjectRegistry:
                      'output_pdf': f'outputs/{identifier}-ocr.pdf',
                      'output_txt': f'outputs/{identifier}-ocr.txt'}
         project = {'project_id': identifier, 'run_id': identifier,
-                   'source_sha256': digest, 'original_name': source.name,
+                   'source_sha256': digest, 'original_name': original_name,
                    'phase': 'registered', 'operation_state': 'idle',
                    'validation': 'not_run', 'acceptance': 'not_recorded'}
+        if run_name is not None:
+            project['run_name'] = run_name
+            artifacts.update(profile_snapshot=f'work/{identifier}/application/profile.json',
+                             run_manifest=f'work/{identifier}/application/run.json',
+                             history=f'work/{identifier}/application/history.jsonl')
         for folder in ('inputs', 'work', 'outputs'):
             (self.root / folder).mkdir(parents=True, exist_ok=True)
         (self.root / artifacts['workspace']).mkdir()
@@ -197,6 +226,22 @@ class ProjectRegistry:
                 finally:
                     if temporary is not None:
                         temporary.unlink(missing_ok=True)
+            if profile is not None:
+                from datetime import datetime, timezone
+                timestamp = datetime.now(timezone.utc).isoformat()
+                snapshot = self.root / artifacts['profile_snapshot']
+                snapshot.parent.mkdir()
+                with snapshot.open('xb') as stream:
+                    stream.write(profile['text'].encode('utf-8'))
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                manifest = {'schema_version': 1, 'run_id': identifier, 'edition_id': digest,
+                            'name': run_name, 'created_at': timestamp,
+                            'profile_sha256': profile['sha256'], 'profile_source_path': profile['path']}
+                atomic_json(self.root / artifacts['run_manifest'], manifest)
+                atomic_json(self.root / artifacts['history'], {
+                    'type': 'run_created', 'timestamp': timestamp, 'run_id': identifier,
+                    'name': run_name, 'profile_sha256': profile['sha256']})
             atomic_json(self.root / artifacts['project'], record)
             registry['projects'].append(record)
             atomic_json(self.path, registry)
@@ -295,6 +340,10 @@ def build_parser():
     command = commands.add_parser('import')
     command.add_argument('source', type=Path)
     command.add_argument('--new-run', action='store_true')
+    command.add_argument('--run-name')
+    command.add_argument('--profile', type=Path)
+    command.add_argument('--profile-sha256')
+    command.add_argument('--source-sha256')
     command = commands.add_parser('status')
     command.add_argument('project_id')
     command = commands.add_parser('list')
@@ -341,6 +390,8 @@ def main(argv=None):
         operation = args.operation
         registry = ProjectRegistry(args.root)
         if args.operation == 'import':
+            if args.source.is_dir() and (args.run_name is not None or args.profile is not None or args.profile_sha256 is not None or args.source_sha256 is not None):
+                raise ProjectError('invalid_arguments', 'Create a named run from one selected edition, not a source directory.')
             if args.source.is_dir():
                 counts = {'sources': 0, 'created': 0, 'reused': 0}
                 for source in sorted(args.source.iterdir()):
@@ -350,7 +401,10 @@ def main(argv=None):
                         counts['created' if created else 'reused'] += 1
                 result = response(args.operation, artifacts={'registry': 'registry.json'}, counts=counts)
             else:
-                record, created = registry.import_source(args.source, new_run=args.new_run)
+                record, created = registry.import_source(args.source, new_run=args.new_run,
+                                                        run_name=args.run_name, profile_path=args.profile,
+                                                        profile_sha256=args.profile_sha256,
+                                                        source_sha256=args.source_sha256)
                 result = response(args.operation, project=record['project'], artifacts=record['artifacts'],
                                   counts={'created': int(created), 'reused': int(not created)})
         elif args.operation == 'validate':

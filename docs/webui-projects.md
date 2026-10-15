@@ -7,6 +7,9 @@ zabalený OCR proces lze předat `--ocr-executable /cesta/k/ocr-process`.
 Bez tohoto přepínače se používá dosavadní `tools/ocr_projects.py` jako podproces.
 Stávající OCR CLI, jeho prostředí a souhrnný JSON protokol zůstávají zachované.
 
+Import PDF a složek, výběr externích profilů a vytváření pojmenovaných průchodů
+popisuje [návod k profilům](webui-profiles.md).
+
 Do pole „Adresář evidence“ patří pracovní kořen se souborem `registry.json`,
 nikoli adresář zdrojových PDF. Po otevření se vlevo zobrazí projekty vydání a jejich
 průchody. Rozdílné zdrojové skeny stejného názvu mají vlastní projekty vydání;

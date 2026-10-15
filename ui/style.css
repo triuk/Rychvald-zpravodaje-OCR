@@ -11,6 +11,21 @@ h3 { font-size: 15px; }
 .registry-bar { display: flex; align-items: center; gap: 12px; padding: 16px 32px; border-bottom: 1px solid #d6dfda; background: #fff; }
 label { font-size: 13px; font-weight: 600; }
 input { flex: 1; min-width: 100px; padding: 10px; background: #f7f9f8; border: 1px solid #c6d2cb; border-radius: 5px; font: inherit; font-size: 13px; }
+select { width: 100%; padding: 10px; background: #f7f9f8; border: 1px solid #c6d2cb; border-radius: 5px; font: inherit; font-size: 13px; }
+.setup-panel { padding: 16px 32px; background: #fff; border-bottom: 1px solid #d6dfda; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
+.setup-form label, .run-form label { display: block; margin-bottom: 7px; }
+.input-row { display: flex; gap: 8px; }
+.input-row input { width: 0; }
+.profile-preview, .run-form { grid-column: 1 / -1; }
+.profile-preview { padding: 18px; background: #f1f5f0; border-radius: 6px; }
+.profile-preview[hidden] { display: none; }
+details summary { cursor: pointer; font-size: 13px; color: #285a4e; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; background: #fff; border: 1px solid #d6dfda; padding: 16px; font: 12px/1.6 ui-monospace, monospace; }
+.run-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 10px; }
+.run-form input { width: 100%; }
+.run-form .hint { grid-column: 1 / -1; margin: 0; }
+.run-profile { margin-top: 24px; }
+.run-history { font-size: 13px; line-height: 1.7; padding-left: 18px; }
 button { border: 1px solid #285a4e; border-radius: 5px; background: #285a4e; color: white; padding: 10px 14px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; }
 button:hover { filter: brightness(.94); }
 button:focus-visible, input:focus-visible { outline: 3px solid #d7ad53; outline-offset: 2px; }
@@ -49,3 +64,4 @@ main { padding: 32px; }
 .availability.missing { color: #7f807b; }
 @media (max-width: 850px) { .registry-bar { flex-wrap: wrap; padding: 16px; } .registry-bar label { width: 100%; } .workspace { grid-template-columns: 260px minmax(0, 1fr); } main { padding: 22px; } .statuses { grid-template-columns: 1fr; } .local-label { display: none; } }
 @media (max-width: 600px) { .workspace { display: block; } aside { border-right: 0; border-bottom: 1px solid #d6dfda; } .app-header { padding: 22px; } .empty { margin: 40px auto; } }
+@media (max-width: 850px) { .setup-panel { grid-template-columns: 1fr; padding: 16px; } .run-form { grid-template-columns: 1fr; } }
