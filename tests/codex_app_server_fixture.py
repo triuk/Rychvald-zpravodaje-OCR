@@ -1,0 +1,83 @@
+"""Controlled child-process protocol peer, never native/model evidence."""
+import json
+import sys
+import time
+
+mode = sys.argv[1]
+logged_in = mode not in ('login', 'missing_account')
+
+
+def emit(value):
+    print(json.dumps(value), flush=True)
+
+
+for raw in sys.stdin:
+    request = json.loads(raw)
+    method = request.get('method')
+    if 'id' not in request:
+        continue
+    identifier = request['id']
+    if method == 'initialize':
+        result = {'userAgent': 'controlled-process-fixture'}
+    elif method == 'account/read':
+        result = {'account': {'type': 'chatgpt', 'email': 'private@example.invalid', 'planType': 'plus'},
+                  'requiresOpenaiAuth': True}
+        if not logged_in:
+            result['account'] = None
+    elif method == 'account/login/start':
+        assert request['params'] == {'type': 'chatgpt'}
+        emit({'id': identifier, 'result': {'type': 'chatgpt', 'loginId': 'fixture-login',
+              'authUrl': 'https://auth.openai.com/authorize?state=private-fixture-state'}})
+        time.sleep(.15)
+        logged_in = True
+        emit({'method': 'account/login/completed', 'params': {'loginId': 'fixture-login', 'success': True, 'error': None}})
+        continue
+    elif method == 'model/list':
+        result = {'data': [{'id': 'gpt-6.1-sol', 'model': 'gpt-6.1-sol',
+                            'inputModalities': ['text', 'image'],
+                            'supportedReasoningEfforts': [{'reasoningEffort': 'high'}]}], 'nextCursor': None}
+        if mode == 'no_vision':
+            result['data'][0]['inputModalities'] = ['text']
+    elif method == 'thread/start':
+        params = request['params']
+        assert params['model'] == 'gpt-6.1-sol'
+        assert params['config']['model_reasoning_effort'] == 'high'
+        result = {'thread': {'id': 'fixture-thread-13'}, 'model': 'gpt-6.1-sol', 'reasoningEffort': 'high'}
+        if mode == 'wrong_effort':
+            result['reasoningEffort'] = 'low'
+        if mode == 'wrong_model':
+            result['model'] = 'gpt-6-sol'
+    elif method == 'turn/start':
+        params = request['params']
+        assert params['model'] == 'gpt-6.1-sol' and params['effort'] == 'high'
+        assert params['input'][1]['type'] == 'localImage'
+        if mode == 'rejected':
+            emit({'id': identifier, 'error': {'code': -32000, 'message': 'Exact model access denied'}})
+            continue
+        if mode == 'malformed':
+            print('not-json', flush=True)
+            continue
+        if mode == 'slow':
+            time.sleep(60)
+        result = {'turn': {'id': 'fixture-turn-13', 'status': 'inProgress'}}
+        emit({'id': identifier, 'result': result})
+        emit({'method': 'turn/started', 'params': {'threadId': 'fixture-thread-13', 'turn': result['turn']}})
+        usage = {'inputTokens': 31, 'cachedInputTokens': 7, 'outputTokens': 9,
+                 'reasoningOutputTokens': 3, 'totalTokens': 40}
+        emit({'method': 'thread/tokenUsage/updated', 'params': {'threadId': 'fixture-thread-13',
+              'turnId': 'fixture-turn-13', 'tokenUsage': {'last': usage, 'total': usage, 'modelContextWindow': None}}})
+        if mode == 'rerouted':
+            emit({'method': 'model/rerouted', 'params': {'threadId': 'fixture-thread-13', 'turnId': 'fixture-turn-13',
+                  'fromModel': 'gpt-6.1-sol', 'toModel': 'gpt-6-sol', 'reason': 'fixture'}})
+        if mode == 'tool_used':
+            emit({'method': 'item/completed', 'params': {'threadId': 'fixture-thread-13', 'turnId': 'fixture-turn-13',
+                  'item': {'type': 'commandExecution', 'id': 'fixture-tool', 'command': 'cat text.txt'}}})
+        emit({'method': 'item/completed', 'params': {'threadId': 'fixture-thread-13', 'turnId': 'fixture-turn-13',
+              'item': {'type': 'agentMessage', 'id': 'fixture-message', 'text': 'VISION CHILD 13'}}})
+        emit({'method': 'turn/completed', 'params': {'threadId': 'fixture-thread-13',
+              'turn': {'id': 'fixture-turn-13', 'status': 'interrupted' if mode == 'interrupted' else 'completed', 'items': []}}})
+        continue
+    else:
+        emit({'id': identifier, 'error': {'code': -32601, 'message': 'Unexpected method ' + str(method)}})
+        continue
+    emit({'id': identifier, 'result': result})

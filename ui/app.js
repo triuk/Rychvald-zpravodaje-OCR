@@ -22,6 +22,8 @@ let requestQueue = Promise.resolve();
 let progressRequestPending = false;
 let displayedPreparation = null;
 const preparationEnvironments = new Map();
+const diagnosticImages = new Map();
+let codexRequestPending = false;
 const rootInput = document.querySelector('#registry-root');
 const message = document.querySelector('#message');
 window.addEventListener('error', event => {
@@ -169,6 +171,7 @@ function renderRun(data) {
   events.id = 'preparation-events';
   preparation.append(status, units, events);
   detail.append(preparation);
+  renderCodexPanel(detail, data);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
     profile.id = 'run-profile';
@@ -182,6 +185,8 @@ function renderRun(data) {
     const history = element('ul', undefined, 'run-history');
     history.id = 'run-history';
     const summaries = { run_created: 'Průchod založen', attempt_started: 'Místní příprava zahájena',
+      codex_attempt_started: 'Pokus Codex zahájen', codex_attempt_completed: 'Pokus Codex dokončen',
+      codex_attempt_failed: 'Pokus Codex selhal', codex_attempt_interrupted: 'Pokus Codex přerušen',
       attempt_completed: 'Místní příprava dokončena', attempt_failed: 'Místní příprava selhala', attempt_interrupted: 'Místní příprava přerušena' };
     for (const event of data.history) {
       if (summaries[event.type]) history.append(element('li', `${summaries[event.type]} · ${event.timestamp}`));
@@ -244,8 +249,129 @@ function renderPreparation(status) {
     list.append(row);
   }
   const button = document.querySelector('#start-preparation');
-  if (button) button.disabled = ['starting', 'running'].includes(status.state) || !document.querySelector('#run-profile');
+  if (button) button.disabled = ['starting', 'running'].includes(status.state) || codexRunning() || !document.querySelector('#run-profile');
 }
+
+function codexRunning() {
+  return ['starting', 'running', 'awaiting_login'].includes(document.querySelector('#codex-state')?.dataset.state);
+}
+
+function renderCodexPanel(detail, data) {
+  const panel = element('section', undefined, 'codex-panel');
+  panel.append(element('h3', 'Codex · obrazové ověření'), element('p',
+    'Požadavek: gpt-6.1-sol · high. Dokončená diagnostika účtu a obrazu nenahrazuje autonomní OCR; to vyžaduje také ověřený context-mode.', 'hint'));
+  const accountControls = element('div', undefined, 'input-row');
+  for (const [operation, id, title] of [['check_codex_account', 'codex-account-check', 'Ověřit přihlášení'],
+    ['start_codex_login', 'codex-login', 'Přihlásit účet ChatGPT']]) {
+    const button = element('button', title, 'secondary');
+    button.id = id;
+    button.type = 'button';
+    button.disabled = !data.run;
+    button.addEventListener('click', () => perform(async () => {
+      renderCodex(await request(operation, { run_id: data.project.run_id }));
+      return 'Ověření účtu Codex bylo zahájeno.';
+    }));
+    accountControls.append(button);
+  }
+  const form = element('form', undefined, 'setup-form');
+  form.id = 'codex-diagnostic-form';
+  const label = element('label', 'Připravený diagnostický obrázek PNG/JPEG');
+  label.htmlFor = 'diagnostic-image';
+  const row = element('div', undefined, 'input-row');
+  const input = element('input');
+  input.id = 'diagnostic-image';
+  input.type = 'text';
+  input.placeholder = 'Cesta k obrázku; prázdná použije připravený rastr první strany';
+  input.value = diagnosticImages.get(data.project.run_id) || '';
+  const start = element('button', 'Přečíst diagnostický obrázek');
+  start.id = 'start-model-diagnostic';
+  start.type = 'submit';
+  start.disabled = !data.run;
+  row.append(input, start);
+  form.append(label, row);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    perform(async () => {
+      diagnosticImages.set(data.project.run_id, input.value);
+      const payload = { run_id: data.project.run_id };
+      if (input.value.trim()) payload.image_path = input.value;
+      renderCodex(await request('start_model_diagnostic', payload));
+      return 'Skutečné diagnostické čtení obrázku bylo zahájeno.';
+    });
+  });
+  const state = element('p', 'Dosud nespouštěno');
+  state.id = 'codex-state';
+  state.setAttribute('aria-live', 'polite');
+  const account = element('p', '', 'hint');
+  account.id = 'codex-account';
+  const login = element('a', 'Pokračovat přihlášením v prohlížeči');
+  login.id = 'codex-login-link';
+  login.target = '_blank';
+  login.rel = 'noopener noreferrer';
+  login.hidden = true;
+  const answer = element('pre');
+  answer.id = 'codex-answer';
+  answer.setAttribute('aria-label', 'Dostupná odpověď diagnostického tahu');
+  const evidence = element('details');
+  evidence.append(element('summary', 'Zadání, identity a původní usage údaje'));
+  const content = element('pre');
+  content.id = 'codex-evidence';
+  evidence.append(content);
+  panel.append(accountControls, form, state, account, login, answer, evidence);
+  detail.append(panel);
+}
+
+function renderCodex(status) {
+  const state = document.querySelector('#codex-state');
+  if (!state || status.run_id !== selectedRun) return;
+  const names = { not_started: 'Dosud nespouštěno', starting: 'Spouští se ověřený Codex',
+    running: 'Codex pracuje', awaiting_login: 'Čeká na přihlášení účtem ChatGPT',
+    completed: 'Diagnostický krok dokončen', failed: 'Diagnostický krok selhal',
+    interrupted: 'Diagnostický krok přerušen', invalidated: 'Obrazový doklad se změnil' };
+  state.dataset.state = status.state;
+  state.dataset.attemptId = status.attempt_id || '';
+  state.dataset.operation = status.operation || '';
+  state.dataset.combinationVerified = String(status.combination_verified || false);
+  state.textContent = names[status.state] || status.state;
+  if (status.error) state.textContent += ` · ${status.error.message} (${status.error.code})`;
+  const account = document.querySelector('#codex-account');
+  account.textContent = status.authenticated === true ? 'Účet: přihlášen přes ChatGPT.' :
+    status.authenticated === false ? 'Účet: není přihlášen přes ChatGPT.' : 'Přihlášení účtu dosud neověřeno.';
+  if (status.effective) account.textContent += ` Konfigurace vlákna: ${status.effective.model} · ${status.effective.reasoning_effort}.`;
+  if (status.combination_verified) account.textContent += ' Požadovaná kombinace dokončila obrazový tah bez hlášeného přesměrování.';
+  const login = document.querySelector('#codex-login-link');
+  login.hidden = !status.login_url;
+  if (status.login_url) login.href = status.login_url;
+  else login.removeAttribute('href');
+  document.querySelector('#codex-answer').textContent = status.answer || '';
+  document.querySelector('#codex-evidence').textContent = JSON.stringify({
+    attempt_id: status.attempt_id, thread_id: status.thread_id, turn_id: status.turn_id,
+    requested: status.requested, effective: status.effective, image: status.image,
+    prompt: status.prompt, profile_sha256: status.profile_sha256, runtime: status.runtime,
+    reroutes: status.reroutes, usage_events: status.usage_events, artifacts: status.artifacts,
+    autonomous_ocr_ready: false,
+  }, null, 2);
+  const busy = codexRunning() || ['starting', 'running'].includes(document.querySelector('#preparation-state')?.dataset.state);
+  for (const id of ['codex-account-check', 'codex-login', 'start-model-diagnostic']) {
+    document.querySelector('#' + id).disabled = busy || !document.querySelector('#run-profile');
+  }
+}
+
+async function pollCodex() {
+  if (!connected || !selectedRun || codexRequestPending) return;
+  const runId = selectedRun;
+  codexRequestPending = true;
+  try {
+    const status = await request('model_diagnostic_status', { run_id: runId });
+    if (selectedRun === runId) renderCodex(status);
+  } catch (error) {
+    const state = document.querySelector('#codex-state');
+    if (state && selectedRun === runId) state.textContent = error.message;
+  } finally {
+    codexRequestPending = false;
+  }
+}
+setInterval(pollCodex, 450);
 
 async function pollPreparation() {
   if (!connected || !selectedRun || progressRequestPending) return;

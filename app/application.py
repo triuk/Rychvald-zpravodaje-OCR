@@ -7,10 +7,11 @@ from .service import Application
 
 
 class WebUIApplication:
-    def __init__(self, root, *, process_command=None, browser=None):
+    def __init__(self, root, *, process_command=None, browser=None, browser_parameters=None):
         self.api = Application(root, process_command=process_command)
         self.window = None
         self.browser = browser
+        self.browser_parameters = browser_parameters
 
     def request(self, event):
         try:
@@ -36,6 +37,8 @@ class WebUIApplication:
         self.window.set_size(1280, 900)
         self.window.bind('requestB', self.request)
         self.window.set_root_folder(str(Path(__file__).resolve().parents[1] / 'ui'))
+        if self.browser_parameters:
+            self.window.set_custom_parameters(self.browser_parameters)
         if self.browser:
             shown = self.window.show_browser('index.html', getattr(webui.Browser, self.browser))
         else:

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "version": "0.162.0-alpha.17.2",
+  "binary": "runtime/codex/codex",
+  "development_binary": "/usr/lib/chatgpt/resources/codex",
+  "sha256": "73b73b048546993298234a295de01ef2424e7a8b29def9d0ecb1ca7cb77500d4",
+  "companions": [
+    {"name": "codex-code-mode-host", "sha256": "086e0abe80a4eb41b1d9e4bbfeeef5e579cf9b7e8c00c58d68563260a96f077d"}
+  ]
+}
