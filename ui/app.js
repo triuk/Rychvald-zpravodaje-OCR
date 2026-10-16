@@ -175,6 +175,7 @@ function renderRun(data) {
   detail.append(preparation);
   renderCodexPanel(detail, data);
   if (typeof renderContextPanel === 'function') renderContextPanel(detail, data);
+  window.renderMetricsPanel(detail, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
     profile.id = 'run-profile';

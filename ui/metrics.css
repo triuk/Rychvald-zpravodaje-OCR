@@ -1,0 +1,14 @@
+.metrics-panel { margin: 1.5rem 0; padding-top: 1rem; border-top: 1px solid #cbd5e1; }
+.metric-notice { font-weight: 700; }
+.metric-legend, .metric-tokens { display: flex; gap: .6rem; flex-wrap: wrap; margin: .6rem 0; }
+.metric-legend-item { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; }
+.metric-legend-item i { width: .75rem; height: .75rem; border-radius: 2px; border: 1px solid #64748b; flex: 0 0 auto; }
+.metric-reasons { flex-basis: 100%; margin: 0; font-size: .75rem; }
+.metric-total { border-left: 6px solid; padding: .6rem; background: #f8fafc; font-weight: 650; }
+.metric-steps { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.metric-steps th, .metric-steps td { text-align: left; vertical-align: top; padding: .65rem; border-bottom: 1px solid #e2e8f0; }
+.metric-steps small { display: block; font-size: .72rem; overflow-wrap: anywhere; }
+.metric-cost { border-left: 6px solid; white-space: nowrap; }
+.metric-step-detail { min-width: 12rem; max-width: 30rem; }
+.metric-step-detail pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
+@media (max-width: 1050px) { .metric-steps { display: block; overflow-x: auto; } }
