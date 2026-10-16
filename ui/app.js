@@ -16,6 +16,7 @@ const artifactLabels = {
   profile_snapshot: 'Použitý profil', run_manifest: 'Identita průchodu',
 };
 let selectedRun = null;
+let runSelection = 0;
 let selectedProfile = null;
 let connected = false;
 let requestQueue = Promise.resolve();
@@ -101,6 +102,7 @@ function renderEditions(data) {
 function renderRun(data) {
   const detail = document.querySelector('#detail');
   const project = data.project;
+  detail.dataset.runId = project.run_id;
   detail.replaceChildren(element('span', 'PŘEHLED PRŮCHODU', 'eyebrow'),
     element('h2', project.run_name || project.original_name, 'detail-title'),
     element('div', `${project.original_name} · ${project.run_id}`, 'run-id'));
@@ -172,6 +174,7 @@ function renderRun(data) {
   preparation.append(status, units, events);
   detail.append(preparation);
   renderCodexPanel(detail, data);
+  if (typeof renderContextPanel === 'function') renderContextPanel(detail, data);
   window.renderMetricsPanel(detail, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
@@ -198,7 +201,13 @@ function renderRun(data) {
 }
 
 async function selectRun(runId) {
+  const selection = ++runSelection;
+  selectedRun = null;
+  const detail = document.querySelector('#detail');
+  detail.dataset.runId = '';
+  detail.replaceChildren(element('p', 'Načítá se vybraný průchod…'));
   const data = await request('select_run', { run_id: runId });
+  if (selection !== runSelection) return;
   selectedRun = runId;
   document.querySelector('#edition-choice').value = data.edition_id;
   document.querySelectorAll('.run').forEach(button => {
@@ -254,7 +263,8 @@ function renderPreparation(status) {
 }
 
 function codexRunning() {
-  return ['starting', 'running', 'awaiting_login'].includes(document.querySelector('#codex-state')?.dataset.state);
+  return ['starting', 'running', 'awaiting_login'].includes(document.querySelector('#codex-state')?.dataset.state) ||
+    ['starting', 'running'].includes(document.querySelector('#context-state')?.dataset.state);
 }
 
 function renderCodexPanel(detail, data) {
