@@ -63,13 +63,13 @@ def scrub(value):
 
 
 class RpcProcess:
-    def __init__(self, command, workspace, stderr, record, cancelled):
+    def __init__(self, command, workspace, stderr, record, cancelled, env=None):
         self.record, self.cancelled = record, cancelled
         self.messages = queue.Queue()
         self.identifier = 0
         self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=stderr, cwd=workspace, start_new_session=True,
-                                        text=True, encoding='utf-8', bufsize=1)
+                                        text=True, encoding='utf-8', bufsize=1, env=env)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
@@ -146,6 +146,8 @@ class RpcProcess:
 
 
 class CodexJobs:
+    namespace = 'codex-attempts'
+
     def __init__(self, publish, runtime=None):
         self.publish = publish
         self.runtime = copy.deepcopy(runtime) if runtime is not None else default_runtime()
@@ -178,7 +180,7 @@ class CodexJobs:
                 except (OSError, ValueError):
                     raise JobError('diagnostic_image_invalid', 'Choose an existing prepared PNG/JPEG image, at most 20 MiB.') from None
             attempt_id = uuid.uuid4().hex
-            directory = work / 'application/codex-attempts' / attempt_id
+            directory = work / 'application' / self.namespace / attempt_id
             workspace = directory / 'workspace'
             workspace.mkdir(parents=True)
             image_record = None
@@ -213,7 +215,7 @@ class CodexJobs:
     def _event(self, job, kind, **details):
         value = job['manifest']
         event = {'schema_version': 1, 'event_id': f"{value['attempt_id']}:{len(value['events'])}",
-                 'run_id': value['run_id'], 'attempt_id': value['attempt_id'], 'step_id': 'model_diagnostic',
+                 'run_id': value['run_id'], 'attempt_id': value['attempt_id'], 'step_id': getattr(self, 'step_id', 'model_diagnostic'),
                  'timestamp': now(), 'type': kind, **details}
         value['events'].append(event)
         with job['history'].open('a+', encoding='utf-8') as stream:
@@ -387,17 +389,21 @@ class CodexJobs:
                     self._active = None
                 self.publish('codex_finished', root=value['root'], run_id=value['run_id'], state=value['state'])
 
-    def status(self, root, run_id, work):
+    def status(self, root, run_id, work, operation=None):
         try:
-            return self._status(root, run_id, work)
+            return self._status(root, run_id, work, operation)
         except (OSError, ValueError, KeyError, TypeError) as error:
             raise JobError('attempt_invalid', f'Cannot read preserved Codex attempt: {error}') from None
 
-    def _status(self, root, run_id, work):
-        paths = list((work / 'application/codex-attempts').glob('*/attempt.json'))
+    def _status(self, root, run_id, work, operation=None):
+        paths = list((work / 'application' / self.namespace).glob('*/attempt.json'))
         if not paths:
             return {'run_id': run_id, 'state': 'not_started', 'autonomous_ocr_ready': False}
         values = [json.loads(path.read_text()) for path in paths]
+        if operation is not None:
+            values = [value for value in values if value.get('operation') == operation]
+        if not values:
+            return {'run_id': run_id, 'state': 'not_started', 'autonomous_ocr_ready': False}
         value = max(values, key=lambda item: item['started_at'])
         if value['root'] != str(root) or value['run_id'] != run_id:
             raise JobError('attempt_invalid', 'Saved Codex attempt belongs to a different run.')

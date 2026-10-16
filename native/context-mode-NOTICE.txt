@@ -1,0 +1,19 @@
+context-mode 1.0.169 — Mert Köseoğlu
+Source: https://github.com/mksglu/context-mode
+License: Elastic License 2.0. The prepared runtime retains the original LICENSE.
+
+Application distribution modification:
+hooks/ensure-deps.mjs is replaced by native/context-no-install.mjs, which
+validates Node's built-in SQLite FTS5 and never installs, rebuilds or repairs
+optional native addons. All original hook entrypoints and routing/session
+bundles are retained byte-for-byte. The application starts server.bundle.mjs
+directly instead of the upstream self-repairing start.mjs.
+
+Original hooks/ensure-deps.mjs SHA-256:
+c42cc4f719065b84240390b1bfe99a9969be4267aa0fb88ddebcc5ce1f9ee6cc
+Prepared replacement SHA-256:
+4a5a18db3583fe81a983cad33cd98a7988d338b698c7dab99f2b821e2a11aac2
+
+Exact original/prepared production dependency closure hashes, Node and
+interpreter identities are recorded in context-runtime.json. Other production
+dependency licenses remain in the prepared node_modules directories.
