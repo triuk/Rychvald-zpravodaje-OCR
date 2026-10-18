@@ -122,6 +122,8 @@ def verify_geometry(registry, record, *, examined=True):
             if proof['preparation_sha256'] != source_hash(work / 'geometry-preparation.json'):
                 raise ValueError('Examined geometry differs from current preparation')
             check_bindings(proof['evidence'])
+            check_bindings(proof['historical_reading']['evidence'])
+            verify_sample_origin(work, packet)
             from ocr_visual_evidence import verify_visual_turn
             observations = verify_visual_turn(proof['visual_turn'], work, packet['images'])
             if observations != load(Path(proof['evidence']['proposal']['path'])):
@@ -158,6 +160,35 @@ def validate_observations(packet, proposal):
         raise ValueError('Diagnostic examination does not prove glyph identity')
 
 
+def verify_sample_origin(work, packet):
+    origin = load(work / 'geometry-sample-origin.json')
+    samples = load(work / 'geometry-source-samples.json')
+    if origin['source_sha256'] != packet['identity']['source_sha256']:
+        raise ValueError('Independent source sample identity differs')
+    if origin['kind'] == 'source_visual_turn':
+        check_bindings({'proposal': origin['proposal']})
+        from ocr_visual_evidence import verify_visual_turn
+        answer = verify_visual_turn(origin['visual_turn'], work, origin['images'])
+        if answer != load(origin['proposal']['path']) or answer['samples'] != samples or answer['source_sha256'] != origin['source_sha256']:
+            raise ValueError('Samples differ from the original independent source image turn')
+        expected = [{'path': f"raster/page-{p['page']}.png", 'sha256': p['raster_sha256']}
+                    for p in load(work/'input-manifest.json')['pages']]
+        if origin['images'] != expected:
+            raise ValueError('Independent samples did not examine every original source raster')
+    elif origin['kind'] == 'original_committed_samples':
+        check_bindings({'commitment': origin['commitment']})
+        committed = load(origin['commitment']['path'])
+        digest = committed
+        for part in origin['commitment_pointer'].lstrip('/').split('/'):
+            digest = digest[part]
+        actual = hashlib.sha256(json.dumps(samples, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        sources = [committed.get('source_sha256')] + [c.get('source_sha256') for c in committed.get('cases', [])]
+        if actual != digest or actual != origin['sample_commitment'] or origin['source_sha256'] not in sources:
+            raise ValueError('Original independent source commitment differs')
+    else:
+        raise ValueError('No independent pre-export source sample provenance')
+
+
 def publish_geometry(registry, project_id, checkpoint):
     with registry.project_lock(project_id) as record:
         work = registry.root / record['artifacts']['workspace']
@@ -165,6 +196,8 @@ def publish_geometry(registry, project_id, checkpoint):
         value = load(checkpoint)
         packet['preparation_sha256'] = source_hash(work / 'geometry-preparation.json')
         check_bindings(value['evidence'])
+        check_bindings(value['historical_reading']['evidence'])
+        verify_sample_origin(work, packet)
         from ocr_visual_evidence import verify_visual_turn
         proposal = verify_visual_turn(value['visual_turn'], work, packet['images'])
         if proposal != load(value['evidence']['proposal']['path']):

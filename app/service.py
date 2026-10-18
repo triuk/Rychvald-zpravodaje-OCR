@@ -17,6 +17,7 @@ from .jobs import JobError, PreparationJobs, read_history
 from .codex import CodexJobs
 from .context import ContextJobs
 from .reading import ReadingJobs
+from .geometry import GeometryJobs
 
 
 class ApplicationError(Exception):
@@ -71,6 +72,7 @@ class Application:
         self.codex = CodexJobs(self.publish, codex_runtime)
         self.context = ContextJobs(self.publish, codex_runtime, context_runtime)
         self.reading = ReadingJobs(self.publish, codex_runtime, context_runtime, self.process)
+        self.geometry = GeometryJobs(self.publish, codex_runtime, context_runtime, self.process)
 
     def dispatch(self, operation, payload=None):
         with self._lock:
@@ -101,7 +103,7 @@ class Application:
                 elif operation == 'start_context_diagnostic':
                     data = self.start_context_diagnostic(payload)
                 elif operation == 'prepare_context_diagnostic':
-                    if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+                    if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
                         raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
                     run = self.select_run(payload.get('run_id'))
                     if 'run' not in run:
@@ -117,8 +119,14 @@ class Application:
                         self.root / run['artifacts']['workspace']['path'])
                 elif operation == 'start_geometry':
                     data = self.start_geometry(payload)
+                elif operation == 'geometry_status':
+                    run = self.select_run(payload.get('run_id'))
+                    data = self.geometry.status(self.root, run['project']['run_id'],
+                        self.root / run['artifacts']['workspace']['path'])
                 elif operation == 'patch_geometry':
                     data = self.patch_geometry(payload)
+                elif operation == 'open_geometry_artifact':
+                    data = self.open_geometry_artifact(payload)
                 elif operation in ('run_metrics', 'step_detail'):
                     from app.metrics import collect, summary, step_detail
                     offset, limit = payload.get('offset', 0), payload.get('limit', 100)
@@ -164,7 +172,7 @@ class Application:
             self._events.append({'sequence': self._sequence, 'type': event_type, **data})
 
     def open_registry(self, root):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
             raise ApplicationError('operation_active', 'A preparation or Codex operation is active; wait before opening another registry.')
         if not isinstance(root, str) or not root.strip():
             raise ApplicationError('invalid_request', 'Choose the OCR registry directory.')
@@ -229,7 +237,7 @@ class Application:
         return self.select_run(run_id)
 
     def start_preparation(self, payload):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
             raise ApplicationError('operation_active', 'A preparation or Codex operation is already active.')
         run = self.select_run(payload.get('run_id'))
         if 'run' not in run:
@@ -258,17 +266,64 @@ class Application:
         self.codex.close()
         self.context.close()
         self.reading.close()
+        self.geometry.close()
 
     def start_geometry(self, payload):
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
+            raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
         run = self.select_run(payload.get('run_id'))
         work = self.root / run['artifacts']['workspace']['path']
         reading = self.reading.status(self.root, run['project']['run_id'], work)
         if not reading.get('reading_complete'):
             raise ApplicationError('geometry_reading_required', 'Geometry requires a verified source reading of this run.')
-        raise ApplicationError('geometry_expectations_required', 'Source-derived pre-export expectations are required.')
+        context = self.context_status(run['project']['run_id'])
+        model = self.model_diagnostic_status(run['project']['run_id'])
+        if (not context.get('autonomous_ocr_ready') or context.get('runtime') != self.geometry.runtime or
+            context.get('context_runtime') != self.geometry.context_runtime or
+            context.get('profile_sha256') != run['run']['profile_sha256'] or
+            model.get('runtime') != self.geometry.runtime or model.get('profile_sha256') != run['run']['profile_sha256']):
+            raise ApplicationError('geometry_preflight_required', 'Geometry requires the same exact completed run-local model/context preflight.')
+        prepared = self.preparation.status(self.root, run['project']['run_id'], work)
+        if not prepared.get('checkpoint_valid'):
+            raise ApplicationError('geometry_preparation_required', 'Verified native source preparation is required.')
+        from .jobs import sha
+        original = work / ('review.json' if reading.get('current_review_bound', True) else
+            'review-history/' + reading['review_sha256'] + '.json')
+        snapshot = work / 'reading-first-publication-review.json'
+        if snapshot.exists() and sha(snapshot) != reading['review_sha256']:
+            raise ApplicationError('reading_publication_changed', 'Historical first-reading snapshot changed.')
+        if not snapshot.exists():
+            snapshot.write_bytes(original.read_bytes())
+        reading_proof = {'attempt_id': reading['attempt_id'], 'review_sha256': reading['review_sha256'],
+            'current_review_sha256': sha(work / 'review.json'), 'evidence': {
+                name: {'path': str(self.root / reading['artifacts'][name]), 'sha256': sha(self.root / reading['artifacts'][name])}
+                for name in ('protocol', 'proposal', 'attempt')}}
+        reading_proof['evidence']['first_publication_review'] = {'path': str(snapshot), 'sha256': sha(snapshot)}
+        metadata = {'run': run, 'source': reading['source'], 'reading': reading_proof,
+            'environment': prepared.get('environment')}
+        if payload.get('samples_path') is not None:
+            try:
+                samples_path = Path(payload['samples_path']).expanduser().resolve()
+                commitment_path = Path(payload['source_commitment_path']).expanduser().resolve()
+                samples = json.loads(samples_path.read_text())
+                committed = json.loads(commitment_path.read_text())
+                pointer = payload.get('commitment_pointer', '/samples_commitment')
+                expected = committed
+                for part in pointer.lstrip('/').split('/'):
+                    expected = expected[part]
+                source_hashes = [committed.get('source_sha256')] + [c.get('source_sha256') for c in committed.get('cases', [])]
+                if run['project']['source_sha256'] not in source_hashes:
+                    raise ValueError('Source commitment belongs to another source')
+                metadata.update(samples=samples, samples_bytes=list(samples_path.read_bytes()), commitment={
+                    'kind': 'original_committed_samples', 'sample_commitment': expected,
+                    'source_sha256': run['project']['source_sha256'], 'commitment_pointer': pointer,
+                    'commitment': {'path': str(commitment_path), 'sha256': sha(commitment_path)}})
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise ApplicationError('geometry_samples_invalid', 'Provide the original independently committed source samples and matching source evidence.') from error
+        return self.geometry.start(self.root, run, operation='geometry', metadata=metadata)
 
     def patch_geometry(self, payload):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
             raise ApplicationError('operation_active', 'Wait for the active operation before a geometry correction.')
         from .jobs import atomic_json
         import uuid
@@ -296,8 +351,30 @@ class Application:
         self.publish('geometry_invalidated', root=str(self.root), run_id=run['project']['run_id'])
         return self.select_run(run['project']['run_id'])
 
+    def open_geometry_artifact(self, payload):
+        run = self.select_run(payload.get('run_id'))
+        work = self.root / run['artifacts']['workspace']['path']
+        try:
+            packet = json.loads((work/'geometry-preparation.json').read_text())
+            allowed = set(packet['outputs']) | {'geometry-preparation.json', 'geometry-checkpoint.json'}
+            name = payload.get('path')
+            if name not in allowed:
+                raise ValueError('Choose a recorded geometry artifact of this run.')
+            path = (work/name).resolve()
+            if not path.is_relative_to(work.resolve()) or not path.is_file():
+                raise ValueError('Geometry artifact is unavailable or outside this run.')
+            from .jobs import sha
+            if name in packet['outputs'] and sha(path) != packet['outputs'][name]:
+                raise ValueError('Recorded geometry artifact changed.')
+            subprocess.Popen(['xdg-open', str(path)], stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, start_new_session=True)
+            return {'run_id': run['project']['run_id'], 'path': name, 'requested': True,
+                'meaning': 'External open requested; this is not evidence of visual examination.'}
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise ApplicationError('artifact_unavailable', str(error)) from error
+
     def start_reading(self, payload):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
             raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
         run = self.select_run(payload.get('run_id'))
         if not run.get('run'):
@@ -324,7 +401,7 @@ class Application:
         return self.reading.start(self.root, run, operation='visual_reading', metadata={'run': run, 'preflight': readiness, 'model': model})
 
     def start_model_diagnostic(self, payload, operation='vision_diagnostic'):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
             raise ApplicationError('operation_active', 'Another preparation or Codex operation is active.')
         run = self.select_run(payload.get('run_id'))
         if 'run' not in run:
@@ -343,7 +420,7 @@ class Application:
         return self.codex.status(self.root, run_id, self.root / result['artifacts']['workspace'])
 
     def start_context_diagnostic(self, payload):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
             raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
         run = self.select_run(payload.get('run_id'))
         if 'run' not in run:
