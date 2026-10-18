@@ -109,10 +109,11 @@ def main():
             wait('return JSON.stringify(document.querySelector("#detail")?.dataset.runId===' + json.dumps(case['run_id']) +
                 '&&Boolean(document.querySelector("#reading-panel")));', bool)
             if args.prepare_local:
+                prior_preparation = status('preparation_status')
                 if args.environment:
                     query('document.querySelector("#preparation-environment").value=' + json.dumps(args.environment) + ';return JSON.stringify(true);')
                 click('start-preparation')
-                prepared = terminal('preparation_status')
+                prepared = terminal('preparation_status', prior_preparation.get('attempt_id'))
                 save(proof / 'native-preparation.json', prepared)
                 require_complete(prepared, 'checkpoint_valid')
             work = Path(case['work'])
@@ -146,7 +147,7 @@ def main():
                 save(proof / 'native-model-preflight.json', model)
                 require_complete(model, 'combination_verified')
                 click('start-context-diagnostic')
-                context = terminal('context_status')
+                context = terminal('context_status', context.get('attempt_id'))
                 save(proof / 'native-context-preflight.json', context)
                 require_complete(context, 'autonomous_ocr_ready')
             if args.run_reading:
@@ -154,7 +155,7 @@ def main():
                 if previous['state'] != 'not_started':
                     raise RuntimeError('Existing reading attempt must be reconciled before any new inference; automatic resubmission is disabled.')
                 click('start-reading')
-                reading = terminal('reading_status')
+                reading = terminal('reading_status', previous.get('attempt_id'))
                 save(proof / 'native-reading.json', reading)
                 require_complete(reading, 'reading_complete')
                 if args.case == 'synthetic':

@@ -2,6 +2,7 @@
 
 const labels = {
   registered: 'Zaregistrován', prepared: 'Místní příprava dokončena',
+  visually_read: 'Vizuální čtení dokončeno',
   preparing: 'Místní příprava', preparation_failed: 'Příprava selhala',
   preparation_interrupted: 'Příprava přerušena', exporting: 'Export',
   export_interrupted: 'Export přerušen', ready: 'Připraven k revizi',
@@ -14,6 +15,8 @@ const artifactLabels = {
   source: 'Zdrojový sken', workspace: 'Pracovní adresář', project: 'Záznam průchodu',
   output_pdf: 'OCR PDF', output_txt: 'Text článků', history: 'Historie průchodu',
   profile_snapshot: 'Použitý profil', run_manifest: 'Identita průchodu',
+  reading_input: 'Podklady vizuálního čtení', reading_draft: 'Nepotvrzené OCR kandidáty',
+  reading_publication: 'Doklad zveřejnění úplného přepisu',
 };
 let selectedRun = null;
 let runSelection = 0;

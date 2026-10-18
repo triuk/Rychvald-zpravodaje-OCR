@@ -3,6 +3,16 @@ let readingRequestPending = false;
 let displayedReading = null;
 const readingReadiness = new Map();
 
+function readingUnitText(unit, lines) {
+  return unit.line_ids.map((id, index) => {
+    const line = lines.get(id);
+    if (!line) return '';
+    if (index === unit.line_ids.length - 1) return line.text;
+    if (line.join_after === 'typesetting_hyphen') return line.text.slice(0, -1);
+    return line.text + (line.join_after === 'space' ? ' ' : '');
+  }).join('');
+}
+
 function renderReadingPanel(detail, data) {
   const panel = element('section', undefined, 'codex-panel');
   panel.id = 'reading-panel';
@@ -68,7 +78,7 @@ function renderReading(status) {
       const lines = new Map(review.lines.map(line => [line.id, line]));
       output.append(element('h4', 'Zveřejněný přepis v pořadí čtení'));
       for (const unit of review.units) {
-        const text = unit.line_ids.map(id => lines.get(id)?.text || '').join(' ');
+        const text = readingUnitText(unit, lines);
         const row = element(unit.tag === 'P' ? 'p' : 'h4', text);
         row.title = `Strana ${unit.page} · ${unit.article} · ${unit.id}`;
         output.append(row);
