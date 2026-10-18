@@ -65,6 +65,10 @@ def verify_trace(value, packet, protocol):
             m['params']['item'].get('phase') == 'final_answer']
         if not terminal or terminal['status'] != 'completed' or not messages or messages[-1]['text'] != record['answer']:
             raise JobError('reading_evidence_mismatch', 'Original completed final assistant JSON differs from preserved reading evidence.')
+    thread_results = [m['result'] for m in frames if isinstance(m.get('result'), dict) and
+        isinstance(m['result'].get('thread'), dict) and m['result']['thread'].get('id') == value['thread_id']]
+    if not thread_results or thread_results[-1].get('model') != MODEL or thread_results[-1].get('reasoningEffort') != EFFORT:
+        raise JobError('model_configuration_mismatch', 'Original thread response did not confirm the requested model/high.')
     images = [item['path'] for item in requests[0]['input'] if item['type'] == 'localImage']
     if images != [page['path'] for page in packet['pages']] or any(sha(Path(p['path'])) != p['sha256'] for p in packet['pages']):
         raise JobError('reading_source_changed', 'Every original source raster must be attached unchanged to the first turn.')
@@ -73,7 +77,31 @@ def verify_trace(value, packet, protocol):
     source = json.loads(value['turns'][0]['answer'])
     proposal = json.loads(value['turns'][1]['answer'])
     verify_source(packet, source)
-    verify_proposal(packet, source, value['turns'][0], proposal, value['dynamic_tools'])
+    replies = {m['id']: m['result'] for m in frames if 'id' in m and 'method' not in m and 'result' in m}
+    calls = []
+    source_id, accounting_id = [turn['turn_id'] for turn in value['turns']]
+    for frame in frames:
+        if frame.get('method') != 'item/tool/call':
+            continue
+        params = frame['params']
+        if params['threadId'] != value['thread_id'] or params['turnId'] not in (source_id, accounting_id):
+            raise JobError('reading_evidence_mismatch', 'A dynamic tool belongs to another reading thread/turn.')
+        reply = replies.get(frame['id'], {})
+        if params['turnId'] == source_id and params['tool'] != 'ocr_image':
+            raise JobError('reading_source_tool_forbidden', 'The independent source turn requested a candidate or mutation tool.')
+        if params['turnId'] == accounting_id:
+            calls.append({'tool': params['tool'], 'arguments': params['arguments'], 'success': reply.get('success') is True})
+        if params['tool'] == 'ocr_image' and reply.get('success') is True:
+            page = packet['pages'][params['arguments']['page'] - 1]
+            expected = 'data:image/png;base64,' + base64.b64encode(Path(page['path']).read_bytes()).decode()
+            images = [item.get('imageUrl') for item in reply['contentItems'] if item['type'] == 'inputImage']
+            if images != [expected]:
+                raise JobError('reading_source_changed', 'Original-image tool response differs from the attached source raster.')
+    source_items = [m['params']['item'] for m in frames if m.get('method') == 'item/completed' and m['params'].get('turnId') == source_id]
+    if any(item.get('type') in ('commandExecution', 'fileChange') or
+            item.get('type') == 'mcpToolCall' and item.get('tool') != 'ctx_stats' for item in source_items):
+        raise JobError('reading_source_tool_forbidden', 'The original source turn inspected non-image content.')
+    verify_proposal(packet, source, value['turns'][0], proposal, calls)
     hooks = [m['params']['run'] for m in frames if m.get('method') == 'hook/completed']
     completed = {hook['eventName'] for hook in hooks if hook.get('status') == 'completed' and hook.get('source') == 'sessionFlags'}
     if not {'sessionStart', 'userPromptSubmit', 'postToolUse', 'stop'} <= completed:
@@ -340,6 +368,8 @@ class ReadingJobs(ContextJobs):
                 packet = json.loads((work / 'reading-input.json').read_text())
                 if packet != value['source']:
                     raise JobError('reading_source_changed', 'Source reading input changed after publication.')
+                if sha(work / 'local-candidates.json') != packet['candidate_sha256']:
+                    raise JobError('reading_source_changed', 'Candidate inventory changed after publication.')
                 proposal = verify_trace(value, packet, root / value['artifacts']['protocol'])
                 if (proposal != json.loads((root / value['artifacts']['proposal']).read_text()) or
                     sha(work / 'review.json') != value['review_sha256']):

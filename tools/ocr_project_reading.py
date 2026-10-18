@@ -60,6 +60,8 @@ def publish_reading(registry, project_id, proposal_path, *, check_only=False):
         work = registry.root / record['artifacts']['workspace']
         review_path = work / 'review.json'
         try:
+            if source_hash(registry.root / record['artifacts']['source']) != record['project']['source_sha256']:
+                raise ValueError('Registered source changed')
             packet = load(work / 'reading-input.json')
             proposal = load(proposal_path)
             current = source_hash(review_path) if review_path.exists() else None

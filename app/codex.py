@@ -416,6 +416,13 @@ class CodexJobs:
         with self._lock:
             if self._active is not None and self._active['manifest']['attempt_id'] == value['attempt_id']:
                 value['login_url'] = self._active.get('login_url')
+                if value['state'] not in ('starting', 'running', 'awaiting_login'):
+                    # A terminal event can precede worker cleanup. Public
+                    # completion waits for ownership release and final write.
+                    value['state'] = 'running'
+                    value['combination_verified'] = False
+                    if 'reading_complete' in value:
+                        value['reading_complete'] = False
         return value
 
     def close(self):

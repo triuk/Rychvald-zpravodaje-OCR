@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tomllib
+import time
 
 mode = sys.argv[1]
 settings = {}
@@ -76,6 +77,8 @@ for line in sys.stdin:
         emit({'id': request['id'], 'result': {'turn': {'id': turn_id}}})
         packet = json.loads(Path('reading-packet.json').read_text())
         if source:
+            if mode == 'slow':
+                time.sleep(.5)
             review = {'source_sha256': packet['source_sha256'], 'lines': [], 'units': [],
                 'dropped_candidates': [], 'unresolved': [], 'publisher_errors': [], 'risk_register': []}
             for page in packet['pages']:
@@ -87,6 +90,14 @@ for line in sys.stdin:
                 review['units'].append({'id': f'unit-{number}', 'article': f'article-{number}',
                     'page': number, 'tag': 'P', 'line_ids': [f'line-{number}']})
             source_answer = {'read_pages': [p['page'] for p in packet['pages']], 'review': review}
+            if mode == 'uncertain':
+                review['lines'][0].update(text='Dne [NEČITELNÉ]', text_status='partially_unresolved')
+                review['unresolved'] = [{'id': 'uncertain-date', 'line': 'line-1', 'context': 'Dne',
+                    'source_crop': 'raster/page-1.png', 'bbox': [20, 0, 90, 20], 'reason': 'Blurred date',
+                    'status': 'waiting_for_input', 'candidates': ['12.', '17.']}]
+                review['publisher_errors'] = [{'id': 'publisher-typo', 'line': 'line-2', 'printed': 'DEF',
+                    'explanation': 'Controlled readable printed mistake', 'status': 'confirmed',
+                    'source_crop': 'raster/page-2.png', 'bbox': [0, 0, 90, 20]}]
             if mode == 'partial_source':
                 source_answer['read_pages'] = [1]
             finish(turn_id, source_answer)

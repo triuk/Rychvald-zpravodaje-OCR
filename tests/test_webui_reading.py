@@ -64,9 +64,10 @@ class WebUIReadingTests(unittest.TestCase):
         self.put(self.work / 'input-manifest.json', {'source_sha256': source_hash, 'pages': pages})
         self.put(self.work / 'local-candidates.json', candidates)
         workspace, storage = self.work / 'context/workspace', self.work / 'context/store'
-        workspace.mkdir(parents=True)
+        workspace.mkdir(parents=True, exist_ok=True)
         for name in ['content', 'sessions']:
-            (storage / name).mkdir(parents=True)
+            (storage / name).mkdir(parents=True, exist_ok=True)
+            (storage / name / 'fixture.db').unlink(missing_ok=True)
         with sqlite3.connect(storage / 'content/fixture.db') as db:
             db.executescript('CREATE VIRTUAL TABLE chunks USING fts5(content); CREATE TABLE sources(id);')
             db.execute('INSERT INTO chunks VALUES(?)', ('CONTEXT_DIAGNOSTIC_RECORD fixture-oracle',))
@@ -135,6 +136,56 @@ class WebUIReadingTests(unittest.TestCase):
         restored = self.app.dispatch('reading_status', {'run_id': self.identifier})
         self.assertEqual(restored['data']['attempt_id'], result['attempt_id'])
         self.assertTrue(restored['data']['reading_complete'])
+
+    def test_partial_source_or_final_and_wrong_model_publish_nothing(self):
+        for mode, code in [('partial_source', 'reading_source_incomplete'),
+                ('partial_final', 'reading_validation_missing'), ('wrong_model', 'model_configuration_mismatch')]:
+            with self.subTest(mode=mode):
+                self.peer(mode)
+                started = self.app.dispatch('start_reading', {'run_id': self.identifier})
+                self.assertTrue(started['ok'], started)
+                result = self.wait()
+                self.assertEqual(result['state'], 'failed', result.get('error'))
+                self.assertEqual(result['error']['code'], code)
+                self.assertFalse(result['reading_complete'])
+                self.assertFalse((self.work / 'review.json').exists())
+
+    def test_original_protocol_and_source_tampering_invalidate_saved_reading(self):
+        self.peer()
+        self.assertTrue(self.app.dispatch('start_reading', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertTrue(result['reading_complete'], result.get('error'))
+        protocol = self.root / result['artifacts']['protocol']
+        original = protocol.read_text()
+        protocol.write_text(original.replace('ABC', 'XYZ'))
+        changed = self.app.dispatch('reading_status', {'run_id': self.identifier})['data']
+        self.assertEqual(changed['state'], 'invalidated')
+        self.assertFalse(changed['reading_complete'])
+        protocol.write_text(original)
+        (self.work / 'raster/page-2.png').write_bytes(b'replaced source')
+        changed = self.app.dispatch('reading_status', {'run_id': self.identifier})['data']
+        self.assertEqual(changed['state'], 'invalidated')
+        self.assertEqual(changed['error']['code'], 'reading_source_changed')
+
+    def test_active_reading_keeps_registry_and_other_ai_operations_bound_to_its_owner(self):
+        self.peer('slow')
+        self.assertTrue(self.app.dispatch('start_reading', {'run_id': self.identifier})['ok'])
+        changed = self.app.dispatch('open_registry', {'root': str(self.directory)})
+        self.assertFalse(changed['ok'], changed)
+        self.assertEqual(changed['error']['code'], 'operation_active')
+        diagnostic = self.app.dispatch('start_model_diagnostic', {'run_id': self.identifier})
+        self.assertEqual(diagnostic['error']['code'], 'operation_active')
+        self.assertEqual(self.wait()['state'], 'completed')
+
+    def test_model_authored_uncertainty_and_printed_mistake_survive_atomic_publication(self):
+        self.peer('uncertain')
+        self.assertTrue(self.app.dispatch('start_reading', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertTrue(result['reading_complete'], result.get('error'))
+        review = json.loads((self.work / 'review.json').read_text())
+        self.assertEqual(review['lines'][0]['text'], 'Dne [NEČITELNÉ]')
+        self.assertEqual(review['unresolved'][0]['status'], 'waiting_for_input')
+        self.assertEqual(review['publisher_errors'][0]['printed'], 'DEF')
 
 
 if __name__ == '__main__':

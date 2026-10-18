@@ -101,7 +101,7 @@ class Application:
                 elif operation == 'start_context_diagnostic':
                     data = self.start_context_diagnostic(payload)
                 elif operation == 'prepare_context_diagnostic':
-                    if self.preparation.busy() or self.codex.busy() or self.context.busy():
+                    if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
                         raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
                     run = self.select_run(payload.get('run_id'))
                     if 'run' not in run:
@@ -160,7 +160,7 @@ class Application:
             self._events.append({'sequence': self._sequence, 'type': event_type, **data})
 
     def open_registry(self, root):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
             raise ApplicationError('operation_active', 'A preparation or Codex operation is active; wait before opening another registry.')
         if not isinstance(root, str) or not root.strip():
             raise ApplicationError('invalid_request', 'Choose the OCR registry directory.')
@@ -225,7 +225,7 @@ class Application:
         return self.select_run(run_id)
 
     def start_preparation(self, payload):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
             raise ApplicationError('operation_active', 'A preparation or Codex operation is already active.')
         run = self.select_run(payload.get('run_id'))
         if 'run' not in run:
@@ -274,7 +274,7 @@ class Application:
         return self.reading.start(self.root, run, operation='visual_reading', metadata={'run': run, 'preflight': readiness, 'model': model})
 
     def start_model_diagnostic(self, payload, operation='vision_diagnostic'):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
             raise ApplicationError('operation_active', 'Another preparation or Codex operation is active.')
         run = self.select_run(payload.get('run_id'))
         if 'run' not in run:
@@ -293,7 +293,7 @@ class Application:
         return self.codex.status(self.root, run_id, self.root / result['artifacts']['workspace'])
 
     def start_context_diagnostic(self, payload):
-        if self.preparation.busy() or self.codex.busy() or self.context.busy():
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
             raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
         run = self.select_run(payload.get('run_id'))
         if 'run' not in run:
