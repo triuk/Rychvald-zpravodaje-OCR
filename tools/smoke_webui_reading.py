@@ -170,7 +170,11 @@ def main():
                 save(proof / 'native-reading.json', reading)
                 require_complete(reading, 'reading_complete')
                 wait('return JSON.stringify(document.querySelector("#reading-state")?.dataset.state);', lambda value: value == 'completed')
+                wait('return JSON.stringify(displayedReading===' + json.dumps(reading['attempt_id']) +
+                    '&&!readingRequestPending&&!progressRequestPending&&document.querySelector("#reading-output")?.children.length>0);', bool)
                 query('document.querySelector("#reading-panel").scrollIntoView({block:"start"});return JSON.stringify(true);')
+                wait('const box=document.querySelector("#reading-panel")?.getBoundingClientRect();'
+                    'return JSON.stringify(Boolean(box&&box.top>-8&&box.top<200));', bool)
                 save(proof / 'native-metrics.json', app.api.dispatch('run_metrics', {'run_id': case['run_id']}))
             time.sleep(.5)
             screenshot = proof / 'native-gui.png'
