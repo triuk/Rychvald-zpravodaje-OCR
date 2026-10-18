@@ -3,6 +3,8 @@
 const labels = {
   registered: 'Zaregistrován', prepared: 'Místní příprava dokončena',
   visually_read: 'Vizuální čtení dokončeno',
+  review_updated: 'Přepis má validovanou opravu', geometry_prepared: 'Geometrie připravena k prohlédnutí',
+  geometry_examined: 'Geometrie prohlédnuta; aproximace evidovány',
   preparing: 'Místní příprava', preparation_failed: 'Příprava selhala',
   preparation_interrupted: 'Příprava přerušena', exporting: 'Export',
   export_interrupted: 'Export přerušen', ready: 'Připraven k revizi',
@@ -17,6 +19,7 @@ const artifactLabels = {
   profile_snapshot: 'Použitý profil', run_manifest: 'Identita průchodu',
   reading_input: 'Podklady vizuálního čtení', reading_draft: 'Nepotvrzené OCR kandidáty',
   reading_publication: 'Doklad zveřejnění úplného přepisu',
+  geometry_preparation: 'Podklady pořadí a geometrie', geometry_checkpoint: 'Doklad prohlédnutí geometrie',
 };
 let selectedRun = null;
 let runSelection = 0;
@@ -179,6 +182,7 @@ function renderRun(data) {
   renderCodexPanel(detail, data);
   if (typeof renderContextPanel === 'function') renderContextPanel(detail, data);
   if (typeof renderReadingPanel === 'function') renderReadingPanel(detail, data);
+  if (typeof renderGeometryPanel === 'function') renderGeometryPanel(detail, data);
   window.renderMetricsPanel(detail, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
@@ -269,7 +273,8 @@ function renderPreparation(status) {
 function codexRunning() {
   return ['starting', 'running', 'awaiting_login'].includes(document.querySelector('#codex-state')?.dataset.state) ||
     ['starting', 'running'].includes(document.querySelector('#context-state')?.dataset.state) ||
-    ['starting', 'running'].includes(document.querySelector('#reading-state')?.dataset.state);
+    ['starting', 'running'].includes(document.querySelector('#reading-state')?.dataset.state) ||
+    ['starting', 'running'].includes(document.querySelector('#geometry-state')?.dataset.state);
 }
 
 function renderCodexPanel(detail, data) {
