@@ -12,6 +12,8 @@ import tempfile
 import time
 import unittest
 
+from native_fixtures import environment_manifest
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / 'tools/ocr_projects.py'
 
@@ -26,7 +28,7 @@ class ProjectPrepareTests(unittest.TestCase):
         self.root = self.directory / 'projekty s mezerami'
         image = Image.new('RGB', (900, 220), 'white')
         ImageDraw.Draw(image).text((30, 70), 'OCR 11',
-                                  font=ImageFont.truetype('/usr/share/fonts/noto/NotoSerif-Regular.ttf', 65), fill='black')
+                                  font=ImageFont.truetype(environment_manifest(ROOT)['fonts']['segmentation']['path'], 65), fill='black')
         stream = io.BytesIO()
         image.save(stream, format='PNG')
         self.source = self.directory / 'synthetic scan.pdf'
@@ -36,7 +38,7 @@ class ProjectPrepareTests(unittest.TestCase):
             document.save(self.source)
 
     def command(self, *arguments, expected=0):
-        result = subprocess.run([sys.executable, str(CLI), '--root', str(self.root),
+        result = subprocess.run([sys.executable, '-B', str(CLI), '--root', str(self.root),
                                  '--json', *map(str, arguments)], capture_output=True)
         self.assertEqual(result.returncode, expected, result.stdout.decode() + result.stderr.decode())
         self.assertLessEqual(len(result.stdout), 4096)
@@ -98,7 +100,7 @@ class ProjectPrepareTests(unittest.TestCase):
         self.assertEqual(samples.read_bytes(), b'original expectations\n')
 
     def test_same_named_model_change_is_rejected_until_approved_in_new_run(self):
-        manifest = json.loads((ROOT / 'native/environment.json').read_text())
+        manifest = environment_manifest(ROOT)
         models = self.directory / 'models'
         models.mkdir()
         original = Path(manifest['root']) / manifest['models']['ces']['path']
@@ -159,7 +161,7 @@ class ProjectPrepareTests(unittest.TestCase):
         targets.write_text(json.dumps(spec))
 
         def targeted():
-            result = subprocess.run([sys.executable, str(ROOT / 'tools/ocr_workflow.py'),
+            result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_workflow.py'),
                                      'targeted', '--work', str(work), '--targets', str(targets)],
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -172,7 +174,7 @@ class ProjectPrepareTests(unittest.TestCase):
         self.assertEqual(cached['status'], 'completed')
         self.assertEqual(cached['identity']['language'], 'ces')
         self.assertEqual(cached['identity']['models']['ces'],
-                         json.loads((ROOT / 'native/environment.json').read_text())['models']['ces']['sha256'])
+                         environment_manifest(ROOT)['models']['ces']['sha256'])
         (work / 'ocr/word-raw.txt').write_bytes(b'damaged output')
         self.assertIn('1 cached', targeted())
         self.assertEqual((work / 'ocr/word-raw.txt').read_text().strip(), 'OCR 11')
@@ -228,7 +230,7 @@ with ProjectRegistry(sys.argv[2]).project_lock(sys.argv[3]):
         imported = self.command('import', self.source)
         identifier = imported['project']['project_id']
         marker_path = self.root / imported['artifacts']['workspace'] / 'preparation-checkpoint.json'
-        process = subprocess.Popen([sys.executable, str(CLI), '--root', str(self.root),
+        process = subprocess.Popen([sys.executable, '-B', str(CLI), '--root', str(self.root),
                                     '--json', 'prepare', identifier], stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, start_new_session=True)
         try:
