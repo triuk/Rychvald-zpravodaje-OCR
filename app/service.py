@@ -354,6 +354,7 @@ class Application:
     def open_geometry_artifact(self, payload):
         run = self.select_run(payload.get('run_id'))
         work = self.root / run['artifacts']['workspace']['path']
+        self.process.request(self.root, 'verify-geometry', run['project']['run_id'], '--prepared')
         try:
             packet = json.loads((work/'geometry-preparation.json').read_text())
             allowed = set(packet['outputs']) | {'geometry-preparation.json', 'geometry-checkpoint.json'}

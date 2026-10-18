@@ -42,7 +42,7 @@ function renderGeometry(status) {
     failed: 'Operace selhala; uložené podklady nejsou dokončeným milníkem', interrupted: 'Přerušeno', invalidated: 'Podklady se změnily; je nutná nová kontrola'};
   state.textContent = names[status.state] || status.state;
   if (status.error) state.textContent += ` · ${status.error.message} (${status.error.code})`;
-  document.querySelector('#start-geometry').disabled = !readingReadiness.has(selectedRun) || codexRunning() ||
+  document.querySelector('#start-geometry').disabled = !readingReadiness.get(selectedRun) || codexRunning() ||
     document.querySelector('#reading-state')?.dataset.state !== 'completed' ||
     ['starting','running'].includes(document.querySelector('#preparation-state')?.dataset.state);
   const counts = status.counts || {};

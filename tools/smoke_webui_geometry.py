@@ -31,6 +31,7 @@ def main():
     parser.add_argument('--proof', type=Path, required=True)
     parser.add_argument('--ocr-python', required=True)
     parser.add_argument('--run-geometry', action='store_true')
+    parser.add_argument('--inspect-preparation', action='store_true', help='Read-only native GUI; no model submission or visual milestone claim.')
     args = parser.parse_args()
     if sha(args.disclosure) != args.disclosure_sha256:
         parser.error('Concrete source/destination disclosure changed')
@@ -98,11 +99,17 @@ def main():
                     raise RuntimeError('Native geometry operation did not finish')
             value = status('geometry_status')
             save(proof/'native-geometry.json', value)
-            if value['state'] != 'completed' or not value.get('geometry_complete'):
+            if args.inspect_preparation:
+                if not value.get('prepared_artifacts_valid'):
+                    raise RuntimeError('Saved native geometry preparation failed validation')
+            elif value['state'] != 'completed' or not value.get('geometry_complete'):
                 raise RuntimeError('Native geometry not complete: '+str(value.get('error')))
-            wait('return JSON.stringify(document.querySelector("#geometry-state")?.dataset.state);', lambda state: state=='completed')
-            wait('return JSON.stringify(displayedGeometry==='+json.dumps(value['attempt_id'])+
-                '&&!geometryRequestPending&&!readingRequestPending&&!progressRequestPending);')
+            if not args.inspect_preparation:
+                wait('return JSON.stringify(document.querySelector("#geometry-state")?.dataset.state);', lambda state: state=='completed')
+                wait('return JSON.stringify(displayedGeometry==='+json.dumps(value['attempt_id'])+
+                    '&&!geometryRequestPending&&!readingRequestPending&&!progressRequestPending);')
+            else:
+                wait('return JSON.stringify(Boolean(document.querySelector("#geometry-output details")));')
             query('document.querySelector("#geometry-panel").scrollIntoView({block:"start"});return JSON.stringify(true);')
             wait('const b=document.querySelector("#geometry-panel")?.getBoundingClientRect();return JSON.stringify(Boolean(b&&b.top>-8&&b.top<200));')
             save(proof/'native-metrics.json', app.api.dispatch('run_metrics', {'run_id': case['run_id']}))
@@ -116,7 +123,7 @@ def main():
             if mean<=.01:
                 raise RuntimeError('Black screenshot cannot prove native GUI')
             save(proof/'summary.json', {'native_gui':True,'case':args.case,'run_id':case['run_id'],
-                'attempt_id':value['attempt_id'],'geometry_complete':True,'screenshot_mean':mean,
+                'attempt_id':value.get('attempt_id'),'geometry_complete':bool(value.get('geometry_complete')),'screenshot_mean':mean,
                 'new_geometry_requested':args.run_geometry,'new_first_reading_requested':False})
             print(json.dumps({'native_gui':True,'case':args.case,'attempt_id':value['attempt_id'],'screenshot_mean':mean}),flush=True)
         except BaseException as error:

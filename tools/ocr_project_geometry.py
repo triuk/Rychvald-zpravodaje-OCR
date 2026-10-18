@@ -113,12 +113,16 @@ def verify_geometry(registry, record, *, examined=True):
         if packet['identity'] != identity(registry, record):
             raise ValueError('Geometry belongs to another run or review')
         check_bindings(packet['inputs'])
+        if project_environment(work, packet['inputs']['environment']['path']).identity != packet['native_environment']:
+            raise ValueError('Native geometry runtime changed')
         for name, digest in packet['outputs'].items():
             path = (work / name).resolve()
             if not path.is_relative_to(work.resolve()) or source_hash(path) != digest:
                 raise ValueError('Changed geometry artifact: ' + name)
         if examined:
             proof = load(work / 'geometry-checkpoint.json')
+            if proof['identity'] != packet['identity'] or proof['source_samples_sha256'] != source_hash(work/'geometry-source-samples.json'):
+                raise ValueError('Examined source/run/sample identity differs')
             if proof['preparation_sha256'] != source_hash(work / 'geometry-preparation.json'):
                 raise ValueError('Examined geometry differs from current preparation')
             check_bindings(proof['evidence'])
@@ -190,11 +194,22 @@ def verify_sample_origin(work, packet):
 
 
 def publish_geometry(registry, project_id, checkpoint):
+    try:
+        return _publish_geometry(registry, project_id, checkpoint)
+    except ProjectError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as error:
+        raise ProjectError('geometry_invalid', str(error)) from error
+
+
+def _publish_geometry(registry, project_id, checkpoint):
     with registry.project_lock(project_id) as record:
         work = registry.root / record['artifacts']['workspace']
         packet = verify_geometry(registry, record, examined=False)
         value = load(checkpoint)
         packet['preparation_sha256'] = source_hash(work / 'geometry-preparation.json')
+        if value['identity'] != packet['identity'] or value['source_samples_sha256'] != source_hash(work/'geometry-source-samples.json'):
+            raise ProjectError('geometry_invalid', 'Checkpoint belongs to different source/run/samples')
         check_bindings(value['evidence'])
         check_bindings(value['historical_reading']['evidence'])
         verify_sample_origin(work, packet)
