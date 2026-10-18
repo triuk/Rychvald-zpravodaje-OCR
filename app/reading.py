@@ -280,6 +280,8 @@ class ReadingJobs(ContextJobs):
             run = metadata['run']
             profile = run['run']['profile']
             packet = json.loads((work / 'reading-input.json').read_text())
+            if packet['profile_sha256'] != value['profile_sha256']:
+                raise JobError('reading_profile_changed', 'Prepared reading packet differs from the immutable run profile.')
             value['source'] = copy.deepcopy(packet)
             value['preflight'] = {'model_attempt_id': metadata['model']['attempt_id'],
                 'context_attempt_id': metadata['preflight']['attempt_id'], 'profile_sha256': value['profile_sha256']}
@@ -370,6 +372,12 @@ class ReadingJobs(ContextJobs):
                     raise JobError('reading_source_changed', 'Source reading input changed after publication.')
                 if sha(work / 'local-candidates.json') != packet['candidate_sha256']:
                     raise JobError('reading_source_changed', 'Candidate inventory changed after publication.')
+                if sha(Path(packet['source_path'])) != packet['source_sha256']:
+                    raise JobError('reading_source_changed', 'Registered source PDF changed after publication.')
+                application = work / 'application'
+                if (sha(application / 'profile.json') != packet['profile_sha256'] or
+                    sha(application / 'run.json') != packet['run_manifest_sha256']):
+                    raise JobError('reading_profile_changed', 'Immutable run profile or manifest changed after publication.')
                 proposal = verify_trace(value, packet, root / value['artifacts']['protocol'])
                 if (proposal != json.loads((root / value['artifacts']['proposal']).read_text()) or
                     sha(work / 'review.json') != value['review_sha256']):

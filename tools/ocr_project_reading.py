@@ -24,6 +24,14 @@ def reading_input(registry, project_id):
         try:
             if source_hash(registry.root / record['artifacts']['source']) != record['project']['source_sha256']:
                 raise ValueError('Registered source differs')
+            profile_hash, run_hash = None, None
+            if 'run_manifest' in record['artifacts']:
+                run_path = registry.root / record['artifacts']['run_manifest']
+                run = load(run_path)
+                profile_hash = source_hash(registry.root / record['artifacts']['profile_snapshot'])
+                if profile_hash != run['profile_sha256']:
+                    raise ValueError('Immutable profile differs')
+                run_hash = source_hash(run_path)
             pages = verified_pages(work, record['project']['source_sha256'])
             if not (work / 'local-candidates.json').exists():
                 fresh = load(work / 'fresh-lines.json')
@@ -41,6 +49,8 @@ def reading_input(registry, project_id):
             atomic_json(work / 'reading-draft.json', draft)
             atomic_json(work / 'reading-input.json', {'schema_version': 1, 'pages': pages,
                         'source_sha256': draft['source_sha256'], 'candidate_sha256': source_hash(work / 'local-candidates.json'),
+                        'source_path': str(registry.root / record['artifacts']['source']),
+                        'profile_sha256': profile_hash, 'run_manifest_sha256': run_hash,
                         'expected_review_sha256': source_hash(work / 'review.json') if (work / 'review.json').exists() else None})
         except (OSError, ValueError, KeyError, TypeError) as error:
             raise ProjectError('reading_input_invalid', 'Verified prepared source inputs are required.') from error
@@ -63,6 +73,10 @@ def publish_reading(registry, project_id, proposal_path, *, check_only=False):
             if source_hash(registry.root / record['artifacts']['source']) != record['project']['source_sha256']:
                 raise ValueError('Registered source changed')
             packet = load(work / 'reading-input.json')
+            if packet.get('profile_sha256') is not None:
+                if (source_hash(registry.root / record['artifacts']['profile_snapshot']) != packet['profile_sha256'] or
+                    source_hash(registry.root / record['artifacts']['run_manifest']) != packet['run_manifest_sha256']):
+                    raise ValueError('Run profile or manifest changed during reading')
             proposal = load(proposal_path)
             current = source_hash(review_path) if review_path.exists() else None
             if current != proposal['expected_review_sha256'] or current != packet['expected_review_sha256']:

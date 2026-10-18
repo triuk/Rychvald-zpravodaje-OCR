@@ -26,12 +26,17 @@ def default_context_runtime():
     lock = json.loads((ROOT / 'native/context-runtime.json').read_text())
     bundled = ROOT / lock['node']['bundled_path']
     node = bundled if bundled.is_file() else Path(lock['node']['development_path'])
+    override_bin = Path(os.environ['RYCHVALD_CONTEXT_BIN']) if os.environ.get('RYCHVALD_CONTEXT_BIN') else None
+    if override_bin is not None:
+        node = override_bin / 'node'
     package = Path(os.environ.get('RYCHVALD_CONTEXT_RUNTIME', ROOT / lock['runtime_directory'])).resolve()
     files = [{'path': str(node), 'sha256': lock['node']['sha256']}]
     interpreters = []
     for item in lock['interpreters']:
         path = ROOT / 'runtime/bin' / item['name']
         path = path if path.is_file() else Path(item['development_path'])
+        if override_bin is not None:
+            path = override_bin / item['name']
         files.append({'path': str(path), 'sha256': item['sha256']})
         interpreters.append({'name': item['name'], 'path': str(path)})
     return {'kind': 'native', 'version': lock['version'], 'node': str(node), 'package': str(package),

@@ -175,6 +175,7 @@ function renderRun(data) {
   detail.append(preparation);
   renderCodexPanel(detail, data);
   if (typeof renderContextPanel === 'function') renderContextPanel(detail, data);
+  if (typeof renderReadingPanel === 'function') renderReadingPanel(detail, data);
   window.renderMetricsPanel(detail, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
@@ -264,7 +265,8 @@ function renderPreparation(status) {
 
 function codexRunning() {
   return ['starting', 'running', 'awaiting_login'].includes(document.querySelector('#codex-state')?.dataset.state) ||
-    ['starting', 'running'].includes(document.querySelector('#context-state')?.dataset.state);
+    ['starting', 'running'].includes(document.querySelector('#context-state')?.dataset.state) ||
+    ['starting', 'running'].includes(document.querySelector('#reading-state')?.dataset.state);
 }
 
 function renderCodexPanel(detail, data) {

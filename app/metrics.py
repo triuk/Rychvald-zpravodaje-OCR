@@ -334,7 +334,7 @@ def collect(root, run):
     application = safe_file(root, run['artifacts']['run_manifest']['path']).parent
     application = safe_file(root, application)
     sources, steps, warnings = {}, [], []
-    for path in sorted(path for namespace in ('codex-attempts', 'context-attempts')
+    for path in sorted(path for namespace in ('codex-attempts', 'context-attempts', 'reading-attempts')
                        for path in (application / namespace).glob('*/attempt.json')):
         path = safe_file(root, path)
         raw = path.read_bytes()

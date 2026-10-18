@@ -51,6 +51,7 @@ function renderContext(status) {
   }, null, 2);
   document.querySelector('#start-context-diagnostic').disabled = codexRunning() ||
     ['starting', 'running'].includes(document.querySelector('#preparation-state')?.dataset.state) || !document.querySelector('#run-profile');
+  if (typeof updateReadingAvailability === 'function') updateReadingAvailability(status);
 }
 
 setInterval(async () => {

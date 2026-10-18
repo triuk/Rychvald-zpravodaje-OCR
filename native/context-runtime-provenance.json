@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "version": "1.0.169",
+  "change_reason": "Historical aggregate source closure was unavailable after host restart. A separately reviewed pristine closure was reconstructed from original upstream Git blobs and integrity-addressed npm package archives. This is an explicit new pin, not a claim to recover historical bytes.",
+  "historical_source_tree_sha256": "6f5b48dc93999c60bb9a29a116040cf8b5f05ba9e9aa90654f44e0b4a8a0f5bf",
+  "historical_prepared_tree_sha256": "05a1b6ff04575c96d9ce1ed5b12622abd94c22c220fd9dd7fe5ea2106419fb88",
+  "historical_difference_reason": "unknown",
+  "upstream_repository": "https://github.com/mksglu/context-mode",
+  "upstream_commit": "03e831573f8964e9330008d1b456d40838d86df8",
+  "source_inventory": "native/context-source-inventory.json",
+  "source_inventory_sha256": "fd39b7012f1b1cdd5bed2f72bb9e720674dba25fc185453b43416d37b2d56772",
+  "source_tree_sha256": "6207b687a1606af3fe46f63ce3e6a3ee0ae9315c1612a37b20633688026bf14b",
+  "prepared_tree_sha256": "e6304ac4d20283362feda2d5287b8e008af48c9b7e3fb949414aa1f89fdd2c17",
+  "original_codex_hooks_unchanged": true,
+  "no_install_adapter_unchanged": true,
+  "only_difference_from_installed_at_review": {
+    "path": "hooks/hooks.json",
+    "installed_sha256": "80b04c4cc3b0173b51f7d43a1e51d5b31f6ec84624b9895531554a53d95afd35",
+    "upstream_sha256": "e1fdd0c0e82d164f119daa43803513b802ca5edab93bc123b2c7d8d4c637cf3e"
+  }
+}

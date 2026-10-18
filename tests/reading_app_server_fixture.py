@@ -24,6 +24,10 @@ def event(method, **params):
 
 
 def finish(turn_id, value):
+    scale = 1 if turn_id == 'source-turn' else 2
+    event('thread/tokenUsage/updated', turnId=turn_id, tokenUsage={'total': {
+        'inputTokens': 101 * scale, 'cachedInputTokens': 20 * scale, 'cacheWriteInputTokens': 0,
+        'outputTokens': 10 * scale, 'reasoningOutputTokens': 5 * scale, 'totalTokens': 111 * scale}})
     for name in ['sessionStart', 'userPromptSubmit', 'postToolUse', 'stop']:
         event('hook/completed', turnId=turn_id, run={'eventName': name, 'status': 'completed', 'source': 'sessionFlags'})
     event('item/completed', turnId=turn_id, item={'type': 'mcpToolCall', 'server': 'context_mode',

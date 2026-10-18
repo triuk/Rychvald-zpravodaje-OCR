@@ -27,8 +27,16 @@ staršího výběru nemůže znovu zobrazit ovládání jiného průchodu.
 a lokálně dostupnou produkční dependency closure bez nepoužívaného
 `better-sqlite3`. Hashuje se celá sada včetně relativních jmen souborů.
 
-- Původní sada: `6f5b48dc93999c60bb9a29a116040cf8b5f05ba9e9aa90654f44e0b4a8a0f5bf`.
-- Připravená sada: `05a1b6ff04575c96d9ce1ed5b12622abd94c22c220fd9dd7fe5ea2106419fb88`.
+- Původní sada: `6207b687a1606af3fe46f63ce3e6a3ee0ae9315c1612a37b20633688026bf14b`.
+- Připravená sada: `e6304ac4d20283362feda2d5287b8e008af48c9b7e3fb949414aa1f89fdd2c17`.
+
+Tato výslovně nově připnutá sada pochází z upstream commitu
+`03e831573f8964e9330008d1b456d40838d86df8` a z integritou ověřených npm
+archivů. `native/context-source-inventory.json` obsahuje hash, velikost a
+Git/npm původ každého souboru. Historická agregovaná sada po restartu nebyla
+dostupná; důvod rozdílu historického hashe není znám a není vydáván za
+obnovení stejných bajtů. Původní Codex hooky i adaptér bez instalací zůstaly
+beze změny. Záznam změny uchovává `native/context-runtime-provenance.json`.
 
 Při sestavení se jediný instalační bootstrap `hooks/ensure-deps.mjs`
 nahradí kontrolou vestavěného SQLite FTS5 z
@@ -42,8 +50,11 @@ a licence produkčních závislostí.
 Příprava používá pouze již dostupné zamčené zdroje:
 
 ```sh
+python tools/reconstruct_context_runtime.py \
+  --upstream /cesta/git-objekty/context-mode --npm-cache /cesta/npm/_cacache \
+  --output /cesta/nove-zdroje/context-mode
 python tools/prepare_context_runtime.py \
-  --source /cesta/context-mode/1.0.169 --output /cesta/pripravene/context-mode
+  --source /cesta/nove-zdroje/context-mode --output /cesta/pripravene/context-mode
 ```
 
 Příkaz odmítne jinou zdrojovou sadu i existující výstup. Nestahuje balíky,
@@ -56,6 +67,12 @@ Vývojový start může určit již připravenou sadu proměnnou
 `runtime/context-mode`. Neprobíhá automatická příprava ani oprava při
 startu GUI. Přenositelnost celého balíku včetně dynamických knihoven je
 součástí distribučního přírůstku, nikoli tohoto testu.
+
+Pro výslovně vybranou stabilní vývojovou kopii lze zadat
+`RYCHVALD_CODEX_RUNTIME` s cestou ke Codexu a `RYCHVALD_CONTEXT_BIN` s adresářem
+`node`, `python3`, `bash`, `sh`. Každý soubor stále musí odpovídat přesnému
+připnutému SHA-256; nejde o náhradu modelu, verze ani povolení změněného
+prostředku. Distribuční balík používá své přibalené cesty.
 
 ## Důvěra a efektivní konfigurace
 

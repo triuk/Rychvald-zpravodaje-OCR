@@ -43,7 +43,8 @@ def process_identity(pid):
 def default_runtime():
     lock = json.loads((ROOT / 'native/codex-runtime.json').read_text())
     bundled = ROOT / lock['binary']
-    executable = bundled if bundled.exists() else Path(lock['development_binary'])
+    executable = Path(os.environ['RYCHVALD_CODEX_RUNTIME']) if os.environ.get('RYCHVALD_CODEX_RUNTIME') else (
+        bundled if bundled.exists() else Path(lock['development_binary']))
     return {'kind': 'native', 'version': lock['version'], 'command': [str(executable), 'app-server', '--stdio',
             '--disable', 'plugins', '--disable', 'hooks', '--disable', 'shell_tool',
             '--disable', 'skill_mcp_dependency_install', '-c', 'mcp_servers={}'],

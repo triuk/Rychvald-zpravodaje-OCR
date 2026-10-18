@@ -187,6 +187,25 @@ class WebUIReadingTests(unittest.TestCase):
         self.assertEqual(review['unresolved'][0]['status'], 'waiting_for_input')
         self.assertEqual(review['publisher_errors'][0]['printed'], 'DEF')
 
+    def test_reading_consumption_joins_existing_metrics_with_original_phase_and_connection_sources(self):
+        self.peer()
+        self.assertTrue(self.app.dispatch('start_reading', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertTrue(result['reading_complete'], result.get('error'))
+        metrics = self.app.dispatch('run_metrics', {'run_id': self.identifier})
+        self.assertTrue(metrics['ok'], metrics)
+        reading = [step for step in metrics['data']['steps'] if step['operation'] == 'visual_reading']
+        self.assertEqual(len(reading), 1)
+        detail = self.app.dispatch('step_detail', {'run_id': self.identifier, 'step_id': reading[0]['step_id']})
+        self.assertTrue(detail['ok'], detail)
+        step = detail['data']
+        self.assertEqual(step['tokens']['values'], {'noncached_input': 162, 'cached_input': 40, 'output': 20})
+        self.assertEqual(step['tokens']['cache_write_input'], 0)
+        self.assertEqual(step['tokens']['reasoning_output'], 10)
+        self.assertEqual(step['turn_ids'], ['source-turn', 'accounting-turn'])
+        self.assertEqual([source['connection_id'] for source in step['usage_sources']], ['1', '1'])
+        self.assertTrue(all(source['path'].endswith('protocol.jsonl') for source in step['usage_sources']))
+
 
 if __name__ == '__main__':
     unittest.main()
