@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "policy": "workspace-confined-image-path-alias-v1",
+  "previous_adapter_sha256": "27c12d6dccdc82716813d7224d17a094fce332d661623dec0bc4660e72727294",
+  "validator_sha256": "18a7eb9405bfe69410de6d9689e7f498bacc9438248ad35dafb3b383e530eb84",
+  "scope": "Validator-only resolved original image path/SHA bijection; original JSON/preparation/protocol retained. No relaxation of workflow, source, review, profile, environment, font, native segmentation or diagnostic pixels. Exact previous adapter bytes must be preserved in the run workspace."
+}

@@ -125,6 +125,11 @@ class Application:
                         self.root / run['artifacts']['workspace']['path'])
                 elif operation == 'patch_geometry':
                     data = self.patch_geometry(payload)
+                elif operation == 'recover_geometry':
+                    if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
+                        raise ApplicationError('operation_active', 'Wait for the active operation before saved-proposal recovery.')
+                    run = self.select_run(payload.get('run_id'))
+                    data = self.geometry.recover(self.root, run, payload.get('attempt_id'))
                 elif operation == 'open_geometry_artifact':
                     data = self.open_geometry_artifact(payload)
                 elif operation in ('run_metrics', 'step_detail'):

@@ -4,6 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 import time
+import uuid
+import fcntl
 
 from .context import ContextJobs
 from .codex import now
@@ -20,6 +22,70 @@ class GeometryJobs(ContextJobs):
     def __init__(self, publish, runtime=None, context_runtime=None, process=None):
         super().__init__(publish, runtime, context_runtime)
         self.process = process
+
+    def recover(self, root, run, attempt_id):
+        """Revalidate an unchanged completed proposal; never starts a provider process."""
+        work = root/run['artifacts']['workspace']['path']
+        directory = (work/'application'/self.namespace/str(attempt_id)).resolve()
+        if directory.parent != (work/'application'/self.namespace).resolve():
+            raise JobError('geometry_recovery_invalid', 'Choose an original geometry attempt of this run.')
+        try:
+            attempt_path = directory/'attempt.json'
+            value = json.loads(attempt_path.read_text())
+            if (value['root'] != str(root) or value['run_id'] != run['project']['run_id'] or
+                value['state'] not in ('failed', 'interrupted') or value['runtime'] != self.runtime or
+                value['context_runtime'] != self.context_runtime or value['profile_sha256'] != run['run']['profile_sha256']):
+                raise ValueError('Saved attempt runtime/source/profile/state differs')
+            last = value['turns'][-1]
+            if last['stage'] != 'geometry_examination' or last['state'] != 'completed':
+                raise ValueError('No original completed geometry observation turn to recover')
+            proposal_path = directory/'geometry_examination/proposal.json'
+            original_checkpoint = directory/'checkpoint-proposal.json'
+            checkpoint = json.loads(original_checkpoint.read_text())
+            if (Path(checkpoint['evidence']['proposal']['path']).resolve() != proposal_path.resolve() or
+                checkpoint['visual_turn']['turn_id'] != last['turn_id']):
+                raise ValueError('Saved publication proposal differs from original completed geometry turn')
+            verify_resources(self.context_runtime, self.runtime)
+            recovery_id = uuid.uuid4().hex
+            descriptor = directory/('recovery-'+recovery_id+'.json')
+            record = {'schema_version': 1, 'recovery_id': recovery_id, 'run_id': value['run_id'],
+                'original_attempt_id': attempt_id, 'original_state': value['state'], 'original_error': value['error'],
+                'reason': 'Revalidate unchanged original completed assistant JSON after local publication failure; no new inference.',
+                'policy': 'workspace-confined-image-path-alias-v1', 'new_ai_turns': 0,
+                'original_evidence': {'attempt': {'path': str(attempt_path), 'sha256': sha(attempt_path)},
+                    'checkpoint_proposal': {'path': str(original_checkpoint), 'sha256': sha(original_checkpoint)},
+                    'protocol': checkpoint['visual_turn']['protocol'], 'proposal': checkpoint['evidence']['proposal']},
+                'validator': {'path': str(Path(__file__).resolve().parents[1]/'tools/ocr_project_geometry.py')}}
+            record['validator']['sha256'] = sha(Path(record['validator']['path']))
+            atomic_json(descriptor, record)
+            checkpoint = copy.deepcopy(checkpoint)
+            checkpoint['evidence'].update(recovery_descriptor={'path': str(descriptor), 'sha256': sha(descriptor)},
+                recovery_validator=record['validator'])
+            packet = json.loads((work/'geometry-preparation.json').read_text())
+            original_adapter = packet['inputs']['geometry_tool']
+            archive = work/'geometry-code-snapshots'/(original_adapter['sha256']+'.py')
+            checkpoint['evidence']['original_adapter_snapshot'] = {'path': str(archive), 'sha256': original_adapter['sha256']}
+            policy = Path(__file__).resolve().parents[1]/'native/geometry-adapter-compatibility.json'
+            if Path(original_adapter['path']).resolve() == Path(record['validator']['path']).resolve():
+                checkpoint['evidence']['validator_compatibility_policy'] = {'path': str(policy), 'sha256': sha(policy)}
+            path = directory/('recovery-checkpoint-'+recovery_id+'.json')
+            atomic_json(path, checkpoint)
+            self.process.request(root, 'publish-geometry', value['run_id'], '--checkpoint', path)
+            result = {'recovery_id': recovery_id, 'attempt_id': attempt_id, 'original_attempt_sha256': sha(attempt_path),
+                'checkpoint_sha256': sha(work/'geometry-checkpoint.json'),
+                'descriptor': {'path': str(descriptor), 'sha256': sha(descriptor)}, 'new_ai_turns': 0}
+            atomic_json(work/'geometry-recovery.json', result)
+            event = {'schema_version': 1, 'event_id': recovery_id, 'run_id': value['run_id'],
+                'type': 'geometry_recovered', 'timestamp': now(), **result}
+            with (root/run['artifacts']['history']['path']).open('a') as stream:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+                stream.write(json.dumps(event, ensure_ascii=False)+'\n'); stream.flush()
+            self.publish('geometry_recovered', root=str(root), run_id=value['run_id'], recovery_id=recovery_id)
+            return result
+        except JobError:
+            raise
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise JobError('geometry_recovery_invalid', str(error)) from error
 
     def _run(self, job):
         value = job['manifest']
@@ -118,6 +184,25 @@ class GeometryJobs(ContextJobs):
 
     def status(self, root, run_id, work, operation=None):
         value = super(ContextJobs, self).status(root, run_id, work, operation)
+        recovery_path = work/'geometry-recovery.json'
+        if recovery_path.exists() and value.get('state') in ('failed', 'interrupted'):
+            try:
+                recovery = json.loads(recovery_path.read_text())
+                if (recovery['attempt_id'] != value['attempt_id'] or
+                    recovery['original_attempt_sha256'] != sha(root/value['artifacts']['attempt']) or
+                    recovery['checkpoint_sha256'] != sha(work/'geometry-checkpoint.json')):
+                    raise ValueError('Saved geometry recovery changed')
+                checkpoint = json.loads((work/'geometry-checkpoint.json').read_text())
+                if checkpoint['evidence']['recovery_descriptor'] != recovery['descriptor']:
+                    raise ValueError('Recovery descriptor differs from validated checkpoint')
+                self.process.request(root, 'verify-geometry', run_id)
+                proposal = json.loads(Path(checkpoint['evidence']['proposal']['path']).read_text())
+                value.update(original_attempt_state=value['state'], state='completed', geometry_complete=True,
+                    evidence_recovered=True, recovery=recovery, error=None, observations=proposal,
+                    counts={'lines': len(proposal['lines']), 'samples': len(proposal['samples']),
+                        'open_items': sum(o['status']=='open' for o in proposal['lines']+proposal['samples'])})
+            except Exception as error:
+                value['recovery_error'] = {'code': getattr(error, 'code', 'geometry_recovery_invalid'), 'message': str(error)}
         value['prepared_artifacts_valid'] = False
         if (work/'geometry-preparation.json').exists():
             try:

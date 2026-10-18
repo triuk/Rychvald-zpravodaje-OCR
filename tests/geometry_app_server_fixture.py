@@ -2,6 +2,7 @@
 import json
 import sys
 import tomllib
+from pathlib import Path
 
 mode = sys.argv[1]
 settings = {}
@@ -61,6 +62,12 @@ for raw in sys.stdin:
                 answer['images_examined'] = answer['images_examined'][:-1]
             if mode == 'template':
                 answer['lines'][0]['reason'] = ''
+            if mode in ('absolute_paths', 'escaped_path'):
+                attached = [i['path'] for i in params['input'] if i['type']=='localImage']
+                for image, path in zip(answer['images_examined'], attached):
+                    image['path'] = path
+                if mode=='escaped_path':
+                    answer['images_examined'][0]['path'] = '/tmp/foreign-image.png'
         identifier = 'source-expectations' if source else 'geometry-examination'
         emit({'id': request['id'], 'result': {'turn': {'id': identifier}}})
         def event(method, **values):
@@ -73,6 +80,10 @@ for raw in sys.stdin:
             'status': 'completed', 'error': None})
         event('item/completed', item={'type': 'agentMessage', 'phase': 'final_answer', 'text': json.dumps(answer)})
         event('turn/completed', turn={'id': identifier, 'status': 'completed'})
+        if not source and mode=='publication_blocked':
+            attached = [i['path'] for i in params['input'] if i['type']=='localImage']
+            # Deliberate controlled host filesystem fault AFTER provider completion.
+            (Path(attached[0]).parents[1]/'geometry-checkpoint.json').mkdir()
         continue
     else:
         raise RuntimeError('Unexpected fixture method '+method)

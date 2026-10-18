@@ -152,6 +152,40 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual([turn['stage'] for turn in result['turns']], ['geometry_examination'])
         self.assertEqual((self.work/'geometry-source-samples.json').read_bytes(), samples)
 
+    def test_absolute_image_aliases_are_validated_without_changing_original_model_json(self):
+        self.native_geometry_peer('absolute_paths')
+        self.assertTrue(self.app.dispatch('start_geometry', {'run_id': self.identifier})['ok'])
+        result = self.geometry_wait()
+        self.assertEqual(result['state'], 'completed', result)
+        original = json.loads((self.root/result['turns'][-1]['proposal']).read_text())
+        self.assertTrue(original['images_examined'][0]['path'].startswith(str(self.work)))
+        self.assertEqual(result['observations'], original)
+
+    def test_image_path_escape_cannot_be_a_completed_geometry_observation(self):
+        self.native_geometry_peer('escaped_path')
+        self.assertTrue(self.app.dispatch('start_geometry', {'run_id': self.identifier})['ok'])
+        result = self.geometry_wait()
+        self.assertEqual(result['state'], 'failed', result)
+        self.assertFalse((self.work/'geometry-checkpoint.json').exists())
+
+    def test_original_completed_proposal_is_recovered_after_local_publication_failure_without_ai(self):
+        self.native_geometry_peer('publication_blocked')
+        self.assertTrue(self.app.dispatch('start_geometry', {'run_id': self.identifier})['ok'])
+        failed = self.geometry_wait()
+        self.assertEqual(failed['state'], 'failed', failed)
+        original = self.root/failed['artifacts']['attempt']
+        before = original.read_bytes()
+        protocol = self.root/failed['artifacts']['protocol']
+        raw = protocol.read_bytes()
+        (self.work/'geometry-checkpoint.json').rmdir()
+        result = self.app.dispatch('recover_geometry', {'run_id': self.identifier, 'attempt_id': failed['attempt_id']})
+        self.assertTrue(result['ok'], result)
+        status = self.app.dispatch('geometry_status', {'run_id': self.identifier})['data']
+        self.assertTrue(status['geometry_complete'], status)
+        self.assertTrue(status['evidence_recovered'])
+        self.assertEqual(original.read_bytes(), before)
+        self.assertEqual(protocol.read_bytes(), raw)
+
 
 if __name__ == '__main__':
     unittest.main()

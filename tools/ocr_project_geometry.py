@@ -20,6 +20,33 @@ def identity(registry, record):
     return result
 
 
+def adapter_snapshot(work):
+    source = Path(__file__)
+    path = work/'geometry-code-snapshots'/(source_hash(source)+'.py')
+    path.parent.mkdir(exist_ok=True)
+    if not path.exists():
+        shutil.copyfile(source, path)
+    if source_hash(path) != source_hash(source):
+        raise ValueError('Geometry adapter snapshot changed')
+    return path
+
+
+def check_geometry_bindings(work, records):
+    """One reviewed validator-only migration; native generating inputs stay exact."""
+    selected = dict(records)
+    adapter = selected.get('geometry_tool')
+    if adapter and Path(adapter['path']).resolve() == Path(__file__).resolve() and source_hash(Path(__file__)) != adapter['sha256']:
+        policy_path = Path(__file__).resolve().parents[1]/'native/geometry-adapter-compatibility.json'
+        policy = load(policy_path)
+        if (policy['policy'] != 'workspace-confined-image-path-alias-v1' or
+            adapter['sha256'] != policy['previous_adapter_sha256'] or
+            source_hash(Path(__file__)) != policy['validator_sha256']):
+            raise ValueError('Unreviewed geometry adapter migration')
+        original = work/'geometry-code-snapshots'/(adapter['sha256']+'.py')
+        selected['geometry_tool'] = {'path': str(original), 'sha256': adapter['sha256']}
+    check_bindings(selected)
+
+
 def prepare_geometry(registry, project_id, samples, *, environment=None, provenance=None):
     with registry.project_lock(project_id) as record:
         work = registry.root / record['artifacts']['workspace']
@@ -82,7 +109,7 @@ def prepare_geometry(registry, project_id, samples, *, environment=None, provena
                 'geometry-sample-origin.json', 'checks/sample-source.json', *names]
             inputs = bindings(source=source, review=work/'review.json', samples=saved,
                 origin=origin, environment=native.path, workflow=WORKFLOW,
-                geometry_tool=Path(__file__), quality_tool=Path(__file__).with_name('ocr_quality.py'))
+                geometry_tool=adapter_snapshot(work), quality_tool=Path(__file__).with_name('ocr_quality.py'))
             inputs.update({'segment_' + k: v for k, v in segmented['inputs'].items()})
             for key in ('profile_snapshot', 'run_manifest', 'reading_publication'):
                 if key in record['artifacts']:
@@ -112,7 +139,7 @@ def verify_geometry(registry, record, *, examined=True):
         packet = load(work / 'geometry-preparation.json')
         if packet['identity'] != identity(registry, record):
             raise ValueError('Geometry belongs to another run or review')
-        check_bindings(packet['inputs'])
+        check_geometry_bindings(work, packet['inputs'])
         if project_environment(work, packet['inputs']['environment']['path']).identity != packet['native_environment']:
             raise ValueError('Native geometry runtime changed')
         for name, digest in packet['outputs'].items():
@@ -133,16 +160,25 @@ def verify_geometry(registry, record, *, examined=True):
             if observations != load(Path(proof['evidence']['proposal']['path'])):
                 raise ValueError('Saved observations differ from original completed assistant JSON')
             packet['preparation_sha256'] = source_hash(work / 'geometry-preparation.json')
-            validate_observations(packet, observations)
+            validate_observations(work, packet, observations)
         return packet
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise ProjectError('geometry_invalid', str(error)) from error
 
 
-def validate_observations(packet, proposal):
+def image_identity(work, image):
+    path = (work/image['path']).resolve()
+    if not path.is_relative_to(work.resolve()) or not path.is_file() or source_hash(path) != image['sha256']:
+        raise ValueError('Image identity is changed or outside the current workspace')
+    return str(path), image['sha256']
+
+
+def validate_observations(work, packet, proposal):
     if proposal['preparation_sha256'] != packet['preparation_sha256']:
         raise ValueError('Observation preparation identity differs')
-    if proposal['images_examined'] != packet['images']:
+    expected = [image_identity(work, image) for image in packet['images']]
+    claimed = [image_identity(work, image) for image in proposal['images_examined']]
+    if claimed != expected or len(set(claimed)) != len(claimed):
         raise ValueError('Every original, overlay and source sample image must actually be examined')
     if proposal['logical_units'] != packet['logical_units']:
         raise ValueError('Logical reading order differs; apply a validated correction first')
@@ -152,10 +188,11 @@ def validate_observations(packet, proposal):
     samples = unique(proposal['samples'], 'source sample observation')
     if set(samples) != {s['id'] for s in packet['source_samples']}:
         raise ValueError('Every independent sample needs a source-boundary observation')
-    allowed_images = {i['path'] for i in packet['images']}
+    allowed_images = {path for path, digest in expected}
     for observation in [*lines.values(), *samples.values()]:
         if (observation['status'] not in ('examined_approximate', 'open') or not observation['reason'].strip() or
-            not observation['evidence'] or not set(observation['evidence']) <= allowed_images):
+            not observation['evidence'] or not all((work/path).resolve().is_relative_to(work.resolve()) and
+                str((work/path).resolve()) in allowed_images for path in observation['evidence'])):
             raise ValueError('Observations need specific honest decisions and original image evidence')
     for finding in [*packet['unsupported_cells'], *packet['geometry_anomalies']]:
         if lines[finding['line']]['status'] != 'open':
@@ -234,7 +271,7 @@ def _publish_geometry(registry, project_id, checkpoint):
         if proposal != load(value['evidence']['proposal']['path']):
             raise ProjectError('geometry_invalid', 'Original model-authored observations differ')
         try:
-            validate_observations(packet, proposal)
+            validate_observations(work, packet, proposal)
         except (ValueError, KeyError, TypeError) as error:
             raise ProjectError('geometry_invalid', str(error)) from error
         if value['preparation_sha256'] != packet['preparation_sha256']:
