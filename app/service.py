@@ -70,7 +70,7 @@ class Application:
         self.preparation = PreparationJobs(self.process.command, self.publish)
         self.codex = CodexJobs(self.publish, codex_runtime)
         self.context = ContextJobs(self.publish, codex_runtime, context_runtime)
-        self.reading = ReadingJobs(self.publish, codex_runtime, context_runtime)
+        self.reading = ReadingJobs(self.publish, codex_runtime, context_runtime, self.process)
 
     def dispatch(self, operation, payload=None):
         with self._lock:
@@ -264,8 +264,14 @@ class Application:
         readiness = self.context_status(run['project']['run_id'])
         if not readiness.get('autonomous_ocr_ready'):
             raise ApplicationError('reading_preflight_required', 'Verify the exact image/model and context-mode combination in this run before visual reading.')
+        model = self.model_diagnostic_status(run['project']['run_id'])
+        if (readiness.get('profile_sha256') != run['run']['profile_sha256'] or
+                model.get('profile_sha256') != run['run']['profile_sha256'] or
+                model.get('runtime') != self.reading.runtime or readiness.get('runtime') != self.reading.runtime or
+                readiness.get('context_runtime') != self.reading.context_runtime):
+            raise ApplicationError('reading_preflight_changed', 'The run profile or pinned runtime differs from its completed preflight.')
         self.process.request(self.root, 'reading-input', run['project']['run_id'])
-        return self.reading.start(self.root, run, operation='visual_reading')
+        return self.reading.start(self.root, run, operation='visual_reading', metadata={'run': run, 'preflight': readiness, 'model': model})
 
     def start_model_diagnostic(self, payload, operation='vision_diagnostic'):
         if self.preparation.busy() or self.codex.busy() or self.context.busy():

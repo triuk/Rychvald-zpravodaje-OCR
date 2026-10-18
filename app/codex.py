@@ -158,7 +158,7 @@ class CodexJobs:
         with self._lock:
             return self._active is not None
 
-    def start(self, root, run, image_path=None, operation='vision_diagnostic'):
+    def start(self, root, run, image_path=None, operation='vision_diagnostic', metadata=None):
         with self._lock:
             if self._active is not None:
                 raise JobError('operation_active', 'A Codex diagnostic is already active.')
@@ -205,7 +205,8 @@ class CodexJobs:
             atomic_json(directory / 'request.json', {'operation': operation, 'profile_sha256': manifest['profile_sha256'],
                                                      'prompt': manifest['prompt'], 'image': image_record})
             job = {'manifest': manifest, 'directory': directory, 'workspace': workspace,
-                   'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None}
+                   'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
+                   'metadata': copy.deepcopy(metadata)}
             self._active = job
             job['thread'] = threading.Thread(target=self._run, args=(job,), name=f'Codex-{attempt_id}', daemon=True)
             result = copy.deepcopy(manifest)
