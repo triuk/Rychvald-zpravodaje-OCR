@@ -270,6 +270,15 @@ class Application:
                 model.get('runtime') != self.reading.runtime or readiness.get('runtime') != self.reading.runtime or
                 readiness.get('context_runtime') != self.reading.context_runtime):
             raise ApplicationError('reading_preflight_changed', 'The run profile or pinned runtime differs from its completed preflight.')
+        work = self.root / run['artifacts']['workspace']['path']
+        prepared = self.preparation.status(self.root, run['project']['run_id'], work)
+        expected = prepared.get('expected', {})
+        parameters = run['run']['profile']['parameters']
+        if (not prepared.get('checkpoint_valid') or prepared['state'] != 'completed' or
+                expected.get('source_sha256') != run['project']['source_sha256'] or
+                expected.get('source_path') != str(self.root / run['artifacts']['source']['path']) or
+                any(expected.get(key) != parameters[key] for key in ('dpi', 'language'))):
+            raise ApplicationError('reading_preparation_required', 'A verified native source preparation with this run profile is required before visual reading.')
         self.process.request(self.root, 'reading-input', run['project']['run_id'])
         return self.reading.start(self.root, run, operation='visual_reading', metadata={'run': run, 'preflight': readiness, 'model': model})
 

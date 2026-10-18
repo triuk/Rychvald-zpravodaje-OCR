@@ -39,6 +39,14 @@ class WebUIReadingTests(unittest.TestCase):
         self.assertEqual(status['data']['state'], 'not_started')
         self.assertFalse((self.work / 'review.json').exists())
 
+    def test_valid_model_preflight_does_not_replace_verified_native_source_preparation(self):
+        self.peer()
+        (self.work / 'preparation-checkpoint.json').unlink(missing_ok=True)
+        started = self.app.dispatch('start_reading', {'run_id': self.identifier})
+        self.assertFalse(started['ok'], started)
+        self.assertEqual(started['error']['code'], 'reading_preparation_required')
+        self.assertEqual(self.app.dispatch('reading_status', {'run_id': self.identifier})['data']['state'], 'not_started')
+
     def peer(self, mode='success'):
         """Controlled old public proof artifacts; never counted as native evidence."""
         self.app.close()
@@ -63,6 +71,35 @@ class WebUIReadingTests(unittest.TestCase):
                 'lines': [{'id': 'candidate-' + str(page), 'page': page, 'text': 'WRONG OCR'}]})
         self.put(self.work / 'input-manifest.json', {'source_sha256': source_hash, 'pages': pages})
         self.put(self.work / 'local-candidates.json', candidates)
+        self.put(self.work / 'ocr-commands.json', [])
+        self.put(self.work / 'fresh-lines.json', [line for region in candidates for line in region['lines']])
+        self.put(self.work / 'preparation-identity.json', {})
+        outputs = ['input-manifest.json', 'ocr-commands.json', 'fresh-lines.json', 'preparation-identity.json']
+        for number in [1, 2]:
+            for name in [f'raster/overview-{number}.png', f'raster/page-{number}-checkpoint.json'] + [
+                f'ocr/page-{number}-psm{psm}{suffix}' for psm in [3, 11]
+                for suffix in ['.hocr', '.tsv', '.txt', '.box', '-cache.json']]:
+                path = self.work / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'controlled preparation output')
+                outputs.append(name)
+            outputs.append(f'raster/page-{number}.png')
+        identity = {'source_sha256': source_hash, 'dpi': 300, 'language': 'ces',
+            'environment': {'build_id': 'controlled-preparation', 'manifest_sha256': 'f' * 64}}
+        self.put(self.work / 'preparation-checkpoint.json', {'status': 'completed', 'identity': identity,
+            'counts': {'pages': 2}, 'outputs': {name: hashlib.sha256((self.work / name).read_bytes()).hexdigest() for name in outputs}})
+        preparation = {'attempt_id': 'controlled-preparation', 'root': str(self.root), 'run_id': self.identifier,
+            'state': 'completed', 'started_at': '2026-01-01T00:00:00+00:00', 'ended_at': '2026-01-01T00:00:01+00:00',
+            'history': self.run['artifacts']['history']['path'], 'expected': {**identity,
+                'source_path': str(self.root / self.run['artifacts']['source']['path'])}}
+        self.put(self.work / 'application/attempts/controlled-preparation.json', preparation)
+        history = self.root / preparation['history']
+        with history.open('a') as stream:
+            for event in [
+                {'type': 'step_completed', 'environment': identity['environment']},
+                {'type': 'checkpoint_completed', 'checkpoint_sha256': hashlib.sha256((self.work / 'preparation-checkpoint.json').read_bytes()).hexdigest()}]:
+                stream.write(json.dumps({'attempt_id': preparation['attempt_id'], 'step_id': 'environment',
+                    'timestamp': preparation['ended_at'], **event}) + '\n')
         workspace, storage = self.work / 'context/workspace', self.work / 'context/store'
         workspace.mkdir(parents=True, exist_ok=True)
         for name in ['content', 'sessions']:
