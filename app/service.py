@@ -16,6 +16,7 @@ from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_
 from .jobs import JobError, PreparationJobs, read_history
 from .codex import CodexJobs
 from .context import ContextJobs
+from .reading import ReadingJobs
 
 
 class ApplicationError(Exception):
@@ -69,6 +70,7 @@ class Application:
         self.preparation = PreparationJobs(self.process.command, self.publish)
         self.codex = CodexJobs(self.publish, codex_runtime)
         self.context = ContextJobs(self.publish, codex_runtime, context_runtime)
+        self.reading = ReadingJobs(self.publish, codex_runtime, context_runtime)
 
     def dispatch(self, operation, payload=None):
         with self._lock:
@@ -107,6 +109,12 @@ class Application:
                     data = self.context.prepare(self.root, run)
                 elif operation == 'context_status':
                     data = self.context_status(payload.get('run_id'))
+                elif operation == 'start_reading':
+                    data = self.start_reading(payload)
+                elif operation == 'reading_status':
+                    run = self.select_run(payload.get('run_id'))
+                    data = self.reading.status(self.root, run['project']['run_id'],
+                        self.root / run['artifacts']['workspace']['path'])
                 elif operation in ('run_metrics', 'step_detail'):
                     from app.metrics import collect, summary, step_detail
                     offset, limit = payload.get('offset', 0), payload.get('limit', 100)
@@ -245,6 +253,19 @@ class Application:
         self.preparation.close()
         self.codex.close()
         self.context.close()
+        self.reading.close()
+
+    def start_reading(self, payload):
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+            raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
+        run = self.select_run(payload.get('run_id'))
+        if not run.get('run'):
+            raise ApplicationError('run_profile_required', 'Choose a named run with an immutable profile.')
+        readiness = self.context_status(run['project']['run_id'])
+        if not readiness.get('autonomous_ocr_ready'):
+            raise ApplicationError('reading_preflight_required', 'Verify the exact image/model and context-mode combination in this run before visual reading.')
+        self.process.request(self.root, 'reading-input', run['project']['run_id'])
+        return self.reading.start(self.root, run, operation='visual_reading')
 
     def start_model_diagnostic(self, payload, operation='vision_diagnostic'):
         if self.preparation.busy() or self.codex.busy() or self.context.busy():
