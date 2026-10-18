@@ -85,10 +85,13 @@ def main():
             raise RuntimeError(str(value['error']))
         return value['data']
 
-    def terminal(operation):
+    def terminal(operation, previous_attempt=None):
         deadline = time.monotonic() + 900
         while time.monotonic() < deadline:
             value = status(operation)
+            if previous_attempt is not None and value.get('attempt_id') == previous_attempt:
+                time.sleep(.1)
+                continue
             if value['state'] not in ('starting', 'running', 'awaiting_login', 'not_started'):
                 return value
             time.sleep(.5)
@@ -125,11 +128,12 @@ def main():
             if args.run_preflights:
                 model = status('model_diagnostic_status')
                 context = status('context_status')
-                if model['state'] == 'failed' and args.retry_terminal_preflight:
+                if model['state'] in ('failed', 'interrupted') and args.retry_terminal_preflight:
                     reconciliation = json.loads(args.retry_terminal_preflight.read_text())
                     if not (reconciliation['run_id'] == case['run_id'] and reconciliation['attempt_id'] == model['attempt_id'] and
                         reconciliation['thread_id'] == model['thread_id'] and reconciliation['turn_id'] == model['turn_id'] and
-                        reconciliation['terminal_status'] == 'failed' and reconciliation['no_inference_submitted']):
+                        (reconciliation['terminal_status'] == 'failed' or reconciliation.get('no_original_turn_submitted')) and
+                        reconciliation['no_inference_submitted']):
                         raise RuntimeError('Explicit preflight retry proof does not identify this original failed turn.')
                 elif model['state'] != 'not_started':
                     raise RuntimeError('Existing image preflight requires explicit supported terminal-state reconciliation before retry.')
@@ -138,7 +142,7 @@ def main():
                 image = work / 'raster/page-1.png'
                 query('document.querySelector("#diagnostic-image").value=' + json.dumps(str(image)) + ';return JSON.stringify(true);')
                 click('start-model-diagnostic')
-                model = terminal('model_diagnostic_status')
+                model = terminal('model_diagnostic_status', model.get('attempt_id'))
                 save(proof / 'native-model-preflight.json', model)
                 require_complete(model, 'combination_verified')
                 click('start-context-diagnostic')

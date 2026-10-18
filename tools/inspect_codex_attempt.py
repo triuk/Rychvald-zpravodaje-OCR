@@ -25,8 +25,15 @@ def main():
     if not saved['ok']:
         raise RuntimeError(str(saved['error']))
     attempt = saved['data']
-    if attempt.get('state') not in ('failed', 'interrupted', 'completed') or not attempt.get('turn_id'):
+    if attempt.get('state') not in ('failed', 'interrupted', 'completed'):
         raise RuntimeError('A concrete saved native turn with a terminal state is required.')
+    no_original_turn = False
+    if not attempt.get('turn_id'):
+        original = Path(args.root) / attempt['artifacts']['protocol']
+        frames = [json.loads(line) for line in original.read_text().splitlines()] if original.exists() else []
+        if any(row['message'].get('method') == 'turn/start' for row in frames):
+            raise RuntimeError('Original turn/start exists without a saved ID; explicit native recovery is required.')
+        no_original_turn = True
     for item in app.codex.runtime['files']:
         from app.jobs import sha
         if sha(Path(item['path'])) != item['sha256']:
@@ -47,15 +54,15 @@ def main():
             rpc.request('initialize', {'clientInfo': {'name': 'rychvald-read-only-inspection', 'version': '1.0'},
                 'capabilities': {'experimentalApi': True}}, notify)
             rpc.send({'method': 'initialized'})
-            response = rpc.request('thread/read', {'threadId': attempt['thread_id'], 'includeTurns': True}, notify)
-            turns = response['thread']['turns']
-            turn = next(t for t in turns if t['id'] == attempt['turn_id'])
+            response = {} if no_original_turn else rpc.request('thread/read', {'threadId': attempt['thread_id'], 'includeTurns': True}, notify)
+            turn = {'id': None, 'status': attempt['state']} if no_original_turn else next(
+                t for t in response['thread']['turns'] if t['id'] == attempt['turn_id'])
             if turn['status'] not in ('failed', 'interrupted', 'completed'):
                 raise RuntimeError('The original submitted turn is still active; never resubmit it.')
             limits = rpc.request('account/rateLimits/read', {}, notify)
             summary = {'run_id': args.run_id, 'attempt_id': attempt['attempt_id'], 'thread_id': attempt['thread_id'],
                 'turn_id': turn['id'], 'terminal_status': turn['status'], 'terminal_error': turn.get('error'),
-                'no_inference_submitted': True, 'rate_limits': limits}
+                'no_inference_submitted': True, 'no_original_turn_submitted': no_original_turn, 'rate_limits': limits}
             (proof / 'thread-read.json').write_text(json.dumps(response, ensure_ascii=False, indent=2))
             (proof / 'reconciliation.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2))
             print(json.dumps(summary, ensure_ascii=False))
