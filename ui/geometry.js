@@ -36,10 +36,18 @@ function renderGeometryPanel(detail, data) {
     renderGeometry(await request('start_geometry', payload));
     return 'Příprava zdrojových vzorků a skutečná kontrola geometrie zahájena.';
   }));
+  const recover = element('button', 'Znovu ověřit uloženou odpověď bez AI', 'secondary');
+  recover.id = 'recover-geometry'; recover.disabled = true;
+  recover.addEventListener('click', () => perform(async () => {
+    const previous = geometryStatuses.get(data.project.run_id);
+    await request('recover_geometry', {run_id: data.project.run_id, attempt_id: previous.attempt_id});
+    renderGeometry(await request('geometry_status', {run_id: data.project.run_id}));
+    return 'Původní uložená odpověď byla znovu nativně ověřena; žádný nový AI tah nebyl spuštěn.';
+  }));
   const state = element('p', 'Zjišťování stavu…'); state.id = 'geometry-state'; state.setAttribute('aria-live', 'polite');
   const counts = element('p', '', 'hint'); counts.id = 'geometry-counts';
   const output = element('div'); output.id = 'geometry-output';
-  panel.append(options, start, state, counts, output); detail.append(panel);
+  panel.append(options, start, recover, state, counts, output); detail.append(panel);
 }
 
 function renderGeometry(status) {
@@ -47,6 +55,8 @@ function renderGeometry(status) {
   const state = document.querySelector('#geometry-state'); if (!state) return;
   state.dataset.state = status.state; state.dataset.attemptId = status.attempt_id || '';
   geometryStatuses.set(status.run_id, status);
+  document.querySelector('#recover-geometry').disabled = !['failed','interrupted'].includes(status.state) ||
+    status.turns?.at(-1)?.stage !== 'geometry_examination' || status.turns?.at(-1)?.state !== 'completed' || codexRunning();
   document.querySelector('#start-geometry').textContent = status.attempt_id ? 'Pokračovat po kontrole uloženého pokusu' : 'Připravit a prohlédnout geometrii';
   const names = {not_started: 'Dosud nepřipraveno', starting: 'Spouští se', running: 'Probíhá příprava a skutečné prohlížení',
     completed: 'Podklady a skutečné prohlédnutí ověřeny; znaková geometrie zůstává aproximací',

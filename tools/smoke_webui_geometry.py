@@ -33,6 +33,7 @@ def main():
     parser.add_argument('--run-geometry', action='store_true')
     parser.add_argument('--inspect-preparation', action='store_true', help='Read-only native GUI; no model submission or visual milestone claim.')
     parser.add_argument('--continue-attempt', help='Explicitly reconcile this saved terminal attempt; never repeats a source-sample turn when frozen samples exist.')
+    parser.add_argument('--recover-attempt', help='Revalidate this original completed proposal through the GUI, without new inference.')
     args = parser.parse_args()
     if sha(args.disclosure) != args.disclosure_sha256:
         parser.error('Concrete source/destination disclosure changed')
@@ -77,6 +78,11 @@ def main():
                 '&&Boolean(document.querySelector("#geometry-panel")));')
             previous = status('geometry_status')
             save(proof/'before-operation.json', {'reading': status('reading_status'), 'geometry': previous})
+            if args.recover_attempt:
+                if previous.get('attempt_id') != args.recover_attempt:
+                    raise RuntimeError('Saved recovery does not identify the selected original attempt')
+                wait('const b=document.querySelector("#recover-geometry");if(b&&!b.disabled){b.click();return JSON.stringify(true)}return JSON.stringify(false);')
+                wait('return JSON.stringify(document.querySelector("#geometry-state")?.dataset.state);', lambda state:state=='completed')
             if args.run_geometry:
                 if previous['state'] != 'not_started' and previous.get('attempt_id') != args.continue_attempt:
                     raise RuntimeError('Existing geometry attempt needs explicit original-turn reconciliation; no duplicate submission')

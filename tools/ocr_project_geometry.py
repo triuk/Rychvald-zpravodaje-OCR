@@ -35,7 +35,7 @@ def check_geometry_bindings(work, records):
     """One reviewed validator-only migration; native generating inputs stay exact."""
     selected = dict(records)
     adapter = selected.get('geometry_tool')
-    if adapter and Path(adapter['path']).resolve() == Path(__file__).resolve() and source_hash(Path(__file__)) != adapter['sha256']:
+    if adapter and source_hash(Path(__file__)) != adapter['sha256']:
         policy_path = Path(__file__).resolve().parents[1]/'native/geometry-adapter-compatibility.json'
         policy = load(policy_path)
         if (policy['policy'] != 'workspace-confined-image-path-alias-v1' or

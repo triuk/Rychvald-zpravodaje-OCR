@@ -1,5 +1,9 @@
 """Native geometry data contract, using independently rendered source fixtures."""
 import unittest
+from pathlib import Path
+import subprocess
+import sys
+import json
 import test_ocr_project_export as export_fixture
 
 
@@ -20,6 +24,16 @@ class NativeGeometryTests(unittest.TestCase):
         self.assertEqual(packet['logical_units'][0]['line_ids'], self.get('review.json')['units'][0]['line_ids'])
         self.assertEqual((self.work / 'samples.json').read_bytes(), samples)
         self.command('verify-geometry', self.identifier, '--prepared')
+        original_adapter = Path(__file__).resolve().parents[1]/'tools/ocr_project_geometry.py'
+        changed_adapter = self.directory/'changed-adapter/ocr_project_geometry.py'
+        changed_adapter.parent.mkdir()
+        changed_adapter.write_text(original_adapter.read_text()+'\n# Unreviewed adapter update\n')
+        launch = ('import sys;sys.path[:0]=['+repr(str(changed_adapter.parent))+','+
+            repr(str(original_adapter.parent))+'];from ocr_projects import main;raise SystemExit(main())')
+        changed = subprocess.run([sys.executable, '-B', '-c', launch, '--root', str(self.root), '--json',
+            'verify-geometry', self.identifier, '--prepared'], capture_output=True, text=True)
+        self.assertEqual(changed.returncode, 1, changed.stdout+changed.stderr)
+        self.assertEqual(json.loads(changed.stdout)['error']['code'], 'geometry_invalid')
         packet['identity']['run_id'] = 'foreign-run'
         self.put('geometry-preparation.json', packet)
         swapped = self.command('verify-geometry', self.identifier, '--prepared', expected=1)
