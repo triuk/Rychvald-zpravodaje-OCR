@@ -390,6 +390,8 @@ def build_parser():
     command = commands.add_parser('verify-geometry')
     command.add_argument('project_id')
     command.add_argument('--prepared', action='store_true')
+    command = commands.add_parser('verify-geometry-samples')
+    command.add_argument('project_id')
     command = commands.add_parser('publish-geometry')
     command.add_argument('project_id')
     command.add_argument('--checkpoint', required=True, type=Path)
@@ -439,6 +441,11 @@ def main(argv=None):
             from ocr_project_geometry import prepare_geometry
             record = prepare_geometry(registry, args.project_id, args.samples,
                 environment=args.environment, provenance=args.provenance)
+            result = response(args.operation, **record)
+        elif args.operation == 'verify-geometry-samples':
+            from ocr_project_geometry import verify_committed_samples
+            record = registry.get(args.project_id)
+            verify_committed_samples(registry, record)
             result = response(args.operation, **record)
         elif args.operation == 'verify-geometry':
             from ocr_project_geometry import verify_geometry

@@ -193,6 +193,22 @@ def verify_sample_origin(work, packet):
         raise ValueError('No independent pre-export source sample provenance')
 
 
+def verify_committed_samples(registry, record):
+    work = registry.root/record['artifacts']['workspace']
+    try:
+        packet = load(work/'geometry-preparation.json')
+        if packet['identity']['source_sha256'] != record['project']['source_sha256'] or any(
+            packet['identity'][key] != record['project'][key] for key in ('project_id', 'run_id')):
+            raise ValueError('Committed samples belong to another source/run')
+        if source_hash(work/'geometry-source-samples.json') != packet['inputs']['samples']['sha256']:
+            raise ValueError('Original committed sample bytes changed')
+        if source_hash(work/'geometry-sample-origin.json') != packet['outputs']['geometry-sample-origin.json']:
+            raise ValueError('Original source-sample provenance changed')
+        verify_sample_origin(work, packet)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ProjectError('geometry_samples_invalid', str(error)) from error
+
+
 def publish_geometry(registry, project_id, checkpoint):
     try:
         return _publish_geometry(registry, project_id, checkpoint)

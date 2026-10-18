@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--ocr-python', required=True)
     parser.add_argument('--run-geometry', action='store_true')
     parser.add_argument('--inspect-preparation', action='store_true', help='Read-only native GUI; no model submission or visual milestone claim.')
+    parser.add_argument('--continue-attempt', help='Explicitly reconcile this saved terminal attempt; never repeats a source-sample turn when frozen samples exist.')
     args = parser.parse_args()
     if sha(args.disclosure) != args.disclosure_sha256:
         parser.error('Concrete source/destination disclosure changed')
@@ -77,13 +78,15 @@ def main():
             previous = status('geometry_status')
             save(proof/'before-operation.json', {'reading': status('reading_status'), 'geometry': previous})
             if args.run_geometry:
-                if previous['state'] != 'not_started':
+                if previous['state'] != 'not_started' and previous.get('attempt_id') != args.continue_attempt:
                     raise RuntimeError('Existing geometry attempt needs explicit original-turn reconciliation; no duplicate submission')
+                wait('return JSON.stringify(!readingRequestPending&&!geometryRequestPending&&!progressRequestPending&&displayedReading!==null);')
                 if case.get('samples_path'):
                     for field, value in [('geometry-samples', case['samples_path']),
                         ('geometry-commitment', case['source_commitment_path']),
                         ('geometry-commitment-pointer', case['commitment_pointer'])]:
-                        query('document.querySelector('+json.dumps('#'+field)+').value='+json.dumps(value)+';return JSON.stringify(true);')
+                        query('const e=document.querySelector('+json.dumps('#'+field)+');e.value='+json.dumps(value)+
+                            ';e.dispatchEvent(new Event("input",{bubbles:true}));return JSON.stringify(true);')
                 save(proof/'prepared-ai-disclosure.json', {'source_disclosure_sha256': args.disclosure_sha256,
                     'case': case, 'runtime': app.api.geometry.runtime, 'context_runtime': app.api.geometry.context_runtime,
                     'model_destination': disclosure['model_destination']})

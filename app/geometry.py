@@ -41,11 +41,12 @@ class GeometryJobs(ContextJobs):
             origin_path = job['directory'] / 'samples-origin.json'
             if samples is not None:
                 # External pre-existing source commitment is verified, not a result-adapted sample list.
-                commitment = metadata['commitment']
-                digest = hashlib.sha256(json.dumps(samples, ensure_ascii=False, sort_keys=True,
-                    separators=(',', ':')).encode()).hexdigest()
-                if digest != commitment['sample_commitment'] or commitment['source_sha256'] != packet['source_sha256']:
-                    raise JobError('geometry_samples_invalid', 'Original source sample commitment differs.')
+                commitment = metadata.get('saved_origin') or metadata['commitment']
+                if not metadata.get('saved_origin'):
+                    digest = hashlib.sha256(json.dumps(samples, ensure_ascii=False, sort_keys=True,
+                        separators=(',', ':')).encode()).hexdigest()
+                    if digest != commitment['sample_commitment'] or commitment['source_sha256'] != packet['source_sha256']:
+                        raise JobError('geometry_samples_invalid', 'Original source sample commitment differs.')
                 atomic_json(origin_path, commitment)
             else:
                 # No transcript/candidate/cell/output text is provided to the independent sample turn.
@@ -63,6 +64,7 @@ class GeometryJobs(ContextJobs):
             else:
                 atomic_json(samples_path, samples)
             value['samples_commitment'] = sha(samples_path)
+            value['reconciled_from'] = metadata.get('previous_attempt_id')
             value['artifacts'].update(source_samples=str(samples_path.relative_to(root)),
                 sample_origin=str(origin_path.relative_to(root)))
             self._event(job, 'geometry_samples_committed', samples_sha256=sha(samples_path), count=len(samples))

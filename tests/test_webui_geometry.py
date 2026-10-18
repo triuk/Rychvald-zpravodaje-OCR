@@ -132,6 +132,26 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(result['turns'][-1]['state'], 'completed')
         self.assertTrue((self.work/'geometry-source-samples.json').exists())
 
+    def test_explicit_continuation_reuses_committed_source_samples_without_another_source_turn(self):
+        self.native_geometry_peer('missing_line')
+        self.assertTrue(self.app.dispatch('start_geometry', {'run_id': self.identifier})['ok'])
+        failed = self.geometry_wait()
+        samples = (self.work/'geometry-source-samples.json').read_bytes()
+        denied = self.app.dispatch('start_geometry', {'run_id': self.identifier})
+        self.assertFalse(denied['ok'], denied)
+        self.assertEqual(denied['error']['code'], 'geometry_reconciliation_required')
+        self.app.geometry.runtime['command'][-1] = 'success'
+        for namespace in ['codex-attempts', 'context-attempts']:
+            path = self.work/'application'/namespace/'preflight/attempt.json'
+            value = json.loads(path.read_text()); value['runtime'] = self.app.geometry.runtime
+            self.put(path, value)
+        continued = self.app.dispatch('start_geometry', {'run_id': self.identifier, 'previous_attempt_id': failed['attempt_id']})
+        self.assertTrue(continued['ok'], continued)
+        result = self.geometry_wait()
+        self.assertEqual(result['state'], 'completed', result)
+        self.assertEqual([turn['stage'] for turn in result['turns']], ['geometry_examination'])
+        self.assertEqual((self.work/'geometry-source-samples.json').read_bytes(), samples)
+
 
 if __name__ == '__main__':
     unittest.main()

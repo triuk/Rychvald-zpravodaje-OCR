@@ -273,6 +273,9 @@ class Application:
             raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
         run = self.select_run(payload.get('run_id'))
         work = self.root / run['artifacts']['workspace']['path']
+        previous = self.geometry.status(self.root, run['project']['run_id'], work)
+        if previous['state'] != 'not_started' and payload.get('previous_attempt_id') != previous.get('attempt_id'):
+            raise ApplicationError('geometry_reconciliation_required', 'Inspect the original geometry attempt and explicitly identify it before continuation.')
         reading = self.reading.status(self.root, run['project']['run_id'], work)
         if not reading.get('reading_complete'):
             raise ApplicationError('geometry_reading_required', 'Geometry requires a verified source reading of this run.')
@@ -300,12 +303,19 @@ class Application:
                 for name in ('protocol', 'proposal', 'attempt')}}
         reading_proof['evidence']['first_publication_review'] = {'path': str(snapshot), 'sha256': sha(snapshot)}
         metadata = {'run': run, 'source': reading['source'], 'reading': reading_proof,
-            'environment': prepared.get('environment')}
+            'environment': prepared.get('environment'), 'previous_attempt_id': payload.get('previous_attempt_id')}
+        frozen = work/'geometry-source-samples.json'
+        if frozen.exists():
+            self.process.request(self.root, 'verify-geometry-samples', run['project']['run_id'])
+            metadata.update(samples=json.loads(frozen.read_text()), samples_bytes=list(frozen.read_bytes()),
+                saved_origin=json.loads((work/'geometry-sample-origin.json').read_text()))
         if payload.get('samples_path') is not None:
             try:
                 samples_path = Path(payload['samples_path']).expanduser().resolve()
                 commitment_path = Path(payload['source_commitment_path']).expanduser().resolve()
                 samples = json.loads(samples_path.read_text())
+                if frozen.exists() and samples_path.read_bytes() != frozen.read_bytes():
+                    raise ValueError('Explicit sample seed conflicts with original committed bytes')
                 committed = json.loads(commitment_path.read_text())
                 pointer = payload.get('commitment_pointer', '/samples_commitment')
                 expected = committed
@@ -314,6 +324,10 @@ class Application:
                 source_hashes = [committed.get('source_sha256')] + [c.get('source_sha256') for c in committed.get('cases', [])]
                 if run['project']['source_sha256'] not in source_hashes:
                     raise ValueError('Source commitment belongs to another source')
+                import hashlib
+                actual = hashlib.sha256(json.dumps(samples, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+                if actual != expected:
+                    raise ValueError('Source sample canonical commitment differs')
                 metadata.update(samples=samples, samples_bytes=list(samples_path.read_bytes()), commitment={
                     'kind': 'original_committed_samples', 'sample_commitment': expected,
                     'source_sha256': run['project']['source_sha256'], 'commitment_pointer': pointer,

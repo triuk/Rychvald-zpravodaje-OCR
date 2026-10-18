@@ -1,6 +1,8 @@
 /* Source-bound geometry work; opening or generating an image confirms nothing. */
 let geometryRequestPending = false;
 let displayedGeometry = null;
+const geometryInputs = new Map();
+const geometryStatuses = new Map();
 
 function renderGeometryPanel(detail, data) {
   const panel = element('section', undefined, 'codex-panel');
@@ -14,12 +16,19 @@ function renderGeometryPanel(detail, data) {
     const field = element('label', label);
     const input = element('input'); input.id = id; input.type = 'text';
     if (id.endsWith('pointer')) input.value = '/samples_commitment';
+    if (geometryInputs.get(data.project.run_id)?.[id] !== undefined) input.value = geometryInputs.get(data.project.run_id)[id];
+    input.addEventListener('input', () => {
+      const values = geometryInputs.get(data.project.run_id) || {};
+      values[id] = input.value; geometryInputs.set(data.project.run_id, values);
+    });
     field.append(input); options.append(field);
   }
   const start = element('button', 'Připravit a prohlédnout geometrii');
   start.id = 'start-geometry'; start.dataset.runId = data.project.run_id; start.disabled = true;
   start.addEventListener('click', () => perform(async () => {
     const payload = {run_id: data.project.run_id};
+    const previous = geometryStatuses.get(data.project.run_id);
+    if (previous?.attempt_id) payload.previous_attempt_id = previous.attempt_id;
     const samples = document.querySelector('#geometry-samples').value.trim();
     if (samples) Object.assign(payload, {samples_path: samples,
       source_commitment_path: document.querySelector('#geometry-commitment').value.trim(),
@@ -37,6 +46,8 @@ function renderGeometry(status) {
   if (status.run_id !== selectedRun) return;
   const state = document.querySelector('#geometry-state'); if (!state) return;
   state.dataset.state = status.state; state.dataset.attemptId = status.attempt_id || '';
+  geometryStatuses.set(status.run_id, status);
+  document.querySelector('#start-geometry').textContent = status.attempt_id ? 'Pokračovat po kontrole uloženého pokusu' : 'Připravit a prohlédnout geometrii';
   const names = {not_started: 'Dosud nepřipraveno', starting: 'Spouští se', running: 'Probíhá příprava a skutečné prohlížení',
     completed: 'Podklady a skutečné prohlédnutí ověřeny; znaková geometrie zůstává aproximací',
     failed: 'Operace selhala; uložené podklady nejsou dokončeným milníkem', interrupted: 'Přerušeno', invalidated: 'Podklady se změnily; je nutná nová kontrola'};
