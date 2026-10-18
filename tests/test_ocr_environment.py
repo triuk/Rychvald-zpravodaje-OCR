@@ -9,13 +9,14 @@ import sys
 import tempfile
 import unittest
 
+from native_fixtures import environment_manifest
+
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / 'native/environment.json'
 
 
 class EnvironmentTests(unittest.TestCase):
     def cli(self, *args, env=None):
-        return subprocess.run([sys.executable, str(ROOT / 'tools/ocr_workflow.py'), *map(str, args)],
+        return subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_workflow.py'), *map(str, args)],
                               capture_output=True, text=True, env=env)
 
     def test_missing_environment_stops_prepare_without_changing_work(self):
@@ -34,7 +35,7 @@ class EnvironmentTests(unittest.TestCase):
     def test_wrong_resource_version_stops_before_writing(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
-            manifest = json.loads(MANIFEST.read_text())
+            manifest = environment_manifest(ROOT)
             manifest['programs']['tesseract']['version'] = 'tesseract 0.0.0'
             changed = directory / 'environment.json'
             changed.write_text(json.dumps(manifest))
@@ -53,7 +54,7 @@ class EnvironmentTests(unittest.TestCase):
             marker.write_bytes(b'confirmed text\n')
             for category, name in [('models', 'ces'), ('fonts', 'segmentation')]:
                 with self.subTest(category=category):
-                    manifest = json.loads(MANIFEST.read_text())
+                    manifest = environment_manifest(ROOT)
                     corrupted = directory / 'changed-resource'
                     corrupted.write_bytes(b'changed bytes')
                     manifest[category][name]['path'] = str(corrupted)
@@ -78,8 +79,9 @@ class EnvironmentTests(unittest.TestCase):
             result = self.cli('doctor', env=env)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads(result.stdout)
-            self.assertEqual(report['build_id'], json.loads(MANIFEST.read_text())['build_id'])
-            self.assertEqual(report['checks']['tesseract']['path'], '/usr/bin/tesseract')
+            manifest = environment_manifest(ROOT)
+            self.assertEqual(report['build_id'], manifest['build_id'])
+            self.assertEqual(report['checks']['tesseract']['path'], manifest['programs']['tesseract']['path'])
 
     def test_pythonpath_cannot_shadow_verified_python_library(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -95,18 +97,23 @@ class EnvironmentTests(unittest.TestCase):
         from PIL import Image, ImageDraw, ImageFont
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
-            manifest = json.loads(MANIFEST.read_text())
+            manifest = environment_manifest(ROOT)
+            source_root = Path(manifest['root'])
             root = directory / 'resources'
             root.mkdir()
-            for category in ['programs', 'models', 'fonts', 'configs']:
+            for category in ['programs', 'models', 'fonts', 'configs', 'libraries']:
                 for name, record in manifest[category].items():
-                    source = Path('/') / record['path']
-                    relative = (Path('models/configs') if category == 'configs' else Path(category)) / source.name
+                    source = Path(record['path'])
+                    if category == 'libraries':
+                        relative = source.relative_to(source_root)
+                    else:
+                        relative = (Path('models/configs') if category == 'configs' else Path(category)) / source.name
                     target = root / relative
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, target)
                     record['path'] = str(relative)
-            manifest['python']['path'] = '/' + manifest['python']['path']
+            manifest['library_dirs'] = [str(Path(value).relative_to(source_root))
+                                        for value in manifest['library_dirs']]
             manifest['root'] = 'resources'
             manifest['tessdata'] = 'models'
             relocated = directory / 'environment.json'
