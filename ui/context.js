@@ -38,7 +38,7 @@ function renderContext(status) {
   state.textContent = names[status.state] || status.state;
   if (status.error) state.textContent += ` · ${status.error.message} (${status.error.code})`;
   document.querySelector('#context-readiness').textContent = status.autonomous_ocr_ready ?
-    'Model, obrazový vstup a context-mode jsou ověřeny pro tento průchod. Přepis vydání ani jeho přijetí tím nejsou dokončeny.' :
+    'Model, obrazový vstup a context-mode jsou ověřeny pro tento průchod. Čtení, export, validaci a přijetí uvádějí vlastní stavy průchodu.' :
     status.context_verified ? 'Context-mode ověřen; pro připravenost celé kombinace je nutné také platné obrazové ověření tohoto průchodu.' :
     'Autonomní OCR není připraveno. Samotná dostupnost modelu nebo registrace MCP nestačí.';
   document.querySelector('#context-evidence').textContent = JSON.stringify({
@@ -51,6 +51,7 @@ function renderContext(status) {
   }, null, 2);
   document.querySelector('#start-context-diagnostic').disabled = codexRunning() ||
     ['starting', 'running'].includes(document.querySelector('#preparation-state')?.dataset.state) || !document.querySelector('#run-profile');
+  if (typeof updateReadingAvailability === 'function') updateReadingAvailability(status);
 }
 
 setInterval(async () => {

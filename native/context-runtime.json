@@ -3,8 +3,12 @@
   "version": "1.0.169",
   "development_source": "/home/gordon/.codex/plugins/cache/context-mode/context-mode/1.0.169",
   "runtime_directory": "runtime/context-mode",
-  "source_tree_sha256": "6f5b48dc93999c60bb9a29a116040cf8b5f05ba9e9aa90654f44e0b4a8a0f5bf",
-  "prepared_tree_sha256": "05a1b6ff04575c96d9ce1ed5b12622abd94c22c220fd9dd7fe5ea2106419fb88",
+  "source_tree_sha256": "6207b687a1606af3fe46f63ce3e6a3ee0ae9315c1612a37b20633688026bf14b",
+  "prepared_tree_sha256": "e6304ac4d20283362feda2d5287b8e008af48c9b7e3fb949414aa1f89fdd2c17",
+  "source_inventory": "native/context-source-inventory.json",
+  "source_inventory_sha256": "fd39b7012f1b1cdd5bed2f72bb9e720674dba25fc185453b43416d37b2d56772",
+  "upstream_repository": "https://github.com/mksglu/context-mode",
+  "upstream_commit": "03e831573f8964e9330008d1b456d40838d86df8",
   "file_count": 4578,
   "adaptations": {
     "hooks/ensure-deps.mjs": "native/context-no-install.mjs"

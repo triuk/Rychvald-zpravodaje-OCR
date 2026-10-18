@@ -369,6 +369,14 @@ def build_parser():
     command.add_argument('project_id')
     command.add_argument('--patch', required=True, type=Path)
     command.add_argument('--id', dest='line_id')
+    command = commands.add_parser('reading-input')
+    command.add_argument('project_id')
+    command = commands.add_parser('publish-reading')
+    command.add_argument('project_id')
+    command.add_argument('--proposal', required=True, type=Path)
+    command = commands.add_parser('check-reading')
+    command.add_argument('project_id')
+    command.add_argument('--proposal', required=True, type=Path)
     command = commands.add_parser('export')
     command.add_argument('project_id')
     command.add_argument('--environment', type=Path)
@@ -420,6 +428,13 @@ def main(argv=None):
             record = export_project(registry, args.project_id, environment=args.environment,
                                     reviewer_root=args.reviewer_root)
             result = response(args.operation, **record)
+        elif args.operation in ('publish-reading', 'check-reading'):
+            from ocr_project_reading import publish_reading
+            result = response(args.operation, **publish_reading(registry, args.project_id, args.proposal,
+                              check_only=args.operation == 'check-reading'))
+        elif args.operation == 'reading-input':
+            from ocr_project_reading import reading_input
+            result = response(args.operation, **reading_input(registry, args.project_id))
         elif args.operation == 'patch':
             from ocr_project_review import patch_project
             record = patch_project(registry, args.project_id, args.patch, line_id=args.line_id)

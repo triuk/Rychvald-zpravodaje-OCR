@@ -2,6 +2,7 @@
 
 const labels = {
   registered: 'Zaregistrován', prepared: 'Místní příprava dokončena',
+  visually_read: 'Vizuální čtení dokončeno',
   preparing: 'Místní příprava', preparation_failed: 'Příprava selhala',
   preparation_interrupted: 'Příprava přerušena', exporting: 'Export',
   export_interrupted: 'Export přerušen', ready: 'Připraven k revizi',
@@ -14,6 +15,8 @@ const artifactLabels = {
   source: 'Zdrojový sken', workspace: 'Pracovní adresář', project: 'Záznam průchodu',
   output_pdf: 'OCR PDF', output_txt: 'Text článků', history: 'Historie průchodu',
   profile_snapshot: 'Použitý profil', run_manifest: 'Identita průchodu',
+  reading_input: 'Podklady vizuálního čtení', reading_draft: 'Nepotvrzené OCR kandidáty',
+  reading_publication: 'Doklad zveřejnění úplného přepisu',
 };
 let selectedRun = null;
 let runSelection = 0;
@@ -175,6 +178,7 @@ function renderRun(data) {
   detail.append(preparation);
   renderCodexPanel(detail, data);
   if (typeof renderContextPanel === 'function') renderContextPanel(detail, data);
+  if (typeof renderReadingPanel === 'function') renderReadingPanel(detail, data);
   window.renderMetricsPanel(detail, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
@@ -264,7 +268,8 @@ function renderPreparation(status) {
 
 function codexRunning() {
   return ['starting', 'running', 'awaiting_login'].includes(document.querySelector('#codex-state')?.dataset.state) ||
-    ['starting', 'running'].includes(document.querySelector('#context-state')?.dataset.state);
+    ['starting', 'running'].includes(document.querySelector('#context-state')?.dataset.state) ||
+    ['starting', 'running'].includes(document.querySelector('#reading-state')?.dataset.state);
 }
 
 function renderCodexPanel(detail, data) {
@@ -394,7 +399,7 @@ async function pollPreparation() {
     renderPreparation(status);
     if (['completed', 'failed', 'interrupted', 'invalidated'].includes(status.state) && status.attempt_id !== displayedPreparation) {
       displayedPreparation = status.attempt_id;
-      await selectRun(runId);
+      await refreshSelectedRun(runId);
       renderPreparation(status);
     }
   } catch (error) {
@@ -410,6 +415,13 @@ async function refresh() {
   const data = await request('projects');
   renderEditions(data);
   if (selectedRun) await selectRun(selectedRun);
+}
+
+async function refreshSelectedRun(runId) {
+  const data = await request('projects');
+  if (selectedRun !== runId) return;
+  renderEditions(data);
+  await selectRun(runId);
 }
 
 document.querySelector('#registry-form').addEventListener('submit', event => {

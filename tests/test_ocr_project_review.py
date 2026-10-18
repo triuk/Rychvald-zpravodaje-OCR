@@ -70,6 +70,54 @@ class ProjectReviewTests(unittest.TestCase):
         self.assertEqual((self.work / 'review.json').read_bytes(), before)
         self.assertFalse((self.work / 'checks/visual-review.json').exists())
 
+    def test_first_reading_candidate_bootstrap_never_publishes_confirmed_transcript(self):
+        (self.work / 'review.json').unlink()
+        manifest = json.loads((self.work / 'input-manifest.json').read_text())
+        for page in manifest['pages']:
+            raster = self.work / 'raster' / f"page-{page['page']}.png"
+            raster.parent.mkdir(exist_ok=True)
+            raster.write_bytes(b'synthetic source pixels ' + str(page['page']).encode())
+            page['raster_sha256'] = hashlib.sha256(raster.read_bytes()).hexdigest()
+        self.put('input-manifest.json', manifest)
+        result = self.command('reading-input', self.identifier)
+        self.assertFalse((self.work / 'review.json').exists())
+        draft = json.loads((self.root / result['artifacts']['reading_draft']).read_text())
+        self.assertEqual([line['text_status'] for line in draft['lines']], ['candidate', 'candidate'])
+        self.assertEqual(result['counts']['pages'], 2)
+
+    def test_whole_document_reading_publishes_atomically_and_rejects_partial_or_stale_proposals(self):
+        manifest = json.loads((self.work / 'input-manifest.json').read_text())
+        pages = []
+        for page in manifest['pages']:
+            raster = self.work / 'raster' / f"page-{page['page']}.png"
+            raster.parent.mkdir(exist_ok=True)
+            raster.write_bytes(b'synthetic source ' + str(page['page']).encode())
+            page['raster_sha256'] = hashlib.sha256(raster.read_bytes()).hexdigest()
+            pages.append({'page': page['page'], 'sha256': page['raster_sha256'],
+                          'line_ids': ['line-a' if page['page'] == 1 else 'line-b']})
+        self.put('input-manifest.json', manifest)
+        self.command('reading-input', self.identifier)
+        original = (self.work / 'review.json').read_bytes()
+        proposal = {'review': self.review, 'coverage': {'pages': pages, 'source_turn_id': 'synthetic-turn',
+                     'source_answer_sha256': 'a' * 64},
+                    'expected_review_sha256': hashlib.sha256(original).hexdigest()}
+        proposal['review'] = copy.deepcopy(self.review)
+        proposal['review']['lines'][0]['text'] = 'ABČ'
+        checked = self.command('check-reading', self.identifier, '--proposal', self.put('complete.json', proposal))
+        self.assertEqual(checked['counts']['lines'], 2)
+        self.assertEqual((self.work / 'review.json').read_bytes(), original)
+        partial = {**proposal, 'coverage': {**proposal['coverage'], 'pages': pages[:1]}}
+        rejected = self.command('publish-reading', self.identifier, '--proposal', self.put('partial.json', partial), expected=1)
+        self.assertEqual(rejected['error']['code'], 'reading_proposal_invalid')
+        self.assertEqual((self.work / 'review.json').read_bytes(), original)
+        success = self.command('publish-reading', self.identifier, '--proposal', self.put('complete.json', proposal))
+        self.assertEqual(success['project']['phase'], 'visually_read')
+        self.assertEqual(json.loads((self.work / 'review.json').read_text())['lines'][0]['text'], 'ABČ')
+        after = (self.work / 'review.json').read_bytes()
+        self.assertEqual(self.command('publish-reading', self.identifier, '--proposal', self.work / 'complete.json',
+                                      expected=1)['error']['code'], 'reading_review_changed')
+        self.assertEqual((self.work / 'review.json').read_bytes(), after)
+
     def test_valid_batch_archives_previous_review_and_marks_only_derived_artifacts_stale(self):
         previous = (self.work / 'review.json').read_bytes()
         previous_hash = hashlib.sha256(previous).hexdigest()

@@ -49,8 +49,12 @@ def source_files(source):
 
 
 def prepare(source, destination):
+    from reconstruct_context_runtime import inventory
     lock = json.loads((ROOT / 'native/context-runtime.json').read_text())
     files = source_files(source)
+    expected = {entry['path']: entry['sha256'] for entry in inventory(lock)}
+    if set(files) != set(expected) or any(hashlib.sha256(path.read_bytes()).hexdigest() != expected[name] for name, path in files.items()):
+        raise ValueError('Context-mode source differs from its per-file provenance inventory.')
     if digest(files) != lock['source_tree_sha256']:
         raise ValueError('Installed context-mode source closure differs from the pinned version.')
     if destination.exists():

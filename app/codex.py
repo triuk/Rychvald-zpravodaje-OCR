@@ -43,7 +43,8 @@ def process_identity(pid):
 def default_runtime():
     lock = json.loads((ROOT / 'native/codex-runtime.json').read_text())
     bundled = ROOT / lock['binary']
-    executable = bundled if bundled.exists() else Path(lock['development_binary'])
+    executable = Path(os.environ['RYCHVALD_CODEX_RUNTIME']) if os.environ.get('RYCHVALD_CODEX_RUNTIME') else (
+        bundled if bundled.exists() else Path(lock['development_binary']))
     return {'kind': 'native', 'version': lock['version'], 'command': [str(executable), 'app-server', '--stdio',
             '--disable', 'plugins', '--disable', 'hooks', '--disable', 'shell_tool',
             '--disable', 'skill_mcp_dependency_install', '-c', 'mcp_servers={}'],
@@ -158,7 +159,7 @@ class CodexJobs:
         with self._lock:
             return self._active is not None
 
-    def start(self, root, run, image_path=None, operation='vision_diagnostic'):
+    def start(self, root, run, image_path=None, operation='vision_diagnostic', metadata=None):
         with self._lock:
             if self._active is not None:
                 raise JobError('operation_active', 'A Codex diagnostic is already active.')
@@ -205,7 +206,8 @@ class CodexJobs:
             atomic_json(directory / 'request.json', {'operation': operation, 'profile_sha256': manifest['profile_sha256'],
                                                      'prompt': manifest['prompt'], 'image': image_record})
             job = {'manifest': manifest, 'directory': directory, 'workspace': workspace,
-                   'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None}
+                   'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
+                   'metadata': copy.deepcopy(metadata)}
             self._active = job
             job['thread'] = threading.Thread(target=self._run, args=(job,), name=f'Codex-{attempt_id}', daemon=True)
             result = copy.deepcopy(manifest)
@@ -415,6 +417,13 @@ class CodexJobs:
         with self._lock:
             if self._active is not None and self._active['manifest']['attempt_id'] == value['attempt_id']:
                 value['login_url'] = self._active.get('login_url')
+                if value['state'] not in ('starting', 'running', 'awaiting_login'):
+                    # A terminal event can precede worker cleanup. Public
+                    # completion waits for ownership release and final write.
+                    value['state'] = 'running'
+                    value['combination_verified'] = False
+                    if 'reading_complete' in value:
+                        value['reading_complete'] = False
         return value
 
     def close(self):
