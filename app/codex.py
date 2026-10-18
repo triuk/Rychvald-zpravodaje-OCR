@@ -424,6 +424,8 @@ class CodexJobs:
                     value['combination_verified'] = False
                     if 'reading_complete' in value:
                         value['reading_complete'] = False
+                    if 'geometry_complete' in value:
+                        value['geometry_complete'] = False
         return value
 
     def close(self):

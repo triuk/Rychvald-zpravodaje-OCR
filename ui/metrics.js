@@ -10,7 +10,7 @@
   const seconds = value => value === null || value === undefined ? 'Neznámé' : `${value.toLocaleString('cs-CZ', {maximumFractionDigits: 3})} s`;
   const money = value => value === null || value === undefined ? 'Neznámá cena' : `${value.toFixed(6)} USD`;
   const states = {completed: 'Dokončeno', failed: 'Selhalo', interrupted: 'Přerušeno', running: 'Probíhá', cached: 'Místní cache', starting: 'Spouštění'};
-  const operations = {vision_diagnostic: 'Obrazové ověření', context_diagnostic: 'Ověření context-mode', visual_reading: 'Úplné vizuální čtení', prepare: 'Místní příprava'};
+  const operations = {vision_diagnostic: 'Obrazové ověření', context_diagnostic: 'Ověření context-mode', visual_reading: 'Úplné vizuální čtení', geometry: 'Pořadí, geometrie a zdrojové vzorky', prepare: 'Místní příprava'};
   const reasons = {
     'Some attempts have unknown usage; run totals are incomplete.': 'Některé pokusy nemají známou spotřebu; součet průchodu je neúplný.',
     'No AI usage observation was reported.': 'Proces neposkytl údaje o spotřebě AI.',

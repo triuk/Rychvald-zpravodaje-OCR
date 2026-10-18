@@ -368,6 +368,7 @@ def build_parser():
     command = commands.add_parser('patch')
     command.add_argument('project_id')
     command.add_argument('--patch', required=True, type=Path)
+    command.add_argument('--expected-review-sha256')
     command.add_argument('--id', dest='line_id')
     command = commands.add_parser('reading-input')
     command.add_argument('project_id')
@@ -381,6 +382,19 @@ def build_parser():
     command.add_argument('project_id')
     command.add_argument('--environment', type=Path)
     command.add_argument('--reviewer-root', type=Path)
+    command = commands.add_parser('prepare-geometry')
+    command.add_argument('project_id')
+    command.add_argument('--samples', required=True, type=Path)
+    command.add_argument('--provenance', type=Path)
+    command.add_argument('--environment', type=Path)
+    command = commands.add_parser('verify-geometry')
+    command.add_argument('project_id')
+    command.add_argument('--prepared', action='store_true')
+    command = commands.add_parser('verify-geometry-samples')
+    command.add_argument('project_id')
+    command = commands.add_parser('publish-geometry')
+    command.add_argument('project_id')
+    command.add_argument('--checkpoint', required=True, type=Path)
     command = commands.add_parser('validate')
     command.add_argument('project_id')
     command.add_argument('--environment', type=Path)
@@ -423,6 +437,24 @@ def main(argv=None):
             from ocr_project_export import validate_project
             record, exit_code = validate_project(registry, args.project_id, environment=args.environment)
             result = response(args.operation, **record)
+        elif args.operation == 'prepare-geometry':
+            from ocr_project_geometry import prepare_geometry
+            record = prepare_geometry(registry, args.project_id, args.samples,
+                environment=args.environment, provenance=args.provenance)
+            result = response(args.operation, **record)
+        elif args.operation == 'verify-geometry-samples':
+            from ocr_project_geometry import verify_committed_samples
+            record = registry.get(args.project_id)
+            verify_committed_samples(registry, record)
+            result = response(args.operation, **record)
+        elif args.operation == 'verify-geometry':
+            from ocr_project_geometry import verify_geometry
+            record = registry.get(args.project_id)
+            verify_geometry(registry, record, examined=not args.prepared)
+            result = response(args.operation, **record)
+        elif args.operation == 'publish-geometry':
+            from ocr_project_geometry import publish_geometry
+            result = response(args.operation, **publish_geometry(registry, args.project_id, args.checkpoint))
         elif args.operation == 'export':
             from ocr_project_export import export_project
             record = export_project(registry, args.project_id, environment=args.environment,
@@ -437,7 +469,8 @@ def main(argv=None):
             result = response(args.operation, **reading_input(registry, args.project_id))
         elif args.operation == 'patch':
             from ocr_project_review import patch_project
-            record = patch_project(registry, args.project_id, args.patch, line_id=args.line_id)
+            record = patch_project(registry, args.project_id, args.patch, line_id=args.line_id,
+                                   expected_review_sha256=args.expected_review_sha256)
             result = response(args.operation, **record)
         elif args.operation == 'query':
             from ocr_project_review import query_project

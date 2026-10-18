@@ -1,0 +1,141 @@
+"""A single image-only native Codex turn with original protocol provenance."""
+import copy
+import json
+import os
+import threading
+import time
+
+from .codex import RpcProcess, MODEL, EFFORT, now, process_identity, scrub
+from .context_runtime import verify_resources, configuration, command, verify_hooks
+from .jobs import JobError, atomic_json, sha
+
+
+def examine(manager, job, stage, prompt, schema, work, images):
+    """No automatic retries; every accepted turn remains durable even on local failure."""
+    value = job['manifest']
+    directory = job['directory'] / stage
+    directory.mkdir()
+    workspace = directory / 'workspace'
+    storage = directory / 'context'
+    workspace.mkdir()
+    storage.mkdir()
+    protocol = directory / 'protocol.jsonl'
+    started = time.monotonic()
+    lock = threading.Lock()
+    value.setdefault('turns', [])
+    value.setdefault('connections', [])
+    items, terminals, reroutes = [], {}, []
+    rpc = None
+    connection_id = None
+
+    def trace(direction, message):
+        row = {'timestamp': now(), 'elapsed_seconds': time.monotonic()-started,
+            'direction': direction, 'stage': stage, 'connection_id': connection_id, 'message': scrub(message)}
+        with lock:
+            for target in (protocol, job['directory']/'protocol.jsonl'):
+                with target.open('a', encoding='utf-8') as stream:
+                    stream.write(json.dumps(row, ensure_ascii=False)+'\n')
+                    stream.flush()
+                    os.fsync(stream.fileno())
+
+    def notify(message):
+        if 'id' in message:
+            rpc.send({'id': message['id'], 'error': {'code': -32601, 'message': 'Image-only examination has no dynamic tools or approvals.'}})
+            raise JobError('visual_tool_forbidden', 'Only attached images and context statistics may be used.')
+        params = message.get('params', {})
+        foreign = params.get('threadId') or params.get('thread', {}).get('id')
+        if foreign is not None and value.get('thread_id') is not None and foreign != value['thread_id']:
+            raise JobError('codex_identity_mismatch', 'Visual event belongs to another native thread.')
+        method = message.get('method')
+        if method == 'item/completed':
+            items.append(copy.deepcopy(params))
+            item = params['item']
+            if item['type'] in ('commandExecution', 'fileChange') or item['type'] == 'mcpToolCall' and (
+                item.get('server') != 'context_mode' or item.get('tool') != 'ctx_stats'):
+                raise JobError('visual_tool_forbidden', 'Visual source examination cannot inspect candidate/output files.')
+        elif method == 'turn/completed':
+            terminals[params['turn']['id']] = params['turn']
+        elif method == 'thread/tokenUsage/updated':
+            value['usage_events'].append(copy.deepcopy(params))
+        elif method == 'model/rerouted':
+            reroutes.append(params)
+
+    def connect(settings, trust=None):
+        nonlocal rpc, connection_id
+        connection_id = str(len(value['connections']))
+        stderr = (directory / 'stderr.log').open('a')
+        rpc = RpcProcess(command(manager.runtime, settings, trust), workspace, stderr, trace,
+                         lambda: job['cancel'], env=settings['process_environment'])
+        job['rpc'] = rpc
+        value['connections'].append({'stage': stage, 'connection_id': str(len(value['connections'])),
+            'pid': rpc.process.pid, 'process_start_ticks': process_identity(rpc.process.pid)})
+        rpc.request('initialize', {'clientInfo': {'name': 'rychvald-geometry', 'version': '1.0'},
+            'capabilities': {'experimentalApi': True}}, notify)
+        rpc.send({'method': 'initialized'})
+        return stderr
+
+    def disconnect(stderr):
+        nonlocal rpc
+        if rpc is not None:
+            rpc.close()
+            job['rpc'] = None
+            rpc = None
+        stderr.close()
+
+    verify_resources(manager.context_runtime, manager.runtime)
+    instructions = ('Examine only the attached original/diagnostic images. Do not run shell commands, read files, '
+        'use candidate/output text, install software or change the project. Call context_mode ctx_stats once. '
+        'Return exactly the requested JSON with honest uncertainty, no invented visual verification.\n')
+    (workspace / 'AGENTS.md').write_text(instructions)
+    settings = configuration(manager.context_runtime, manager.runtime, workspace, storage)
+    (storage / 'config/AGENTS.md').write_text(instructions)
+    stderr = connect(settings)
+    try:
+        trust = verify_hooks(rpc.request('hooks/list', {'cwds': [str(workspace)]}, notify), settings)
+    finally:
+        disconnect(stderr)
+    stderr = connect(settings, trust)
+    try:
+        verify_hooks(rpc.request('hooks/list', {'cwds': [str(workspace)]}, notify), settings, trusted=True, expected=trust)
+        account = rpc.request('account/read', {'refreshToken': False}, notify)
+        if account.get('account', {}).get('type') != 'chatgpt':
+            raise JobError('chatgpt_account_required', 'A managed ChatGPT account is required.')
+        thread = rpc.request('thread/start', {'model': MODEL, 'cwd': str(workspace),
+            'config': {'model_reasoning_effort': EFFORT}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
+            'runtimeWorkspaceRoots': [str(workspace), str(storage)], 'developerInstructions': instructions}, notify)
+        value['thread_id'] = thread['thread']['id']
+        value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort')}
+        if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
+            raise JobError('model_configuration_mismatch', 'Exact model/high required for geometry examination.')
+        inputs = [{'type': 'text', 'text': prompt}] + [
+            {'type': 'localImage', 'path': str((work / image['path']).resolve())} for image in images]
+        params = {'threadId': value['thread_id'], 'model': MODEL, 'effort': EFFORT, 'input': inputs, 'outputSchema': schema}
+        value.setdefault('application_requests', []).append({'stage': stage, 'params': params})
+        atomic_json(job['directory']/'request.json', {'requests': value['application_requests']})
+        atomic_json(directory / 'request.json', params)
+        result = rpc.request('turn/start', params, notify)
+        identifier = result['turn']['id']
+        value['turn_id'] = identifier
+        record = {'stage': stage, 'thread_id': value['thread_id'], 'turn_id': identifier, 'state': 'running',
+            'prompt': prompt, 'protocol': str(protocol.relative_to(job['root']))}
+        value['turns'].append(record)
+        manager._event(job, 'geometry_turn_submitted', stage=stage, thread_id=value['thread_id'], turn_id=identifier)
+        deadline = time.monotonic()+600
+        while identifier not in terminals:
+            notify(rpc.receive(deadline))
+        record['state'] = terminals[identifier]['status']
+        if record['state'] != 'completed':
+            raise JobError('codex_turn_'+record['state'], str(terminals[identifier].get('error')))
+        if reroutes:
+            raise JobError('model_rerouted', 'Visual examination was rerouted.')
+    finally:
+        disconnect(stderr)
+    # Verify the original trace after closing the provider connection, before publication.
+    proof = {'protocol': {'path': str(protocol), 'sha256': sha(protocol)},
+        'thread_id': value['thread_id'], 'turn_id': identifier}
+    from tools.ocr_visual_evidence import verify_visual_turn
+    answer = verify_visual_turn(proof, work, images)
+    path = directory / 'proposal.json'
+    atomic_json(path, answer)
+    record.update(answer=json.dumps(answer, ensure_ascii=False), proposal=str(path.relative_to(job['root'])))
+    return answer, proof, path

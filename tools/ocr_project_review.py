@@ -196,13 +196,15 @@ EXPORT_ARTIFACTS = (
     'checks/findings.json', 'checks/manual-copy/status.json', 'checks/report-todo.json',
     'checks/run-validation.json', 'checks/run-summary.md',
 )
-DERIVED_ARTIFACTS = SEGMENTATION_ARTIFACTS + EXPORT_ARTIFACTS
+DERIVED_ARTIFACTS = SEGMENTATION_ARTIFACTS + EXPORT_ARTIFACTS + ('geometry-preparation.json', 'geometry-checkpoint.json')
 
 
-def patch_project(registry, project_id, patch, *, line_id=None):
+def patch_project(registry, project_id, patch, *, line_id=None, expected_review_sha256=None):
     with registry.project_lock(project_id) as record:
         work = registry.root / record['artifacts']['workspace']
         path = work / 'review.json'
+        if expected_review_sha256 is not None and source_hash(path) != expected_review_sha256:
+            raise ProjectError('review_changed', 'Review changed before the validated patch; nothing changed.')
         original = read_artifact(path)
         try:
             edits = load(patch)
@@ -217,6 +219,8 @@ def patch_project(registry, project_id, patch, *, line_id=None):
         except (ValueError, KeyError, TypeError, AttributeError, OSError) as error:
             raise ProjectError('patch_invalid', 'Patch was rejected by the complete review validator; no files changed.') from error
         previous_hash = source_hash(path)
+        chain_path = work / 'review-patch-chain.json'
+        chain = load(chain_path) if chain_path.exists() else []
         if changed == original:
             result = copy.deepcopy(record)
             result['counts'].update(changed_lines=0, invalidated_artifacts=0)
@@ -245,6 +249,11 @@ def patch_project(registry, project_id, patch, *, line_id=None):
         with contextlib.redirect_stdout(io.StringIO()):
             save_review(SimpleNamespace(work=work, review=path), original, changed)
         current_hash = source_hash(path)
+        saved_patch = work / 'review-history' / (current_hash + '-patch.json')
+        atomic_json(saved_patch, edits)
+        chain.append({'previous': previous_hash, 'current': current_hash,
+                      'patch': str(saved_patch.relative_to(work)), 'patch_sha256': source_hash(saved_patch), 'line_id': line_id})
+        atomic_json(chain_path, chain)
         invalidation = {'schema_version': 1, 'status': 'stale_for_current_review',
                         'previous_review_sha256': previous_hash, 'review_sha256': current_hash,
                         'affected_lines': affected, 'affected_pages': pages, 'unit_order_changed': reordered,

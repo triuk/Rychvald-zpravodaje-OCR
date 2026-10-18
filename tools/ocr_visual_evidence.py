@@ -1,0 +1,51 @@
+"""Re-derive image examination from original completed native app-server frames."""
+import json
+from pathlib import Path
+import hashlib
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def verify_visual_turn(proof, work, images):
+    protocol = Path(proof['protocol']['path'])
+    if sha(protocol) != proof['protocol']['sha256']:
+        raise ValueError('Original visual protocol changed')
+    messages = [json.loads(line)['message'] for line in protocol.read_text().splitlines()]
+    identifier, thread = proof['turn_id'], proof['thread_id']
+    requests = [m['params'] for m in messages if m.get('method') == 'turn/start' and
+        m['params']['threadId'] == thread]
+    if len(requests) != 1 or any(m.get('method') == 'model/rerouted' for m in messages):
+        raise ValueError('One non-rerouted original visual turn is required')
+    request = requests[0]
+    if request['model'] != 'gpt-6.1-sol' or request['effort'] != 'high':
+        raise ValueError('Exact gpt-6.1-sol/high visual turn required')
+    result = [m['result'] for m in messages if isinstance(m.get('result'), dict) and
+        isinstance(m['result'].get('thread'), dict) and m['result']['thread']['id'] == thread]
+    if not result or result[-1].get('model') != request['model'] or result[-1].get('reasoningEffort') != request['effort']:
+        raise ValueError('Native thread did not confirm the requested visual model')
+    requested_images = [i['path'] for i in request['input'] if i['type'] == 'localImage']
+    expected = [str((Path(work) / i['path']).resolve()) for i in images]
+    if requested_images != expected or any(sha(path) != image['sha256'] for path, image in zip(expected, images)):
+        raise ValueError('Actual attached original/diagnostic images differ')
+    terminals = [m['params']['turn'] for m in messages if m.get('method') == 'turn/completed' and
+        m['params']['turn']['id'] == identifier and m['params'].get('threadId') == thread]
+    if len(terminals) != 1 or terminals[0]['status'] != 'completed':
+        raise ValueError('Original visual assistant turn did not complete')
+    items = [m['params']['item'] for m in messages if m.get('method') == 'item/completed' and
+        m['params'].get('threadId') == thread and m['params'].get('turnId') == identifier]
+    answers = [i['text'] for i in items if i['type'] == 'agentMessage' and i.get('phase') == 'final_answer']
+    if not answers:
+        raise ValueError('Missing original final visual assistant JSON')
+    if any(i['type'] in ('commandExecution', 'fileChange') or i['type'] == 'mcpToolCall' and
+           (i.get('server') != 'context_mode' or i.get('tool') != 'ctx_stats') for i in items):
+        raise ValueError('Visual observations must use attached images, not output extraction or files')
+    if not any(i['type'] == 'mcpToolCall' and i.get('tool') == 'ctx_stats' and
+               i.get('status') == 'completed' and not i.get('error') for i in items):
+        raise ValueError('Actual successful run-local context statistics required')
+    hooks = {m['params']['run']['eventName'] for m in messages if m.get('method') == 'hook/completed' and
+        m['params']['run'].get('status') == 'completed' and m['params']['run'].get('source') == 'sessionFlags'}
+    if not {'sessionStart', 'userPromptSubmit', 'postToolUse', 'stop'} <= hooks:
+        raise ValueError('Actual applicable trusted context hooks are missing')
+    return json.loads(answers[-1])
