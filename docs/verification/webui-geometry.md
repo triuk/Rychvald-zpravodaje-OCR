@@ -20,3 +20,21 @@ All source/proof paths below are under canonical project `.scratch/ticket-16-pro
 - The GUI/manager correction preserves seed choices and independently reuses valid frozen originals; explicit continuation identifies the previous attempt and submits only missing geometry examination. No complete first-reading inference is repeated.
 
 Actual completion, remaining risks and final checks are recorded below only after their native/original-turn validation. No PDF export or user acceptance is claimed by #16.
+
+## Actual synthetic geometry and saved-proposal recovery
+
+Attempt `c3d0b09ff611472086a47259e962d6d3`, original completed geometry turn `01a150b3-c204-7da0-b618-8517e9a310be`, actually received all18source/overlay/sample images. It returned13individual line and13sample observations plus seven explicit limitations. All remained `examined_approximate`; exact glyph identity, antialiased boundary containment, whitespace, semantic tags, PDF checks and user acceptance were not claimed. Original13samples and logical order remained unchanged.
+
+The first local publication rejected an equivalent absolute-vs-relative image path spelling. `synthetic-path-alias-audit.json` proves all18workspace-confined resolved identities, hashes and order match. The original final JSON, preparation packet, request and protocol were not modified. The exact old adapter blob (`27c12d6d…727294`) was archived before correction; the sole compatibility pair now binds it to validator `046c6af6…f12261`. Positive absolute-alias, negative escape and public changed-current-adapter tests were red before the fixes, then green. A controlled host filesystem publication fault verifies public recovery preserves original protocol/attempt bytes without submitting another provider turn.
+
+`native-synthetic-recovered/native-gui.png` and `summary.json` record successful native GUI revalidation of that same original completed proposal, no new AI inference,13lines/13samples,0explicit geometric findings while approximations remain. Screenshot mean0.4070; original and overlay sheet and GUI were visually inspected. The public result is complete for artifact validation and actual examination, with source uncertainties/remaining risks and no export/user acceptance claim. Original failed provider/application attempts remain in history and consumption.
+
+## Real difficult crop: locally prepared, not AI-examined in #16
+
+A new external AI request for the historical crop was rejected by automatic review before any process/turn. The exact denial is preserved in `difficult-automatic-approval-denial.json`; explicit user consent is pending at the root workflow. No workaround or hard-case retry was made. This is not a hard geometry pass.
+
+The three `difficult-original-source-samples.json` entries copy exact clear text/value and source-coordinate rectangles from the ORIGINAL #15candidate-free source-only assistant JSON: line0heading, line2intro and original risk0date. Unknown word and clipped bottom row were excluded. `difficult-original-source-commitment.json` preserves original turn `01a14f8b-e167-7232-962b-174a182eb3cf`, raw answer/protocol hashes, exact JSON selectors and canonical sample commitment `7917a487e8233ec2c77e1ca49cdf04d779ea1210c7ae267ad5afbc0256b972f7`, frozen before export. This is source-derived model evidence, not a claim of an infallible golden transcript.
+
+Local native preparation completed `prepared_unexamined`, retaining the one unresolved source location and clipping risks. Zero automatic cell/anomaly findings is not proof of glyph geometry. Six exact current original/diagnostic images and scope delta are disclosed in `source-disclosure-with-source-reuse.json`, SHA256 `605826c08dcc881814866c61f4d2475ee3ed31f1f8c9bc8dc3d5d8913b2d3310`. The remaining authorized path after consent is ONLY one actual diagnostic examination; no new source-sample or whole-first-reading turn is needed. The future examiner must assess the heading's right blurred edge and source sample boundaries explicitly; expectations must never be adapted to output.
+
+Ticket16's public small-document scenario is established by the completed actual synthetic case. The real difficult geometry/PDF scenario remains an explicit #17/final-spec handoff, pending source-transfer consent and genuine examination.

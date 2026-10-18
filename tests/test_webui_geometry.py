@@ -105,6 +105,7 @@ class GeometryTests(unittest.TestCase):
         self.assertEqual(result['state'], 'completed', result)
         self.assertTrue(result['geometry_complete'])
         self.assertEqual(result['counts']['samples'], 2)
+        self.assertIn('proposal', [a['name'] for a in result['decision_artifacts']])
         self.assertEqual(json.loads((self.work/'samples.json').read_text())[0]['expected'], 'ABC')
         self.assertTrue(self.app.dispatch('reading_status', {'run_id': self.identifier})['data']['reading_complete'])
         metrics = self.app.dispatch('run_metrics', {'run_id': self.identifier})

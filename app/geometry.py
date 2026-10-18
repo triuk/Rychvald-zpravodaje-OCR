@@ -216,6 +216,13 @@ class GeometryJobs(ContextJobs):
         if value.get('geometry_complete') and value['state'] == 'completed':
             try:
                 self.process.request(root, 'verify-geometry', run_id)
+                checkpoint = json.loads((work/'geometry-checkpoint.json').read_text())
+                value['decision_artifacts'] = []
+                for name in ('proposal', 'sample_origin', 'recovery_descriptor'):
+                    record = checkpoint['evidence'].get(name)
+                    if record and Path(record['path']).resolve().is_relative_to(work.resolve()):
+                        value['decision_artifacts'].append({'name': name,
+                            'path': str(Path(record['path']).resolve().relative_to(work.resolve())), 'sha256': record['sha256']})
             except Exception as error:
                 value.update(state='invalidated', geometry_complete=False,
                     error={'code': getattr(error, 'code', 'geometry_invalid'), 'message': str(error)})

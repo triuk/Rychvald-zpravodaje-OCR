@@ -71,7 +71,10 @@ function renderGeometry(status) {
   const output = document.querySelector('#geometry-output'); output.replaceChildren();
   if (status.prepared) {
     const images = element('details'); images.append(element('summary', 'Otevřít originály, překryvy a zdrojové vzorky'));
-    for (const image of status.prepared.images) {
+    const artifacts = [...status.prepared.images, {path:'geometry-preparation.json'},
+      {path:'geometry-source-samples.json'}, {path:'geometry-sample-origin.json'}, ...(status.decision_artifacts || [])];
+    if (status.geometry_complete) artifacts.push({path:'geometry-checkpoint.json'});
+    for (const image of artifacts) {
       const button = element('button', image.path, 'secondary');
       button.addEventListener('click', () => perform(async () => {
         await request('open_geometry_artifact', {run_id: selectedRun, path: image.path});

@@ -378,6 +378,16 @@ class Application:
             packet = json.loads((work/'geometry-preparation.json').read_text())
             allowed = set(packet['outputs']) | {'geometry-preparation.json', 'geometry-checkpoint.json'}
             name = payload.get('path')
+            decisions = {}
+            if (work/'geometry-checkpoint.json').is_file():
+                checkpoint = json.loads((work/'geometry-checkpoint.json').read_text())
+                for key in ('proposal', 'sample_origin', 'recovery_descriptor'):
+                    record = checkpoint['evidence'].get(key)
+                    if record and Path(record['path']).resolve().is_relative_to(work.resolve()):
+                        decisions[str(Path(record['path']).resolve().relative_to(work.resolve()))] = record['sha256']
+            if name in decisions:
+                self.process.request(self.root, 'verify-geometry', run['project']['run_id'])
+                allowed.add(name)
             if name not in allowed:
                 raise ValueError('Choose a recorded geometry artifact of this run.')
             path = (work/name).resolve()
@@ -386,6 +396,8 @@ class Application:
             from .jobs import sha
             if name in packet['outputs'] and sha(path) != packet['outputs'][name]:
                 raise ValueError('Recorded geometry artifact changed.')
+            if name in decisions and sha(path) != decisions[name]:
+                raise ValueError('Original decision evidence changed.')
             subprocess.Popen(['xdg-open', str(path)], stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, start_new_session=True)
             return {'run_id': run['project']['run_id'], 'path': name, 'requested': True,
