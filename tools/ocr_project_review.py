@@ -196,7 +196,7 @@ EXPORT_ARTIFACTS = (
     'checks/findings.json', 'checks/manual-copy/status.json', 'checks/report-todo.json',
     'checks/run-validation.json', 'checks/run-summary.md',
 )
-DERIVED_ARTIFACTS = SEGMENTATION_ARTIFACTS + EXPORT_ARTIFACTS
+DERIVED_ARTIFACTS = SEGMENTATION_ARTIFACTS + EXPORT_ARTIFACTS + ('geometry-preparation.json', 'geometry-checkpoint.json')
 
 
 def patch_project(registry, project_id, patch, *, line_id=None, expected_review_sha256=None):

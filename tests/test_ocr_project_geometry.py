@@ -20,6 +20,13 @@ class NativeGeometryTests(unittest.TestCase):
         self.assertEqual(packet['logical_units'][0]['line_ids'], self.get('review.json')['units'][0]['line_ids'])
         self.assertEqual((self.work / 'samples.json').read_bytes(), samples)
         self.command('verify-geometry', self.identifier, '--prepared')
+        packet['identity']['run_id'] = 'foreign-run'
+        self.put('geometry-preparation.json', packet)
+        swapped = self.command('verify-geometry', self.identifier, '--prepared', expected=1)
+        self.assertEqual(swapped['error']['code'], 'geometry_invalid')
+        packet['identity']['run_id'] = self.identifier
+        self.put('geometry-preparation.json', packet)
+        self.command('verify-geometry', self.identifier, '--prepared')
         missing = self.command('verify-geometry', self.identifier, expected=1)
         self.assertEqual(missing['error']['code'], 'geometry_invalid')
         self.put('samples.json', [{'id': 'adapted', 'page': 1, 'bbox': [0, 0, 900, 220],
