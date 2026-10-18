@@ -103,6 +103,9 @@ class ProjectReviewTests(unittest.TestCase):
                     'expected_review_sha256': hashlib.sha256(original).hexdigest()}
         proposal['review'] = copy.deepcopy(self.review)
         proposal['review']['lines'][0]['text'] = 'ABČ'
+        checked = self.command('check-reading', self.identifier, '--proposal', self.put('complete.json', proposal))
+        self.assertEqual(checked['counts']['lines'], 2)
+        self.assertEqual((self.work / 'review.json').read_bytes(), original)
         partial = {**proposal, 'coverage': {**proposal['coverage'], 'pages': pages[:1]}}
         rejected = self.command('publish-reading', self.identifier, '--proposal', self.put('partial.json', partial), expected=1)
         self.assertEqual(rejected['error']['code'], 'reading_proposal_invalid')

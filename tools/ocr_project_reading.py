@@ -50,7 +50,7 @@ def reading_input(registry, project_id):
     return registry.get(project_id)
 
 
-def publish_reading(registry, project_id, proposal_path):
+def publish_reading(registry, project_id, proposal_path, *, check_only=False):
     """Validate the complete candidate accounting before one atomic review write.
 
     This native operation validates the data contract. The AI adapter additionally
@@ -90,6 +90,8 @@ def publish_reading(registry, project_id, proposal_path):
             raise
         except (OSError, ValueError, KeyError, TypeError) as error:
             raise ProjectError('reading_proposal_invalid', 'Complete source coverage and a valid whole-document review are required; nothing published.') from error
+        if check_only:
+            return {'project': record['project'], 'counts': summary, 'artifacts': {}}
         if review_path.exists():
             history = work / 'review-history' / (current + '.json')
             history.parent.mkdir(exist_ok=True)
