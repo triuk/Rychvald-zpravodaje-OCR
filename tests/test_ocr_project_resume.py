@@ -10,6 +10,8 @@ import tempfile
 import time
 import unittest
 
+from native_fixtures import environment_manifest, environment_path
+
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / 'tools/ocr_projects.py'
 
@@ -27,7 +29,7 @@ class ProjectResumeTests(unittest.TestCase):
         from PIL import Image, ImageDraw, ImageFont
         image = Image.new('RGB', (900, height), 'white')
         draw = ImageDraw.Draw(image)
-        font = ImageFont.truetype('/usr/share/fonts/noto/NotoSerif-Regular.ttf', 65)
+        font = ImageFont.truetype(environment_manifest(ROOT)['fonts']['segmentation']['path'], 65)
         for y in range(70, height - 65, 90):
             draw.text((30, y), 'OCR 11', font=font, fill='black')
         stream = io.BytesIO()
@@ -41,7 +43,7 @@ class ProjectResumeTests(unittest.TestCase):
         return source
 
     def cli(self, *args, expected=0):
-        result = subprocess.run([sys.executable, str(CLI), '--root', str(self.root),
+        result = subprocess.run([sys.executable, '-B', str(CLI), '--root', str(self.root),
                                  '--json', *map(str, args)], capture_output=True)
         self.assertEqual(result.returncode, expected, result.stdout.decode() + result.stderr.decode())
         self.assertLessEqual(len(result.stdout), 4096)
@@ -116,7 +118,7 @@ class ProjectResumeTests(unittest.TestCase):
         return result
 
     def start(self, operation, identifier):
-        process = subprocess.Popen([sys.executable, str(CLI), '--root', str(self.root),
+        process = subprocess.Popen([sys.executable, '-B', str(CLI), '--root', str(self.root),
                                     '--json', operation, identifier], stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, start_new_session=True)
         self.addCleanup(self.kill, process)
@@ -246,7 +248,7 @@ class ProjectResumeTests(unittest.TestCase):
 
     def test_resume_uses_original_manifest_and_refuses_input_mismatches_without_writes(self):
         identifier, work = self.imported()
-        manifest = json.loads((ROOT / 'native/environment.json').read_text())
+        manifest = environment_manifest(ROOT)
         manifest['build_id'] = 'explicit-custom-test-profile'
         profile = self.directory / 'custom-environment.json'
         profile.write_text(json.dumps(manifest))
@@ -257,7 +259,7 @@ class ProjectResumeTests(unittest.TestCase):
         before = marker.read_bytes()
         for arguments, code in [(['--dpi', '150'], 'configuration_changed'),
                                 (['--language', 'eng'], 'configuration_changed'),
-                                (['--environment', ROOT / 'native/environment.json'], 'environment_changed'),
+                                (['--environment', environment_path(ROOT)], 'environment_changed'),
                                 (['--environment', self.directory / 'missing.json'], 'environment_invalid')]:
             with self.subTest(arguments=arguments):
                 result = self.cli('resume', identifier, *arguments, expected=1)
