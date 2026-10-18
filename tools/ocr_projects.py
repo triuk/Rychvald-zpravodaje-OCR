@@ -368,6 +368,7 @@ def build_parser():
     command = commands.add_parser('patch')
     command.add_argument('project_id')
     command.add_argument('--patch', required=True, type=Path)
+    command.add_argument('--expected-review-sha256')
     command.add_argument('--id', dest='line_id')
     command = commands.add_parser('reading-input')
     command.add_argument('project_id')
@@ -437,7 +438,8 @@ def main(argv=None):
             result = response(args.operation, **reading_input(registry, args.project_id))
         elif args.operation == 'patch':
             from ocr_project_review import patch_project
-            record = patch_project(registry, args.project_id, args.patch, line_id=args.line_id)
+            record = patch_project(registry, args.project_id, args.patch, line_id=args.line_id,
+                                   expected_review_sha256=args.expected_review_sha256)
             result = response(args.operation, **record)
         elif args.operation == 'query':
             from ocr_project_review import query_project

@@ -379,9 +379,36 @@ class ReadingJobs(ContextJobs):
                     sha(application / 'run.json') != packet['run_manifest_sha256']):
                     raise JobError('reading_profile_changed', 'Immutable run profile or manifest changed after publication.')
                 proposal = verify_trace(value, packet, root / value['artifacts']['protocol'])
-                if (proposal != json.loads((root / value['artifacts']['proposal']).read_text()) or
-                    sha(work / 'review.json') != value['review_sha256']):
+                if proposal != json.loads((root / value['artifacts']['proposal']).read_text()):
                     raise JobError('reading_publication_changed', 'Published review or original proposal changed.')
+                current = sha(work / 'review.json')
+                value['current_review_bound'] = current == value['review_sha256']
+                value['current_review_sha256'] = current
+                if not value['current_review_bound']:
+                    original = work / 'review-history' / (value['review_sha256'] + '.json')
+                    if sha(original) != value['review_sha256'] or json.loads(original.read_text()) != proposal['review']:
+                        raise JobError('reading_publication_changed', 'Original first-reading review snapshot is missing or changed.')
+                    chain = json.loads((work / 'review-patch-chain.json').read_text())
+                    reached = value['review_sha256']
+                    for step in chain:
+                        if step['previous'] == reached:
+                            old = work / 'review-history' / (reached + '.json')
+                            patch = (work / step['patch']).resolve()
+                            if not patch.is_relative_to(work.resolve()) or sha(patch) != step['patch_sha256'] or sha(old) != reached:
+                                raise JobError('reading_publication_changed', 'Native review correction history changed.')
+                            # Reapply each public native validated correction to its archived input.
+                            from tools.ocr_quality import patched_review, apply_line_patch
+                            expected = json.loads(old.read_text())
+                            if step.get('line_id') is None:
+                                expected = patched_review(expected, json.loads(patch.read_text()))
+                            else:
+                                apply_line_patch(expected, step['line_id'], json.loads(patch.read_text()))
+                            target = work / 'review.json' if step['current'] == current else work / 'review-history' / (step['current'] + '.json')
+                            if sha(target) != step['current'] or json.loads(target.read_text()) != expected:
+                                raise JobError('reading_publication_changed', 'Current review is not the recorded native correction result.')
+                            reached = step['current']
+                    if reached != current:
+                        raise JobError('reading_publication_changed', 'Current review has no validated native correction chain.')
             except (OSError, ValueError, KeyError, TypeError, JobError) as error:
                 value.update(state='invalidated', reading_complete=False,
                     error={'code': getattr(error, 'code', 'reading_evidence_invalid'), 'message': str(error)})

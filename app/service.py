@@ -117,6 +117,8 @@ class Application:
                         self.root / run['artifacts']['workspace']['path'])
                 elif operation == 'start_geometry':
                     data = self.start_geometry(payload)
+                elif operation == 'patch_geometry':
+                    data = self.patch_geometry(payload)
                 elif operation in ('run_metrics', 'step_detail'):
                     from app.metrics import collect, summary, step_detail
                     offset, limit = payload.get('offset', 0), payload.get('limit', 100)
@@ -264,6 +266,35 @@ class Application:
         if not reading.get('reading_complete'):
             raise ApplicationError('geometry_reading_required', 'Geometry requires a verified source reading of this run.')
         raise ApplicationError('geometry_expectations_required', 'Source-derived pre-export expectations are required.')
+
+    def patch_geometry(self, payload):
+        if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
+            raise ApplicationError('operation_active', 'Wait for the active operation before a geometry correction.')
+        from .jobs import atomic_json
+        import uuid
+        run = self.select_run(payload.get('run_id'))
+        work = self.root / run['artifacts']['workspace']['path']
+        expected = payload.get('expected_review_sha256')
+        if not isinstance(expected, str) or len(expected) != 64:
+            raise ApplicationError('invalid_request', 'A current review hash is required for a geometry correction.')
+        patch = payload.get('patch')
+        if not isinstance(patch, dict):
+            raise ApplicationError('invalid_request', 'Provide a validated structured geometry patch.')
+        original = json.loads((work / 'review.json').read_text())
+        lines = {line['id']: line for line in original['lines']}
+        for edit in patch.get('lines', []):
+            line = edit.get('line', {})
+            old = lines.get(line.get('id'))
+            if old is None or any(line.get(key) != old.get(key) for key in ('text', 'text_status', 'page', 'candidate_id')):
+                raise ApplicationError('geometry_text_changed', 'Geometry corrections preserve the source-read transcript.')
+        if patch.get('drop_lines') or patch.get('dropped_candidates'):
+            raise ApplicationError('geometry_text_changed', 'Geometry corrections preserve the source-read inventory.')
+        path = work / 'application' / ('geometry-patch-' + uuid.uuid4().hex + '.json')
+        atomic_json(path, patch)
+        self.process.request(self.root, 'patch', run['project']['run_id'], '--patch', path,
+                             '--expected-review-sha256', expected)
+        self.publish('geometry_invalidated', root=str(self.root), run_id=run['project']['run_id'])
+        return self.select_run(run['project']['run_id'])
 
     def start_reading(self, payload):
         if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
