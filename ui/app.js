@@ -396,7 +396,7 @@ async function pollPreparation() {
     renderPreparation(status);
     if (['completed', 'failed', 'interrupted', 'invalidated'].includes(status.state) && status.attempt_id !== displayedPreparation) {
       displayedPreparation = status.attempt_id;
-      await selectRun(runId);
+      await refreshSelectedRun(runId);
       renderPreparation(status);
     }
   } catch (error) {
@@ -412,6 +412,13 @@ async function refresh() {
   const data = await request('projects');
   renderEditions(data);
   if (selectedRun) await selectRun(selectedRun);
+}
+
+async function refreshSelectedRun(runId) {
+  const data = await request('projects');
+  if (selectedRun !== runId) return;
+  renderEditions(data);
+  await selectRun(runId);
 }
 
 document.querySelector('#registry-form').addEventListener('submit', event => {

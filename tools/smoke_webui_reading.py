@@ -38,6 +38,8 @@ def main():
     parser.add_argument('--browser-parameters', default='--ozone-platform=x11')
     parser.add_argument('--proof', type=Path, required=True)
     parser.add_argument('--prepare-local', action='store_true')
+    parser.add_argument('--inspect-preparation', action='store_true', help='Read-only GUI check of the saved native preparation.')
+    parser.add_argument('--retry-terminal-preflight', type=Path, help='Explicit supported terminal-state reconciliation proof for retrying a failed image preflight.')
     parser.add_argument('--run-preflights', action='store_true', help='Authorize actual image/context subscription turns for this exact run.')
     parser.add_argument('--run-reading', action='store_true', help='Authorize two actual source/accounting subscription turns for this exact run.')
     args = parser.parse_args()
@@ -50,7 +52,7 @@ def main():
     proof = args.proof.resolve()
     proof.mkdir(parents=True, exist_ok=True)
     app = WebUIApplication(disclosure['registry'], browser=args.browser, browser_parameters=args.browser_parameters,
-        process_command=[args.ocr_python, str(ROOT / 'tools/ocr_projects.py')])
+        process_command=[args.ocr_python, '-B', str(ROOT / 'tools/ocr_projects.py')])
     from webui import webui
     failures = []
 
@@ -123,7 +125,15 @@ def main():
             if args.run_preflights:
                 model = status('model_diagnostic_status')
                 context = status('context_status')
-                if model['state'] != 'not_started' or context['state'] != 'not_started':
+                if model['state'] == 'failed' and args.retry_terminal_preflight:
+                    reconciliation = json.loads(args.retry_terminal_preflight.read_text())
+                    if not (reconciliation['run_id'] == case['run_id'] and reconciliation['attempt_id'] == model['attempt_id'] and
+                        reconciliation['thread_id'] == model['thread_id'] and reconciliation['turn_id'] == model['turn_id'] and
+                        reconciliation['terminal_status'] == 'failed' and reconciliation['no_inference_submitted']):
+                        raise RuntimeError('Explicit preflight retry proof does not identify this original failed turn.')
+                elif model['state'] != 'not_started':
+                    raise RuntimeError('Existing image preflight requires explicit supported terminal-state reconciliation before retry.')
+                if context['state'] != 'not_started':
                     raise RuntimeError('Existing preflight attempts require explicit terminal-state inspection; this harness never repeats them automatically.')
                 image = work / 'raster/page-1.png'
                 query('document.querySelector("#diagnostic-image").value=' + json.dumps(str(image)) + ';return JSON.stringify(true);')
@@ -148,7 +158,9 @@ def main():
                         'review_sha256': reading['review_sha256'], 'proposal_path': reading['artifacts']['proposal'],
                         'proposal_sha256': reading['proposal_sha256'], 'source_disclosure_sha256': args.disclosure_sha256}
                     save(Path(disclosure['publication_control']), control)
-            if args.run_reading or not args.prepare_local and not args.run_preflights:
+            if args.inspect_preparation:
+                require_complete(status('preparation_status'), 'checkpoint_valid')
+            if args.run_reading or not args.prepare_local and not args.run_preflights and not args.inspect_preparation:
                 reading = status('reading_status')
                 save(proof / 'native-reading.json', reading)
                 require_complete(reading, 'reading_complete')

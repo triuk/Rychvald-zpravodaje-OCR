@@ -106,7 +106,7 @@ setInterval(async () => {
     renderReading(status);
     if (status.reading_complete && status.attempt_id !== displayedReading) {
       displayedReading = status.attempt_id;
-      await selectRun(runId);
+      await refreshSelectedRun(runId);
       renderReading(status);
     }
   } catch (error) {
