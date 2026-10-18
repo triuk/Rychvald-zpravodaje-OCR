@@ -115,6 +115,8 @@ class Application:
                     run = self.select_run(payload.get('run_id'))
                     data = self.reading.status(self.root, run['project']['run_id'],
                         self.root / run['artifacts']['workspace']['path'])
+                elif operation == 'start_geometry':
+                    data = self.start_geometry(payload)
                 elif operation in ('run_metrics', 'step_detail'):
                     from app.metrics import collect, summary, step_detail
                     offset, limit = payload.get('offset', 0), payload.get('limit', 100)
@@ -254,6 +256,14 @@ class Application:
         self.codex.close()
         self.context.close()
         self.reading.close()
+
+    def start_geometry(self, payload):
+        run = self.select_run(payload.get('run_id'))
+        work = self.root / run['artifacts']['workspace']['path']
+        reading = self.reading.status(self.root, run['project']['run_id'], work)
+        if not reading.get('reading_complete'):
+            raise ApplicationError('geometry_reading_required', 'Geometry requires a verified source reading of this run.')
+        raise ApplicationError('geometry_expectations_required', 'Source-derived pre-export expectations are required.')
 
     def start_reading(self, payload):
         if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy():
