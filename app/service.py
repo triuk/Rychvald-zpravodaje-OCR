@@ -18,6 +18,8 @@ from .codex import CodexJobs
 from .context import ContextJobs
 from .reading import ReadingJobs
 from .geometry import GeometryJobs
+from .output_review import OutputReviewJobs
+from .autonomous import AutonomousJobs
 
 
 class ApplicationError(Exception):
@@ -33,11 +35,11 @@ class OcrProcess:
         self.command = list(command) if command else [
             sys.executable, str(Path(__file__).resolve().parents[1] / 'tools/ocr_projects.py')]
 
-    def request(self, root, *arguments):
+    def request(self, root, *arguments, allowed_returncodes=(0,), timeout=30):
         try:
             result = subprocess.run(
                 [*self.command, '--root', str(root), '--json', *map(str, arguments)],
-                capture_output=True, timeout=30)
+                capture_output=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             raise ApplicationError('ocr_timeout', 'OCR process did not answer in time.') from None
         except OSError as error:
@@ -48,7 +50,7 @@ class OcrProcess:
                 raise ValueError()
             if value.get('error'):
                 raise ApplicationError(value['error']['code'], value['error']['message'])
-            if result.returncode or value.get('status') != 'completed':
+            if result.returncode not in allowed_returncodes or value.get('status') != 'completed':
                 raise ValueError()
             return value
         except (ValueError, KeyError, TypeError):
@@ -73,6 +75,8 @@ class Application:
         self.context = ContextJobs(self.publish, codex_runtime, context_runtime)
         self.reading = ReadingJobs(self.publish, codex_runtime, context_runtime, self.process)
         self.geometry = GeometryJobs(self.publish, codex_runtime, context_runtime, self.process)
+        self.output_review = OutputReviewJobs(self.publish, codex_runtime, context_runtime, self.process)
+        self.autonomous = AutonomousJobs(self)
 
     def dispatch(self, operation, payload=None):
         with self._lock:
@@ -80,6 +84,12 @@ class Application:
                 if not isinstance(payload, (dict, type(None))):
                     raise ApplicationError('invalid_request', 'Request payload must be an object.')
                 payload = payload or {}
+                if (self.autonomous.busy() or self.output_review.busy()) and operation in (
+                        'open_registry', 'import_sources', 'create_run', 'start_preparation', 'start_model_diagnostic',
+                        'start_context_diagnostic', 'prepare_context_diagnostic', 'start_reading', 'start_geometry',
+                        'patch_geometry', 'recover_geometry', 'start_autonomous', 'start_first_export', 'start_output_review',
+                        'check_codex_account', 'start_codex_login'):
+                    raise ApplicationError('operation_active', 'An autonomous/export operation is active; wait for its saved result.')
                 if operation == 'projects':
                     data = self.projects()
                 elif operation == 'open_registry':
@@ -94,6 +104,22 @@ class Application:
                     data = self.create_run(payload)
                 elif operation == 'start_preparation':
                     data = self.start_preparation(payload)
+                elif operation in ('start_autonomous', 'start_first_export'):
+                    data = self.start_autonomous(payload, from_geometry=operation == 'start_first_export')
+                elif operation == 'autonomous_status':
+                    run = self.select_run(payload.get('run_id'))
+                    data = self.autonomous.status(self.root, run['project']['run_id'],
+                        self.root / run['artifacts']['workspace']['path'])
+                elif operation == 'start_output_review':
+                    data = self.start_output_review(payload)
+                elif operation == 'output_review_status':
+                    run = self.select_run(payload.get('run_id'))
+                    data = self.output_review.status(self.root, run['project']['run_id'],
+                        self.root / run['artifacts']['workspace']['path'])
+                elif operation == 'output_results':
+                    data = self.output_results(payload)
+                elif operation == 'open_output_artifact':
+                    data = self.open_output_artifact(payload)
                 elif operation == 'preparation_status':
                     data = self.preparation_status(payload.get('run_id'))
                 elif operation == 'start_model_diagnostic':
@@ -267,11 +293,109 @@ class Application:
         return self.preparation.status(self.root, run_id, work)
 
     def close(self):
+        self.autonomous.close()
         self.preparation.close()
         self.codex.close()
         self.context.close()
         self.reading.close()
         self.geometry.close()
+        self.output_review.close()
+        self.autonomous.join()
+
+    def start_autonomous(self, payload, *, from_geometry=False):
+        if any(manager.busy() for manager in (self.preparation, self.codex, self.context, self.reading, self.geometry, self.output_review)):
+            raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
+        if from_geometry:
+            run = self.select_run(payload.get('run_id'))
+            if not run.get('run'):
+                raise ApplicationError('run_profile_required', 'Autonomous export requires a named run and immutable profile.')
+            self.process.request(self.root, 'verify-geometry', run['project']['run_id'])
+            if payload.get('existing_export_sha256'):
+                if not isinstance(payload.get('prepared_review_sha256'), str) or len(payload['prepared_review_sha256']) != 64:
+                    raise ApplicationError('invalid_request', 'Resume requires the exact disclosed current export and prepared review hashes.')
+                self.process.request(self.root, 'verify-output-preparation', run['project']['run_id'],
+                    '--sha256', payload['prepared_review_sha256'], '--output-manifest-sha256', payload['existing_export_sha256'])
+        else:
+            path = payload.get('source_path')
+            if not isinstance(path, str) or not Path(path).expanduser().is_file():
+                raise ApplicationError('single_source_required', 'Choose one existing PDF for an autonomous named run.')
+            # Profile and name are checked before import can publish any run.
+            validate_run_name(payload.get('name'))
+            if not isinstance(payload.get('profile_sha256'), str) or len(payload['profile_sha256']) != 64:
+                raise ApplicationError('invalid_request', 'Inspect and select an exact profile before starting an autonomous run.')
+            if not isinstance(payload.get('profile_path'), str) or not payload['profile_path'].strip():
+                raise ApplicationError('invalid_request', 'Choose the inspected profile file.')
+            load_profile(payload.get('profile_path'), expected_sha256=payload['profile_sha256'])
+            imported = self.import_sources(path)
+            if len(imported['editions']) != 1:
+                raise ApplicationError('single_source_required', 'Choose one PDF for an autonomous named run.')
+            run = self.create_run({**payload, 'edition_id': imported['editions'][0]['edition_id']})
+        return self.autonomous.start(run, payload, from_geometry=from_geometry)
+
+    def start_output_review(self, payload):
+        if any(manager.busy() for manager in (self.preparation, self.codex, self.context, self.reading, self.geometry, self.output_review)):
+            raise ApplicationError('operation_active', 'Wait for the current operation before output examination.')
+        run = self.select_run(payload.get('run_id'))
+        if not run.get('run'):
+            raise ApplicationError('run_profile_required', 'Output examination requires a named run.')
+        return self.output_review.start(self.root, run, operation='output_review', metadata={
+            'environment': payload.get('environment'), 'prepared_review_sha256': payload.get('prepared_review_sha256')})
+
+    def output_results(self, payload):
+        from .jobs import sha
+        run = self.select_run(payload.get('run_id'))
+        work = self.root / run['artifacts']['workspace']['path']
+        manifest_path = work / 'output-manifest.json'
+        if not manifest_path.exists():
+            return {'run_id': run['project']['run_id'], 'project': run['project'], 'available': False}
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            allowed = {}
+            for name in ('source', 'pdf', 'txt'):
+                path = Path(manifest[name]).resolve()
+                digest = manifest[name + '_sha256']
+                if not path.is_relative_to(self.root) or sha(path) != digest:
+                    raise ValueError('Current exported artifact identity changed')
+                allowed[str(path.relative_to(self.root))] = sha(path)
+            reports = {}
+            for key, name in (('visual_review', 'visual-review.json'), ('findings', 'findings.json'),
+                              ('validation', 'run-validation.json')):
+                path = work / 'checks' / name
+                if path.exists():
+                    reports[key] = json.loads(path.read_text())
+                    allowed[str(path.relative_to(self.root))] = sha(path)
+            prepared_resume = None
+            if (work / 'output-review-preparation.json').exists():
+                packet = json.loads((work / 'output-review-preparation.json').read_text())
+                if (packet['inputs']['output-manifest.json']['sha256'] == sha(manifest_path) and
+                        all(sha(Path(item['path'])) == item['sha256'] for item in packet['compare_and_swap'].values())):
+                    prepared_resume = {'existing_export_sha256': sha(manifest_path),
+                        'prepared_review_sha256': sha(work / 'output-review-preparation.json')}
+            provenance = {'status': 'not_published'}
+            if (work / 'output-review-publication.json').exists():
+                try:
+                    self.process.request(self.root, 'verify-output-review', run['project']['run_id'])
+                    provenance = {'status': 'original_turn_verified'}
+                except ApplicationError as error:
+                    provenance = {'status': 'invalidated', 'code': error.code, 'message': str(error)}
+            return {'run_id': run['project']['run_id'], 'project': run['project'], 'available': True,
+                'workspace': str(work),
+                'reports': reports, 'report_provenance': provenance, 'prepared_resume': prepared_resume,
+                'artifacts': [{'path': name, 'sha256': digest} for name, digest in allowed.items()]}
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise ApplicationError('output_identity_invalid', str(error)) from error
+
+    def open_output_artifact(self, payload):
+        from .jobs import sha
+        result = self.output_results(payload)
+        item = next((row for row in result.get('artifacts', []) if row['path'] == payload.get('path')), None)
+        if item is None or payload.get('sha256') != item['sha256']:
+            raise ApplicationError('artifact_unavailable', 'Choose a current recorded output/report and its exact hash.')
+        path = (self.root / item['path']).resolve()
+        if not path.is_relative_to(self.root) or not path.is_file() or sha(path) != item['sha256']:
+            raise ApplicationError('artifact_unavailable', 'Recorded output changed or is unavailable.')
+        subprocess.Popen(['xdg-open', str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return {'requested': True, 'path': item['path'], 'meaning': 'External open request; no visual verification or acceptance.'}
 
     def start_geometry(self, payload):
         if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():

@@ -41,8 +41,35 @@ for raw in sys.stdin:
     elif method == 'turn/start':
         prompt = params['input'][0]['text']
         source = 'SOURCE_GEOMETRY_PACKET\n' in prompt
-        packet = json.loads(prompt.split('SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
-        if source:
+        output = 'OUTPUT_PACKET\n' in prompt
+        packet = json.loads(prompt.split('OUTPUT_PACKET\n' if output else 'SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
+        if output:
+            visual = {**packet['visual_review'], 'reviewer': 'Explicit controlled model peer',
+                'pages_reviewed': packet['pages'], 'evidence': [i['path'] for i in packet['images']],
+                'geometry_status': 'approximation_requires_character_review',
+                'conclusion': 'Controlled actual exported page inspection; known ABC/DEF synthetic fixture, approximation retained'}
+            findings = {**packet['findings'], 'items': [{**row, 'status': 'open',
+                'reason': 'Controlled fixture retains this explicitly open limitation',
+                'evidence': [packet['images'][0]['path']]} for row in packet['findings']['items']]}
+            answer = {'preparation_sha256': packet['preparation_sha256'], 'images_examined': packet['images'],
+                'visual_review': visual, 'findings': findings}
+            if mode == 'waive_output':
+                visual['geometry_status'] = 'visually_verified'
+                for row in findings['items']:
+                    row['status'] = 'resolved'
+            if mode == 'drop_output':
+                findings['items'] = []
+            if mode == 'template_output':
+                visual.update(conclusion='', pages_reviewed=[])
+            if mode == 'absolute_input_evidence':
+                attached = [i['path'] for i in params['input'] if i['type'] == 'localImage']
+                paths = [attached[0], packet['inputs']['checks/visual-review.json']['path']]
+                visual['evidence'] = paths
+                for row in findings['items']:
+                    row['evidence'] = paths
+            if mode == 'outside_evidence':
+                visual['evidence'] = [packet['technical']['inputs']['source']['path']]
+        elif source:
             answer = {'source_sha256': packet['source_sha256'], 'basis': 'Controlled known source raster letters',
                 'samples': [{'id': 'sample-'+str(p['page']), 'page': p['page'], 'bbox': [0, 0, 90, 20],
                     'expected': 'ABC' if p['page']==1 else 'DEF', 'expected_origin': 'Controlled original source image'} for p in packet['pages']]}
@@ -68,7 +95,7 @@ for raw in sys.stdin:
                     image['path'] = path
                 if mode=='escaped_path':
                     answer['images_examined'][0]['path'] = '/tmp/foreign-image.png'
-        identifier = 'source-expectations' if source else 'geometry-examination'
+        identifier = 'output-examination' if output else 'source-expectations' if source else 'geometry-examination'
         emit({'id': request['id'], 'result': {'turn': {'id': identifier}}})
         def event(method, **values):
             emit({'method': method, 'params': {'threadId': 'geometry-thread', 'turnId': identifier, **values}})
@@ -80,6 +107,12 @@ for raw in sys.stdin:
             'status': 'completed', 'error': None})
         event('item/completed', item={'type': 'agentMessage', 'phase': 'final_answer', 'text': json.dumps(answer)})
         event('turn/completed', turn={'id': identifier, 'status': 'completed'})
+        if output and mode == 'tamper_output':
+            attached = [i['path'] for i in params['input'] if i['type'] == 'localImage']
+            Path(attached[0]).write_bytes(b'Controlled changed pixels after completed model turn')
+        if output and mode == 'tamper_geometry':
+            attached = [i['path'] for i in params['input'] if i['type'] == 'localImage']
+            (Path(attached[0]).parents[1] / 'geometry.json').write_text('[]')
         if not source and mode=='publication_blocked':
             attached = [i['path'] for i in params['input'] if i['type']=='localImage']
             # Deliberate controlled host filesystem fault AFTER provider completion.

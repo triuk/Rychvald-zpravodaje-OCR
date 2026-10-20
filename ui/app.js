@@ -183,6 +183,7 @@ function renderRun(data) {
   if (typeof renderContextPanel === 'function') renderContextPanel(detail, data);
   if (typeof renderReadingPanel === 'function') renderReadingPanel(detail, data);
   if (typeof renderGeometryPanel === 'function') renderGeometryPanel(detail, data);
+  if (typeof renderExportPanel === 'function') renderExportPanel(detail, data);
   window.renderMetricsPanel(detail, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
@@ -274,7 +275,8 @@ function codexRunning() {
   return ['starting', 'running', 'awaiting_login'].includes(document.querySelector('#codex-state')?.dataset.state) ||
     ['starting', 'running'].includes(document.querySelector('#context-state')?.dataset.state) ||
     ['starting', 'running'].includes(document.querySelector('#reading-state')?.dataset.state) ||
-    ['starting', 'running'].includes(document.querySelector('#geometry-state')?.dataset.state);
+    ['starting', 'running'].includes(document.querySelector('#geometry-state')?.dataset.state) ||
+    ['starting', 'running'].includes(document.querySelector('#autonomous-state')?.dataset.state);
 }
 
 function renderCodexPanel(detail, data) {
@@ -453,6 +455,7 @@ document.querySelector('#source-form').addEventListener('submit', event => {
 document.querySelector('#profile-path').addEventListener('input', () => {
   selectedProfile = null;
   document.querySelector('#create-run').disabled = true;
+  document.querySelector('#start-autonomous').disabled = true;
   document.querySelector('#profile-preview').hidden = true;
 });
 document.querySelector('#profile-form').addEventListener('submit', event => {
@@ -460,6 +463,7 @@ document.querySelector('#profile-form').addEventListener('submit', event => {
   perform(async () => {
     selectedProfile = null;
     document.querySelector('#create-run').disabled = true;
+    document.querySelector('#start-autonomous').disabled = true;
     const data = await request('inspect_profile', { path: document.querySelector('#profile-path').value });
     selectedProfile = data;
     document.querySelector('#profile-path').value = data.path;
@@ -469,6 +473,7 @@ document.querySelector('#profile-form').addEventListener('submit', event => {
     document.querySelector('#profile-text').textContent = data.text;
     document.querySelector('#profile-preview').hidden = false;
     document.querySelector('#create-run').disabled = false;
+    document.querySelector('#start-autonomous').disabled = false;
     return 'Profil načten. Prompty a parametry lze prohlédnout před založením průchodu.';
   });
 });
