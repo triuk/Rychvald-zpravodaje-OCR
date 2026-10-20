@@ -382,6 +382,19 @@ def build_parser():
     command.add_argument('project_id')
     command.add_argument('--environment', type=Path)
     command.add_argument('--reviewer-root', type=Path)
+    command.add_argument('--geometry-checkpoint', type=Path)
+    command = commands.add_parser('prepare-output-review')
+    command.add_argument('project_id')
+    command.add_argument('--environment', type=Path)
+    command = commands.add_parser('publish-output-review')
+    command.add_argument('project_id')
+    command.add_argument('--proposal', required=True, type=Path)
+    command = commands.add_parser('verify-output-review')
+    command.add_argument('project_id')
+    command = commands.add_parser('verify-output-preparation')
+    command.add_argument('project_id')
+    command.add_argument('--sha256', required=True)
+    command.add_argument('--output-manifest-sha256')
     command = commands.add_parser('prepare-geometry')
     command.add_argument('project_id')
     command.add_argument('--samples', required=True, type=Path)
@@ -455,10 +468,23 @@ def main(argv=None):
         elif args.operation == 'publish-geometry':
             from ocr_project_geometry import publish_geometry
             result = response(args.operation, **publish_geometry(registry, args.project_id, args.checkpoint))
+        elif args.operation == 'prepare-output-review':
+            from ocr_project_output_review import prepare_output_review
+            result = response(args.operation, **prepare_output_review(registry, args.project_id, environment=args.environment))
+        elif args.operation == 'publish-output-review':
+            from ocr_project_output_review import publish_output_review
+            result = response(args.operation, **publish_output_review(registry, args.project_id, args.proposal))
+        elif args.operation == 'verify-output-review':
+            from ocr_project_output_review import verify_output_review
+            result = response(args.operation, **verify_output_review(registry, args.project_id))
+        elif args.operation == 'verify-output-preparation':
+            from ocr_project_output_review import verify_output_preparation
+            result = response(args.operation, **verify_output_preparation(registry, args.project_id, args.sha256,
+                output_manifest_sha256=args.output_manifest_sha256))
         elif args.operation == 'export':
             from ocr_project_export import export_project
             record = export_project(registry, args.project_id, environment=args.environment,
-                                    reviewer_root=args.reviewer_root)
+                                    reviewer_root=args.reviewer_root, geometry_checkpoint=args.geometry_checkpoint)
             result = response(args.operation, **record)
         elif args.operation in ('publish-reading', 'check-reading'):
             from ocr_project_reading import publish_reading

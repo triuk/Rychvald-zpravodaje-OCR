@@ -44,6 +44,17 @@ for line in sys.stdin:
         continue
     if 'method' not in request:
         if pending == 'query':
+            if mode == 'full_run':
+                rows = json.loads(request['result']['contentItems'][0]['text'])['rows']
+                candidates = {row['id']: row for row in rows if row['candidate_kind'] == 'local'}
+                used = set()
+                for row in proposal['review']['lines']:
+                    row['candidate_id'] = next((key for key, candidate in candidates.items()
+                        if candidate['page'] == row['page'] and key not in used), None)
+                    if row['candidate_id']:
+                        used.add(row['candidate_id'])
+                proposal['review']['dropped_candidates'] = [{'id': key, 'reason': 'Controlled duplicate OCR candidate accounted against independent source reading'}
+                    for key in candidates if key not in used]
             pending = 'image'
             emit({'id': 'dynamic-image', 'method': 'item/tool/call', 'params': {'threadId': 'reading-thread',
                 'turnId': 'accounting-turn', 'callId': 'image', 'tool': 'ocr_image', 'arguments': {'page': 1}}})
@@ -118,7 +129,8 @@ for line in sys.stdin:
                 proposal['coverage']['pages'] = proposal['coverage']['pages'][:1]
             pending = 'query'
             emit({'id': 'dynamic-query', 'method': 'item/tool/call', 'params': {'threadId': 'reading-thread',
-                'turnId': turn_id, 'callId': 'query', 'tool': 'ocr_query', 'arguments': {'view': 'candidates', 'page': 1}}})
+                'turnId': turn_id, 'callId': 'query', 'tool': 'ocr_query', 'arguments':
+                {'view': 'candidates'} if mode == 'full_run' else {'view': 'candidates', 'page': 1}}})
         continue
     else:
         emit({'id': request['id'], 'error': {'code': -32601, 'message': 'Unexpected request'}})

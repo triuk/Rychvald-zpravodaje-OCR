@@ -38,12 +38,24 @@ def workflow_command(work, native, command, *arguments, allowed=(0,)):
     return result.returncode
 
 
-def export_project(registry, project_id, *, environment=None, reviewer_root=None):
+def export_project(registry, project_id, *, environment=None, reviewer_root=None, geometry_checkpoint=None):
     current = registry.get(project_id)
     work = registry.root / current['artifacts']['workspace']
     native = project_environment(work, environment)
     failure = None
     with registry.project_lock(project_id) as record:
+        examined = None
+        if geometry_checkpoint is not None:
+            from ocr_project_geometry import verify_geometry
+            examined = verify_geometry(registry, record)
+            try:
+                if source_hash(geometry_checkpoint) != source_hash(work / 'geometry-checkpoint.json'):
+                    raise ValueError('Selected checkpoint differs from the examined geometry')
+            except (OSError, ValueError) as error:
+                raise ProjectError('geometry_invalid', str(error)) from error
+            examined = {'checkpoint_sha256': source_hash(work / 'geometry-checkpoint.json'),
+                        'preparation_sha256': source_hash(work / 'geometry-preparation.json'),
+                        'source_samples_sha256': source_hash(work / 'geometry-source-samples.json')}
         source = registry.root / record['artifacts']['source']
         if source_hash(source) != record['project']['source_sha256']:
             raise ProjectError('source_corrupt', 'Registered source differs from its content hash.')
@@ -58,7 +70,7 @@ def export_project(registry, project_id, *, environment=None, reviewer_root=None
         record['project'].update(phase='exporting', operation_state='running', validation='not_run')
         atomic_json(registry.root / record['artifacts']['project'], record)
         try:
-            export_iteration(registry, record, work, source, native, reviewer_root, previous_record)
+            export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined)
         except (ProjectError, OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
             failure = error if isinstance(error, ProjectError) else ProjectError('export_failed', 'Export failed; inspect export-error.json.')
             atomic_json(work / 'export-error.json', {'code': failure.code, 'diagnostic': str(error)})
@@ -69,7 +81,7 @@ def export_project(registry, project_id, *, environment=None, reviewer_root=None
     return registry.get(project_id)
 
 
-def export_iteration(registry, record, work, source, native, reviewer_root, previous_record):
+def export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined=None):
     project_id = record['project']['project_id']
     iteration = uuid.uuid4().hex
     pdf = registry.root / 'outputs' / f'{project_id}-{iteration}-ocr.pdf'
@@ -82,9 +94,10 @@ def export_iteration(registry, record, work, source, native, reviewer_root, prev
         archived = load(previous / 'snapshot.json')
         archived['artifacts']['project.json'] = {'sha256': source_hash(previous / 'project.json'), 'stored': True}
         atomic_json(previous / 'snapshot.json', archived)
-    workflow_command(work, native, 'segment', '--review', work / 'review.json')
-    workflow_command(work, native, 'sheets', '--lines', work / 'reviewed-lines.json')
-    workflow_command(work, native, 'sample-sheets', '--samples', work / 'samples.json')
+    if examined is None:
+        workflow_command(work, native, 'segment', '--review', work / 'review.json')
+        workflow_command(work, native, 'sheets', '--lines', work / 'reviewed-lines.json')
+        workflow_command(work, native, 'sample-sheets', '--samples', work / 'samples.json')
     export_args = ['--source', source, '--pages', work / 'pages.json', '--pdf', pdf, '--txt', txt]
     if previous:
         export_args.extend(['--previous-snapshot', previous])
@@ -92,6 +105,8 @@ def export_iteration(registry, record, work, source, native, reviewer_root, prev
     manifest = load(work / 'output-manifest.json')
     manifest.update(project_id=project_id, run_id=record['project']['run_id'], iteration_id=iteration,
                     review_sha256=source_hash(work / 'review.json'))
+    if examined is not None:
+        manifest['examined_geometry'] = examined
     atomic_json(work / 'output-manifest.json', manifest)
     check_args = ['--source', source, '--pages', work / 'exported-pages.json', '--pdf', pdf, '--txt', txt]
     if reviewer_root is not None:
@@ -121,6 +136,13 @@ def validate_project(registry, project_id, *, environment=None):
         with contextlib.redirect_stdout(io.StringIO()):
             code = validate_run(SimpleNamespace(work=work))
         report = load(work / 'checks/run-validation.json')
+        visual_provenance = True
+        if load(work / 'output-manifest.json').get('examined_geometry'):
+            try:
+                from ocr_project_output_review import verify_output_review
+                verify_output_review(registry, project_id)
+            except ProjectError:
+                visual_provenance = False
         try:
             manifest = load(work / 'output-manifest.json')
             bound = (all(manifest.get(key) == record['project'].get(key) for key in ['project_id', 'run_id', 'iteration_id']) and
@@ -130,15 +152,16 @@ def validate_project(registry, project_id, *, environment=None):
         except (ValueError, OSError, KeyError, TypeError):
             bound = False
         report['project_binding_valid'] = bound
-        if not bound:
+        if not bound or not visual_provenance:
             code = 1
             report['status'] = 'failed'
-            report['errors'].append('project_output_binding')
+            reason = 'project_output_binding' if not bound else 'output_review_provenance'
+            report['errors'].append(reason)
             summary = (work / 'checks/run-summary.md').read_text(encoding='utf-8').splitlines()
             summary[0] = 'OCR validation: failed'
             summary = [f'Errors: {len(report["errors"])}; open items: {len(report["open_items"])}'
                        if line.startswith('Errors: ') else line for line in summary]
-            summary.append('- project_output_binding')
+            summary.append('- ' + reason)
             (work / 'checks/run-summary.md').write_text('\n'.join(summary), encoding='utf-8')
         atomic_json(work / 'checks/run-validation.json', report)
         record['project'].update(phase='validation_failed' if code == 1 else 'validated',

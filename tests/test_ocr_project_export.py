@@ -87,6 +87,33 @@ class ProjectExportTests(unittest.TestCase):
                            evidence=[proof.name])
         self.put('checks/findings.json', findings)
 
+    def test_examined_export_rejects_unbound_checkpoint_before_outputs(self):
+        checkpoint = self.put('unbound-checkpoint.json', {'status': 'examined'})
+        response = self.command('export', self.identifier, '--geometry-checkpoint', checkpoint, expected=1)
+        self.assertEqual(response['error']['code'], 'geometry_invalid')
+        self.assertFalse(list((self.root / 'outputs').glob('*')))
+        self.assertFalse((self.work / 'output-manifest.json').exists())
+
+    def test_output_review_rejects_template_without_original_turn_and_preserves_reports(self):
+        self.command('export', self.identifier)
+        original_render = (self.work / 'checks/final-page-1.png').read_bytes()
+        (self.work / 'checks/final-page-1.png').write_bytes(b'Forged pre-existing final render')
+        (self.work / 'checks/geometry-review-999.png').write_bytes(b'Stale diagnostic from another preparation')
+        self.command('prepare-output-review', self.identifier)
+        packet = self.get('output-review-preparation.json')
+        self.assertTrue(any(i['path'] == 'checks/final-page-1.png' for i in packet['images']))
+        self.assertEqual((self.work / 'checks/final-page-1.png').read_bytes(), original_render)
+        self.assertNotIn('checks/geometry-review-999.png', [i['path'] for i in packet['images']])
+        before = {name: (self.work / name).read_bytes() for name in
+                  ('checks/visual-review.json', 'checks/findings.json')}
+        forged = self.put('forged-output-review.json', {'preparation_sha256':
+            hashlib.sha256((self.work / 'output-review-preparation.json').read_bytes()).hexdigest(),
+            'visual_review': {'reviewer': 'Completed turn is not proof'}, 'findings': {'items': []}})
+        result = self.command('publish-output-review', self.identifier, '--proposal', forged, expected=1)
+        self.assertEqual(result['error']['code'], 'output_review_invalid')
+        for name, data in before.items():
+            self.assertEqual((self.work / name).read_bytes(), data)
+
     def test_export_uses_common_transcript_preserves_source_and_creates_unconfirmed_reports(self):
         import fitz
         source_bytes = self.source.read_bytes()

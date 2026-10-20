@@ -10,7 +10,7 @@ from .context_runtime import verify_resources, configuration, command, verify_ho
 from .jobs import JobError, atomic_json, sha
 
 
-def examine(manager, job, stage, prompt, schema, work, images):
+def examine(manager, job, stage, prompt, schema, work, images, *, instructions=None):
     """No automatic retries; every accepted turn remains durable even on local failure."""
     value = job['manifest']
     directory = job['directory'] / stage
@@ -83,7 +83,7 @@ def examine(manager, job, stage, prompt, schema, work, images):
         stderr.close()
 
     verify_resources(manager.context_runtime, manager.runtime)
-    instructions = ('Examine only the attached original/diagnostic images. Do not run shell commands, read files, '
+    instructions = instructions or ('Examine only the attached original/diagnostic images. Do not run shell commands, read files, '
         'use candidate/output text, install software or change the project. Call context_mode ctx_stats once. '
         'Return exactly the requested JSON with honest uncertainty, no invented visual verification.\n')
     (workspace / 'AGENTS.md').write_text(instructions)

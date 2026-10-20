@@ -12,6 +12,7 @@
   <script src="context.js" defer></script>
   <script src="reading.js" defer></script>
   <script src="geometry.js" defer></script>
+  <script src="export.js" defer></script>
 </head>
 <body>
   <header class="app-header">
@@ -44,6 +45,9 @@
       <div><label for="edition-choice">Projekt vydání</label><select id="edition-choice" required></select></div>
       <div><label for="run-name">Jméno nového průchodu</label><input id="run-name" type="text" required maxlength="160" placeholder="Například: První vizuální čtení"></div>
       <button id="create-run" type="submit" disabled>Založit nový průchod</button>
+      <button id="start-autonomous" type="button" disabled>Spustit celý průchod ze zdrojového PDF</button>
+      <label for="autonomous-environment">Nativní prostředí pro celý průchod (volitelné)</label>
+      <input id="autonomous-environment" type="text" spellcheck="false" placeholder="Manifest prostředí OCR procesu">
       <p class="hint">Nejdříve prohlédněte profil. Nový průchod uchová přesnou použitou podobu promptů a nastavení.</p>
     </form>
   </section>

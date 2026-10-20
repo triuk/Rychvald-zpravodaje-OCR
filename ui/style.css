@@ -68,6 +68,14 @@ main { padding: 32px; }
 .artifacts th { font-weight: 500; color: #64766a; }
 .artifacts th, .artifacts td { padding: 12px 8px; border-bottom: 1px solid #dce4de; }
 .artifacts td:nth-child(2) { font: 11px ui-monospace, monospace; overflow-wrap: anywhere; }
+#export-results { min-width: 0; }
+#export-results button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+#export-results table { table-layout: fixed; }
+#export-results th:nth-child(1) { width: 20%; }
+#export-results th:nth-child(2) { width: 9%; }
+#export-results th:nth-child(3) { width: 43%; }
+#export-results th:nth-child(4) { width: 28%; }
+#export-results td { overflow-wrap: anywhere; vertical-align: top; }
 .availability { color: #285a4e; white-space: nowrap; }
 .availability.missing { color: #7f807b; }
 @media (max-width: 850px) { .registry-bar { flex-wrap: wrap; padding: 16px; } .registry-bar label { width: 100%; } .workspace { grid-template-columns: 260px minmax(0, 1fr); } main { padding: 22px; } .statuses { grid-template-columns: 1fr; } .local-label { display: none; } }
