@@ -88,9 +88,15 @@ clang-x64 knihovnu s SHA `59b7230ee0a6608ea6fa5bd38cf327851c0a0cc980976b13793723
 a obnovený Python 3.14.7 s `-B`. Preimport guard ověřuje knihovnu dříve, než by
 její standardní loader mohl zkusit stažení. Nic se neinstalovalo ani neměnilo
 globálně. Actual GUI summary/metrics a původní snímky jsou v
-`native-synthetic/` a `native-difficult/`. Doplňkové read-only snímky čekají i na
-skutečně vykreslený DOM výsledků/nálezů; žádný modelový tah se kvůli snímku
-neopakuje. Dřívější neúplné captures zůstávají označené jako neúplné.
+`native-synthetic/` a `native-difficult/`. Dokončené doplňkové read-only captures
+jsou v `native-synthetic-completed-gui-v3/` a
+`native-difficult-completed-gui-v2/`: oba `summary.json` potvrzují dokončení bez
+nového modelového požadavku. Root skutečně prohlédl jejich `native-gui.png` a
+`native-open-items.png` (visual PASS): čitelných 5/6 otevřených nálezů, bez
+vodorovného přetečení, oddělené `ready_with_open_items` a `not_recorded`; u
+reálného výřezu zůstávají blur/clip a source unknown. Snímky vznikly sekvenčně
+po vykreslení výsledků i terminálního stavu. Žádný modelový tah se kvůli nim
+neopakoval. Dřívější neúplné captures zůstávají označené jako neúplné.
 
 Původní generující `ocr_workflow.py`, `ocr_quality.py` a F zůstaly byte-identical
 s checkpointem #16. Přesné kopie zdrojových cest #15/#16/#17 jsou navíc uložené
