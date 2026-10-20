@@ -315,6 +315,8 @@ def local_steps(root, application, run, sources, warnings):
                 steps.append({'step_id': 'local:' + aid + ':' + sid, 'native_step_id': sid,
                     'kind': 'local', 'operation': 'prepare', 'attempt_id': aid, 'run_id': run['project']['run_id'],
                     'thread_id': None, 'turn_ids': [], 'started_at': first.get('timestamp'),
+                    'origin': last.get('origin', 'same_run_cache' if last.get('type') == 'unit_cached' else 'computed'),
+                    'import_provenance': last.get('import_provenance'),
                     'ended_at': last.get('timestamp'), 'state': state, 'events': group, 'attempt': attempt,
                     'artifacts': {'attempt': str(path.relative_to(root)), 'history': history_path},
                     'usage_sources': [], 'tokens': usage, 'model': None,

@@ -96,6 +96,9 @@ class Application:
                     data = self.open_registry(payload.get('root'))
                 elif operation == 'select_run':
                     data = self.select_run(payload.get('run_id'))
+                elif operation == 'compare_runs':
+                    from .comparison import compare
+                    data = compare(self, payload)
                 elif operation == 'import_sources':
                     data = self.import_sources(payload.get('path'))
                 elif operation == 'inspect_profile':
@@ -163,7 +166,7 @@ class Application:
                     offset, limit = payload.get('offset', 0), payload.get('limit', 100)
                     if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 200:
                         raise ApplicationError('invalid_request', 'Metric pages require offset >=0 and limit 1..200.')
-                    run = self.select_run(payload.get('run_id'))
+                    run = self.select_run(payload.get('run_id'), notify=False)
                     if not run.get('run'):
                         raise ApplicationError('named_run_required', 'Metrics require a named run; legacy data stays available in its read view.')
                     try:
@@ -283,7 +286,17 @@ class Application:
             if not isinstance(environment, str) or not environment.strip():
                 raise ApplicationError('invalid_request', 'Environment manifest must be a file path.')
             environment = str(Path(environment).expanduser().resolve())
-        return self.preparation.start(self.root, run, environment)
+        donor_id = payload.get('reuse_from_run_id')
+        if donor_id is not None:
+            donor = self.select_run(donor_id)
+            if not donor.get('run') or donor_id == run['project']['run_id'] or donor['edition_id'] != run['edition_id']:
+                raise ApplicationError('invalid_donor', 'Choose another named run of this same complete source hash.')
+            work = self.root / run['artifacts']['workspace']['path']
+            for directory in (work / 'raster', work / 'ocr'):
+                if any(path.is_symlink() or path.is_file() and path.stat().st_nlink > 1
+                       for path in (directory, *directory.rglob('*'))):
+                    raise ApplicationError('invalid_import_destination', 'Destination preparation must own independent regular files.')
+        return self.preparation.start(self.root, run, environment, donor_id)
 
     def preparation_status(self, run_id):
         if not isinstance(run_id, str) or not run_id:
@@ -341,9 +354,9 @@ class Application:
         return self.output_review.start(self.root, run, operation='output_review', metadata={
             'environment': payload.get('environment'), 'prepared_review_sha256': payload.get('prepared_review_sha256')})
 
-    def output_results(self, payload):
+    def output_results(self, payload, *, run=None):
         from .jobs import sha
-        run = self.select_run(payload.get('run_id'))
+        run = run or self.select_run(payload.get('run_id'))
         work = self.root / run['artifacts']['workspace']['path']
         manifest_path = work / 'output-manifest.json'
         if not manifest_path.exists():
@@ -621,7 +634,7 @@ class Application:
         self.publish('projects_changed', edition_count=len(editions))
         return {'root': str(self.root), 'editions': list(editions.values())}
 
-    def select_run(self, run_id):
+    def select_run(self, run_id, *, notify=True):
         if not isinstance(run_id, str) or not run_id:
             raise ApplicationError('invalid_request', 'Choose an OCR run.')
         result = self.process.request(self.root, 'status', run_id)
@@ -647,5 +660,6 @@ class Application:
                 data.update(run={**manifest, 'profile': profile['profile']}, history=history)
             except (OSError, ValueError, KeyError, TypeError, ProfileError) as error:
                 raise ApplicationError('run_metadata_invalid', f'Cannot load named run metadata: {error}') from None
-        self.publish('run_selected', run_id=run_id, edition_id=data['edition_id'])
+        if notify:
+            self.publish('run_selected', run_id=run_id, edition_id=data['edition_id'])
         return data

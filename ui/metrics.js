@@ -103,6 +103,7 @@
           const id = text('small', step.attempt_id.slice(0, 12) + '…');
           id.title = step.attempt_id;
           label.append(text('strong', step.native_step_id || operations[step.operation] || step.operation), id);
+          if (step.kind === 'local') label.append(text('small', ({computed: 'Nově spočítáno', same_run_cache: 'Vlastní místní cache', imported_local: 'Převzaté místní podklady'})[step.origin] || step.origin));
           if (step.duplicate_of) label.append(text('small', 'Shodné původní měření; v součtu je započteno jen jednou.'));
           const time = text('td');
           const dates = text('small', `${date(step.started_at)} → ${date(step.ended_at)}`);
