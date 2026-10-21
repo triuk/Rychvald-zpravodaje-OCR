@@ -10,7 +10,7 @@ import fcntl
 
 from .codex import now, process_identity
 from .jobs import JobError, atomic_json, sha
-from .recovery import inspect_original, unchanged_originals, local_recovery_routes, recover_local
+from .recovery import inspect_original, unchanged_originals, local_recovery_routes, recover_local, verify_completed_reuse
 
 
 class AutonomousJobs:
@@ -288,8 +288,15 @@ class AutonomousJobs:
         if sha(proof_path) != integrity['sha256']:
             raise JobError('checkpoint_invalid', 'Saved reconciliation evidence changed.')
         proof = json.loads(proof_path.read_text())
+        if proof['provider'].get('continuation_error'):
+            raise JobError(**proof['provider']['continuation_error'])
         if not proof['provider']['safe_to_continue'] or not unchanged_originals(self.app.root, proof['provider']):
             raise JobError('reconciliation_required', 'Original AI delivery/state remains unknown or inspected evidence changed.')
+        for link in proof['stage_links']:
+            for row in value['stages']:
+                if row.get('intent_id') == link['intent_id']:
+                    row['attempt_id'] = link['attempt_id']
+        verify_completed_reuse(self.app, work, value, proof['provider'], proof['local_recovery'])
         if not proof['checkpoint']['valid']:
             raise JobError('checkpoint_invalid', 'OCR checkpoint failed independently of original thread recovery.')
         self._verify_checkpoint(run, value)
@@ -299,10 +306,6 @@ class AutonomousJobs:
         try:
             if proof['original_sha256'] != sha(path) or self._bindings(run, value['payload']) != value['bindings']:
                 raise JobError('checkpoint_identity_changed', 'Saved work changed before ownership was acquired.')
-            for link in proof['stage_links']:
-                for row in value['stages']:
-                    if row.get('intent_id') == link['intent_id']:
-                        row['attempt_id'] = link['attempt_id']
             for route in proof['local_recovery']:
                 recover_local(self.app, work, value['run_id'], route)
         except BaseException:

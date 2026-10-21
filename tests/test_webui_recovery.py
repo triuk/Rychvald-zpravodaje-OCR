@@ -197,6 +197,31 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(denied['ok'])
         self.assertEqual(denied['error']['code'], 'checkpoint_invalid')
 
+    def test_completed_provider_without_local_result_cannot_submit_a_replacement_turn(self):
+        self.interrupt_peer('completed_lost_terminal')
+        first = self.start()
+        identity = {'run_id': first['run_id'], 'attempt_id': first['attempt_id']}
+        self.assertEqual(self.wait(first['run_id'])['state'], 'failed')
+        original = self.app.dispatch('model_diagnostic_status', identity)['data']
+        self.assertEqual(original['turn_id'], 'fixture-turn-13')
+        self.assertIsNone(original.get('terminal_turn'))
+        protocol = self.root / original['artifacts']['protocol']
+        before = protocol.read_bytes()
+        self.assertNotIn(b'turn/completed', before)
+        checked = self.app.dispatch('reconcile_autonomous', identity)
+        self.assertTrue(checked['ok'], checked)
+        self.assertTrue(checked['data']['checkpoint']['valid'], checked)
+        self.assertEqual(checked['data']['provider']['turns'][0]['state'], 'completed')
+        self.assertFalse(checked['data']['provider']['safe_to_continue'])
+        resumed = self.app.dispatch('resume_autonomous', {**identity,
+            'reconciliation_id': checked['data']['reconciliation_id']})
+        if resumed['ok']:
+            self.wait(first['run_id'])
+        self.assertEqual(json.loads(self.peer_state.read_text())['start_count'], 1)
+        self.assertFalse(resumed['ok'], resumed)
+        self.assertEqual(resumed['error']['code'], 'original_result_unavailable')
+        self.assertEqual(protocol.read_bytes(), before)
+
     def test_lost_submission_ack_remains_unknown_and_cannot_be_replayed(self):
         self.interrupt_peer('lost_ack')
         first = self.start()

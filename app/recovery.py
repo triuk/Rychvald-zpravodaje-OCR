@@ -117,12 +117,60 @@ def inspect_original(app, work, parent, destination):
             observations.append(record)
     states = [row['state'] for row in observations]
     unresolved = any(state not in ('completed', 'interrupted', 'failed', 'rejected') for state in states)
-    return {'state': 'unknown' if unresolved else 'reconciled' if observations else 'not_submitted',
+    proof = {'state': 'unknown' if unresolved else 'reconciled' if observations else 'not_submitted',
         'turns': observations, 'originals': originals, 'safe_to_continue': not unresolved}
+    if not unresolved:
+        try:
+            verify_completed_reuse(app, work, parent, proof, local_recovery_routes(work, parent))
+        except JobError as error:
+            proof.update(safe_to_continue=False, continuation_error={'code': error.code, 'message': str(error)})
+    return proof
 
 
 def unchanged_originals(root, proof):
     return all((root / path).is_file() and sha(root / path) == digest for path, digest in proof['originals'].items())
+
+
+def verify_completed_reuse(app, work, parent, provider, routes):
+    """A known provider completion permits reuse, never a replacement submission."""
+    recoverable = {route['attempt_id'] for route in routes}
+    flags = {'model_diagnostic': 'combination_verified', 'context_diagnostic': 'context_verified',
+        'reading': 'reading_complete', 'geometry': 'geometry_complete', 'output_review': 'output_review_complete'}
+    for record in provider['turns']:
+        if record['state'] != 'completed':
+            continue
+        identifier, stage = record['attempt_id'], record['stage']
+        if identifier in recoverable:
+            continue  # recover_local validates the original result before any worker starts.
+        entry = next(row for row in parent['stages'] if row.get('attempt_id') == identifier)
+        operation = entry.get('child_status_operation')
+        if operation:
+            status = app.dispatch(operation, {'run_id': parent['run_id']})
+            if (status['ok'] and status['data'].get('attempt_id') == identifier and
+                    status['data']['state'] == 'completed' and status['data'].get(flags[stage])):
+                continue
+        path = work / 'application' / NAMESPACES[stage] / identifier / 'attempt.json'
+        attempt = json.loads(path.read_text())
+        turns = attempt.get('turns', [])
+        saved = next((turn for turn in turns if turn.get('thread_id') == record['thread_id'] and
+            turn.get('turn_id') == record['turn_id'] and turn.get('state') == 'completed' and turn.get('answer')), None)
+        protocol = app.root / attempt['artifacts']['protocol']
+        completed_frame = any(row['direction'] == 'server' and row['message'].get('method') == 'turn/completed' and
+            row['message']['params'].get('threadId') == record['thread_id'] and
+            row['message']['params']['turn'].get('id') == record['turn_id'] and
+            row['message']['params']['turn'].get('status') == 'completed'
+            for row in (json.loads(raw) for raw in protocol.read_text().splitlines()))
+        if saved and completed_frame:
+            if stage == 'reading' and saved is turns[0] and saved['stage'] == 'source':
+                continue  # Reading resumes the original thread with only the accounting turn.
+            if stage == 'context_diagnostic' and any(turn['stage'] == 'routing' and
+                    turn.get('state') == 'completed' and turn.get('answer') for turn in turns):
+                continue  # Context continuation explicitly reuses completed routing/recovery.
+            if stage == 'geometry' and saved['stage'] == 'source_expectations' and all(
+                    (work / name).is_file() for name in ('geometry-source-samples.json', 'geometry-sample-origin.json')):
+                continue  # Native verification checks the frozen samples before another examination.
+        raise JobError('original_result_unavailable',
+            'The original provider turn completed, but its local result cannot be safely reused; no replacement turn was submitted.')
 
 
 def local_recovery_routes(work, parent):
