@@ -27,6 +27,30 @@ RED a GREEN logy a kontrolované artefakty jsou uchovány pod
 pakety zůstávají beze změny; přesné kopie z dočasných testových cest mají mapu
 původních cest a SHA manifest. Cesty uvnitř modelových paketů se nepřepisují.
 
+Závěrečné výsledky po synchronizaci integration
+`f9316c8e724cc7f5a85c4159c2206c26b7913023`:
+
+- Původní zmrazený běh 89 testů skončil 88 PASS / 1 FAIL za 746,718 s.
+  Všech 82 dosavadních regresních testů prošlo. Nový test tří cyklů odhalil
+  chybějící archivaci zdrojového PNG z předchozí opravné iterace; zpracování
+  bezpečně skončilo technickou chybou. Původní neúspěšný výsledek zůstává
+  v `final-regressions.log`, původní zdroje v `before-final-fixes/` a přesné
+  artefakty neúspěšného případu v `failed-89-cycle-case/`.
+- Zpřísnění řízeného protějšku na skutečné schéma odpovědi #17 odhalilo další
+  chybu převodu ID vzorku (`11-strict-schema-red.log`). Oprava používá cílové
+  údaje z nativního reportu vzorků; nepřidává pole do původní modelové odpovědi.
+- Čerstvý běh všech sedmi opravných scénářů na `cc39104e52292a4fea552b1435ecddea2e736705`
+  prošel 7/7 za 322,419 s (`affected-final.log`, `affected-final-exit.json`).
+  Obsahuje skutečné omezené schéma #17 a všechny tři archivované iterace.
+  Celá původní sada 89 testů po opravě opakována nebyla; výsledky výše jsou
+  odlišené a původní FAIL není přeznačen na úspěch.
+- Závěrečná kontrola syntaxe `ui/export.js` a `ui/geometry.js` připnutým Node
+  a `git diff --check` prošly (`js-syntax-final.log`).
+
+`LATEST.json` v kanonickém adresáři důkazů ukazuje na přesnou konečnou kopii.
+Její `SHA256SUMS.json` a `origin-map.json` umožňují ověřit obsah a původní
+cesty také po odstranění izolovaného worktree.
+
 Samostatný nativní GUI screenshot v #18 nevznikl. Veřejná historie, stránkování,
 ochrana externího otevření a syntaxe JS se kontrolují v tomto ticketu; společná
 vizuální kontrola finálního nativního GUI a pause/recovery/fronty následuje v #23.
