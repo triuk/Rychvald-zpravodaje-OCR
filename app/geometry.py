@@ -167,7 +167,7 @@ class GeometryJobs(ContextJobs):
                     'open_items': sum(o['status'] == 'open' for o in observations['lines']+observations['samples'])})
             value['artifacts']['checkpoint'] = str((work / 'geometry-checkpoint.json').relative_to(root))
         except Exception as error:
-            value.update(state='interrupted' if job['cancel'] else 'failed',
+            value.update(state='paused' if getattr(error, 'code', None) == 'autonomous_paused' else 'interrupted' if job['cancel'] else 'failed',
                 error={'code': getattr(error, 'code', 'geometry_failed'), 'message': str(error)})
         finally:
             if job['rpc'] is not None:

@@ -1,6 +1,8 @@
 /* One public action; a finished operation, validation and user acceptance differ. */
 let exportRequestPending = false;
 const exportTerminal = new Map();
+const autonomousDisplayed = new Map();
+const recoveryProofs = new Map();
 
 document.querySelector('#start-autonomous').addEventListener('click', () => perform(async () => {
   if (!selectedProfile) throw new Error('Nejdříve prohlédněte externí profil.');
@@ -32,7 +34,35 @@ function renderExportPanel(detail, data) {
   const state = element('p', 'Zjišťování stavu…'); state.id = 'autonomous-state'; state.setAttribute('aria-live', 'polite');
   const stages = element('ol'); stages.id = 'autonomous-stages';
   const results = element('div'); results.id = 'export-results';
-  panel.append(start, state, stages, results); detail.append(panel);
+  const controls = element('div', undefined, 'recovery-controls');
+  for (const [id, title, operation] of [
+    ['pause-autonomous', 'Pozastavit po rozpracované jednotce', 'pause_autonomous'],
+    ['interrupt-autonomous', 'Přerušit probíhající práci', 'interrupt_autonomous'],
+    ['reconcile-autonomous', 'Ověřit checkpoint a původní AI tahy', 'reconcile_autonomous'],
+    ['resume-autonomous', 'Pokračovat od ověřeného bodu', 'resume_autonomous']]) {
+    const button = element('button', title, 'secondary'); button.id = id; button.disabled = true;
+    button.addEventListener('click', () => perform(async () => {
+      const current = autonomousDisplayed.get(data.project.run_id);
+      if (!current?.attempt_id) throw new Error('Nejdříve načtěte uložený průchod.');
+      const payload = {run_id: current.run_id, attempt_id: current.attempt_id};
+      if (operation === 'resume_autonomous') payload.reconciliation_id = recoveryProofs.get(current.run_id)?.reconciliation_id;
+      if (operation === 'reconcile_autonomous') {
+        document.querySelector('#recovery-state').textContent = 'Ověřování místních podkladů a skutečného stavu původních AI tahů…';
+        const proof = await request(operation, payload);
+        recoveryProofs.set(current.run_id, proof);
+        renderRecovery(proof);
+        renderAutonomous(await request('autonomous_status', payload));
+        return 'Ověření checkpointu a původních AI tahů uloženo odděleně. Nebyl odeslán nový AI úkol.';
+      }
+      renderAutonomous(await request(operation, payload));
+      return operation === 'pause_autonomous' ? 'Požadavek na pozastavení uložen. Rozpracované jednotky se dokončí.' :
+        operation === 'interrupt_autonomous' ? 'Přerušování probíhá. Platné výsledky a původní spotřeba zůstávají zachovány.' :
+        'Pokračování stejného průchodu zahájeno od ověřeného bodu.';
+    })); controls.append(button);
+  }
+  const recovery = element('p', 'Po přerušení lze ověřit uložené podklady a původní AI tahy a pokračovat. Zavření aplikace přeruší běžící práci.', 'hint');
+  recovery.id = 'recovery-state'; recovery.setAttribute('aria-live', 'polite');
+  panel.append(start, state, controls, recovery, stages, results); detail.append(panel);
   request('output_results', {run_id: data.project.run_id}).then(renderExportResults).catch(error => {
     if (selectedRun === data.project.run_id) results.textContent = error.message;
   });
@@ -42,14 +72,31 @@ function renderAutonomous(status) {
   if (selectedRun !== status.run_id) return;
   const state = document.querySelector('#autonomous-state'); if (!state) return;
   state.dataset.state = status.state;
+  autonomousDisplayed.set(status.run_id, status);
   const names = {not_started: 'Autonomní akce dosud nespuštěna', starting: 'Spouštění',
-    running: 'Probíhá', completed: 'Operace dokončena', failed: 'Operace selhala', interrupted: 'Operace přerušena'};
+    running: 'Probíhá', paused: 'Pozastaveno', interrupting: 'Přerušování', completed: 'Operace dokončena', failed: 'Operace selhala', interrupted: 'Operace přerušena'};
   state.textContent = `${names[status.state] || status.state}${status.stage ? ' · ' + status.stage : ''}`;
   if (status.error) state.textContent += ` · ${status.error.message} (${status.error.code})`;
   if (status.validation) state.textContent += ` · validace: ${status.validation} · přijetí: ${status.acceptance}`;
   document.querySelector('#autonomous-stages').replaceChildren(...status.stages.map(stage =>
     element('li', `${stage.stage} · ${stage.state}${stage.error ? ' · ' + stage.error.message : ''}`)));
   document.querySelector('#start-first-export').disabled = codexRunning() || status.state === 'completed';
+  const active = ['starting', 'running'].includes(status.state);
+  const stopped = ['paused', 'interrupted', 'failed'].includes(status.state);
+  document.querySelector('#pause-autonomous').disabled = !active || status.control === 'pause';
+  document.querySelector('#interrupt-autonomous').disabled = !active;
+  document.querySelector('#reconcile-autonomous').disabled = !stopped;
+  const proof = recoveryProofs.get(status.run_id);
+  document.querySelector('#resume-autonomous').disabled = !stopped || proof?.attempt_id !== status.attempt_id ||
+    !proof?.checkpoint.valid || !proof?.provider.safe_to_continue;
+  if (proof?.attempt_id === status.attempt_id) renderRecovery(proof);
+}
+
+function renderRecovery(proof) {
+  const target = document.querySelector('#recovery-state'); if (!target) return;
+  target.textContent = `OCR checkpoint: ${proof.checkpoint.valid ? 'ověřen' : 'neplatný'} · původní AI tahy: ${proof.provider.state}`;
+  if (!proof.checkpoint.valid) target.textContent += ` · ${proof.checkpoint.error.message}`;
+  if (!proof.provider.safe_to_continue) target.textContent += ' · Pokračování čeká na doložení skutečného původního tahu; automatické opakování je zablokováno.';
 }
 
 function renderExportResults(result) {
@@ -106,8 +153,8 @@ setInterval(async () => {
     const status = await request('autonomous_status', {run_id: runId});
     if (selectedRun !== runId) return;
     renderAutonomous(status);
-    if (['completed', 'failed', 'interrupted'].includes(status.state) && exportTerminal.get(runId) !== status.attempt_id) {
-      exportTerminal.set(runId, status.attempt_id);
+    if (['completed', 'failed', 'interrupted', 'paused'].includes(status.state) && exportTerminal.get(runId) !== status.attempt_id + status.state) {
+      exportTerminal.set(runId, status.attempt_id + status.state);
       renderRun(await request('select_run', {run_id: runId})); renderAutonomous(status);
       renderExportResults(await request('output_results', {run_id: runId}));
     }

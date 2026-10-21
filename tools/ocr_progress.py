@@ -20,6 +20,7 @@ class ProgressReporter:
         self._starts = {}
         self._lock = threading.RLock()
         self._sequence = 0
+        self.control_file = None
         if self.path is None:
             return
         if (not self.path.is_relative_to(Path(work).resolve()) or
@@ -62,6 +63,26 @@ class ProgressReporter:
                 stream.flush()
                 import os
                 os.fsync(stream.fileno())
+
+    def admit(self, step_id=None, **unit):
+        """Check a durable request before starting the next indivisible unit.
+
+        Each of the two native workers checks this immediately before work;
+        already admitted units finish and commit their original cache record.
+        """
+        if self.control_file is None:
+            if step_id is not None:
+                self.emit('unit_started', step_id, **unit)
+            return
+        with self._lock, Path(str(self.control_file) + '.lock').open('a') as gate:
+            fcntl.flock(gate, fcntl.LOCK_EX)
+            value = json.loads(self.control_file.read_text())
+            if value.get('attempt_id') != self.attempt_id or value.get('run_id') != self.run_id:
+                raise ProjectError('control_invalid', 'Control belongs to a different attempt.')
+            if value.get('action') == 'pause':
+                raise ProjectError('autonomous_paused', 'Paused before admitting the next native unit.')
+            if step_id is not None:
+                self.emit('unit_started', step_id, **unit)
 
     def failed(self, error):
         failure = {'code': getattr(error, 'code', 'prepare_failed'), 'message': str(error),

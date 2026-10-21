@@ -7,14 +7,15 @@ The OCR implementation stays behind its existing subprocess JSON protocol.
 
 from collections import deque
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import threading
 
 from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_run_name
-from .jobs import JobError, PreparationJobs, read_history
-from .codex import CodexJobs
+from .jobs import JobError, PreparationJobs, read_history, atomic_json
+from .codex import CodexJobs, process_identity
 from .context import ContextJobs
 from .reading import ReadingJobs
 from .geometry import GeometryJobs
@@ -34,12 +35,64 @@ class OcrProcess:
     def __init__(self, command=None):
         self.command = list(command) if command else [
             sys.executable, str(Path(__file__).resolve().parents[1] / 'tools/ocr_projects.py')]
+        self._owner = threading.local()
 
-    def request(self, root, *arguments, allowed_returncodes=(0,), timeout=30):
+    def bind_owner(self, job):
+        self._owner.job = job
+
+    def release_owner(self):
+        self._owner.job = None
+
+    def request(self, root, *arguments, allowed_returncodes=(0,), timeout=30, cancelled=None, owned=None):
+        job = getattr(self._owner, 'job', None)
+        if job is not None and cancelled is None:
+            cancelled = lambda: job['cancel']
+
+            def owned(process):
+                job['manifest'].setdefault('native_processes', []).append({'pid': process.pid,
+                    'process_group': process.pid, 'process_start_ticks': process_identity(process.pid),
+                    'operation': str(arguments[0])})
+                atomic_json(job['directory'] / 'attempt.json', job['manifest'])
+        if cancelled is not None and cancelled():
+            raise ApplicationError('operation_cancelled', 'Application stopped before native work was admitted.')
         try:
-            result = subprocess.run(
-                [*self.command, '--root', str(root), '--json', *map(str, arguments)],
-                capture_output=True, timeout=timeout)
+            command = [*self.command, '--root', str(root), '--json', *map(str, arguments)]
+            if cancelled is None:
+                result = subprocess.run(command, capture_output=True, timeout=timeout)
+            else:
+                import signal
+                import time
+                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+                try:
+                    if owned:
+                        owned(process)
+                    deadline = time.monotonic() + timeout
+                    while True:
+                        if cancelled() or time.monotonic() >= deadline:
+                            try:
+                                os.killpg(process.pid, signal.SIGTERM)
+                            except ProcessLookupError:
+                                pass
+                            try:
+                                process.communicate(timeout=2)
+                            except subprocess.TimeoutExpired:
+                                os.killpg(process.pid, signal.SIGKILL)
+                                process.communicate()
+                            raise ApplicationError('operation_cancelled' if cancelled() else 'ocr_timeout', 'Owned native operation stopped.')
+                        try:
+                            stdout, stderr = process.communicate(timeout=.05)
+                            result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+                            break
+                        except subprocess.TimeoutExpired:
+                            pass
+                finally:
+                    # The group belongs to this exact Popen session, including
+                    # helpers left after the leader returned.
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
         except subprocess.TimeoutExpired:
             raise ApplicationError('ocr_timeout', 'OCR process did not answer in time.') from None
         except OSError as error:
@@ -70,6 +123,7 @@ class Application:
         self._lock = threading.RLock()
         self._events = deque(maxlen=1000)
         self._sequence = 0
+        self._closing = False
         self.preparation = PreparationJobs(self.process.command, self.publish)
         self.codex = CodexJobs(self.publish, codex_runtime)
         self.context = ContextJobs(self.publish, codex_runtime, context_runtime)
@@ -84,6 +138,15 @@ class Application:
                 if not isinstance(payload, (dict, type(None))):
                     raise ApplicationError('invalid_request', 'Request payload must be an object.')
                 payload = payload or {}
+                if self._closing and (operation.startswith('start_') or operation == 'resume_autonomous'):
+                    raise ApplicationError('application_closing', 'Application is closing; no new work can start.')
+                if operation in ('start_preparation', 'start_model_diagnostic', 'start_context_diagnostic',
+                        'start_reading', 'start_geometry', 'start_output_review', 'start_first_export') and payload.get('run_id'):
+                    saved_run = self.select_run(payload['run_id'])
+                    work = self.root / saved_run['artifacts']['workspace']['path']
+                    parent = self.autonomous.status(self.root, payload['run_id'], work)
+                    if parent['state'] in ('paused', 'interrupted', 'failed', 'interrupting'):
+                        raise ApplicationError('reconciliation_required', 'Continue this saved autonomous attempt through checkpoint and original-turn reconciliation.')
                 if (self.autonomous.busy() or self.output_review.busy()) and operation in (
                         'open_registry', 'import_sources', 'create_run', 'start_preparation', 'start_model_diagnostic',
                         'start_context_diagnostic', 'prepare_context_diagnostic', 'start_reading', 'start_geometry',
@@ -106,6 +169,15 @@ class Application:
                     data = self.start_preparation(payload)
                 elif operation in ('start_autonomous', 'start_first_export'):
                     data = self.start_autonomous(payload, from_geometry=operation == 'start_first_export')
+                elif operation in ('pause_autonomous', 'interrupt_autonomous', 'reconcile_autonomous', 'resume_autonomous'):
+                    run = self.select_run(payload.get('run_id'))
+                    if operation == 'reconcile_autonomous':
+                        data = self.autonomous.reconcile(run, payload.get('attempt_id'))
+                    elif operation == 'resume_autonomous':
+                        data = self.autonomous.resume(run, payload)
+                    else:
+                        data = self.autonomous.control(run, payload.get('attempt_id'),
+                            'pause' if operation == 'pause_autonomous' else 'interrupt')
                 elif operation == 'autonomous_status':
                     run = self.select_run(payload.get('run_id'))
                     data = self.autonomous.status(self.root, run['project']['run_id'],
@@ -196,6 +268,10 @@ class Application:
                 return {'ok': False, 'data': None,
                         'error': {'code': error.code, 'message': str(error)},
                         'event_cursor': self._sequence}
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                if operation in ('pause_autonomous', 'interrupt_autonomous', 'reconcile_autonomous', 'resume_autonomous', 'autonomous_status'):
+                    return {'ok': False, 'data': None, 'error': {'code': 'checkpoint_invalid', 'message': str(error)}, 'event_cursor': self._sequence}
+                raise
 
     def publish(self, event_type, **data):
         with self._lock:
@@ -283,7 +359,7 @@ class Application:
             if not isinstance(environment, str) or not environment.strip():
                 raise ApplicationError('invalid_request', 'Environment manifest must be a file path.')
             environment = str(Path(environment).expanduser().resolve())
-        return self.preparation.start(self.root, run, environment)
+        return self.preparation.start(self.root, run, environment, resume=payload.get('resume_preparation') is True)
 
     def preparation_status(self, run_id):
         if not isinstance(run_id, str) or not run_id:
@@ -293,6 +369,8 @@ class Application:
         return self.preparation.status(self.root, run_id, work)
 
     def close(self):
+        with self._lock:
+            self._closing = True
         self.autonomous.close()
         self.preparation.close()
         self.codex.close()
@@ -303,6 +381,14 @@ class Application:
         self.autonomous.join()
 
     def start_autonomous(self, payload, *, from_geometry=False):
+        lease = self.autonomous._lease()
+        try:
+            return self._start_autonomous(payload, from_geometry=from_geometry, lease=lease)
+        except BaseException:
+            lease.close()
+            raise
+
+    def _start_autonomous(self, payload, *, from_geometry=False, lease=None):
         if any(manager.busy() for manager in (self.preparation, self.codex, self.context, self.reading, self.geometry, self.output_review)):
             raise ApplicationError('operation_active', 'Another preparation or AI operation is active.')
         if from_geometry:
@@ -330,7 +416,7 @@ class Application:
             if len(imported['editions']) != 1:
                 raise ApplicationError('single_source_required', 'Choose one PDF for an autonomous named run.')
             run = self.create_run({**payload, 'edition_id': imported['editions'][0]['edition_id']})
-        return self.autonomous.start(run, payload, from_geometry=from_geometry)
+        return self.autonomous.start(run, payload, from_geometry=from_geometry, lease=lease)
 
     def start_output_review(self, payload):
         if any(manager.busy() for manager in (self.preparation, self.codex, self.context, self.reading, self.geometry, self.output_review)):
@@ -554,7 +640,8 @@ class Application:
                 any(expected.get(key) != parameters[key] for key in ('dpi', 'language'))):
             raise ApplicationError('reading_preparation_required', 'A verified native source preparation with this run profile is required before visual reading.')
         self.process.request(self.root, 'reading-input', run['project']['run_id'])
-        return self.reading.start(self.root, run, operation='visual_reading', metadata={'run': run, 'preflight': readiness, 'model': model})
+        return self.reading.start(self.root, run, operation='visual_reading', metadata={'run': run, 'preflight': readiness,
+            'model': model, 'previous_reading_attempt_id': payload.get('previous_reading_attempt_id')})
 
     def start_model_diagnostic(self, payload, operation='vision_diagnostic'):
         if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
@@ -584,7 +671,8 @@ class Application:
         if run['project']['operation_state'] == 'running':
             raise ApplicationError('project_busy', 'Another process is active for this run.')
         try:
-            return self.context.start(self.root, run, operation='context_diagnostic')
+            return self.context.start(self.root, run, operation='context_diagnostic',
+                metadata={'previous_context_attempt_id': payload.get('previous_context_attempt_id')})
         except OSError as error:
             raise ApplicationError('context_artifact_failed', f'Cannot preserve context diagnostic: {error}') from None
 

@@ -288,7 +288,7 @@ def local_steps(root, application, run, sources, warnings):
     events = run.get('history', [])
     steps = []
     for path in sorted((application / 'attempts').glob('*.json')):
-        if path.name.endswith('.stdout.json'):
+        if path.name.endswith(('.stdout.json', '.control.json')):
             continue
         path = safe_file(root, path)
         raw = path.read_bytes()

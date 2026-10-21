@@ -54,6 +54,23 @@ def verify_proposal(packet, source, source_turn, proposal, tools):
 def verify_trace(value, packet, protocol):
     """Re-derive publication evidence from original JSON-RPC, not saved flags."""
     frames = [json.loads(line)['message'] for line in protocol.read_text().splitlines()]
+    reused = value.get('reused_source')
+    if reused:
+        original_path, original_protocol = Path(reused['attempt']['path']), Path(reused['protocol']['path'])
+        if sha(original_path) != reused['attempt']['sha256'] or sha(original_protocol) != reused['protocol']['sha256']:
+            raise JobError('reading_evidence_mismatch', 'Preserved source-turn evidence changed.')
+        original = json.loads(original_path.read_text())
+        if original['source'] != packet or original['turns'][0] != value['turns'][0]:
+            raise JobError('reading_evidence_mismatch', 'Preserved independent source turn differs.')
+        prefix = []
+        for line in original_protocol.read_text().splitlines():
+            message = json.loads(line)['message']
+            prefix.append(message)
+            if message.get('method') == 'turn/completed' and message['params']['turn']['id'] == value['turns'][0]['turn_id']:
+                break
+        else:
+            raise JobError('reading_evidence_mismatch', 'Preserved source turn has no original completion.')
+        frames = prefix + frames
     requests = [m['params'] for m in frames if m.get('method') == 'turn/start']
     terminals = {m['params']['turn']['id']: m['params']['turn'] for m in frames if m.get('method') == 'turn/completed'}
     if len(requests) != 2 or len(value['turns']) != 2 or value['reroutes']:
@@ -221,7 +238,7 @@ class ReadingJobs(ContextJobs):
         def connect(settings, trust=None):
             stderr = (job['directory'] / 'stderr.log').open('a', encoding='utf-8')
             rpc = RpcProcess(command(self.runtime, settings, trust), workspace, stderr, trace,
-                lambda: job['cancel'], env=settings['process_environment'])
+                lambda: job['cancel'], env=settings['process_environment'], paused=lambda: job.get('pause', False))
             job['rpc'], job['stderr'] = rpc, stderr
             identity = {'connection_id': str(len(value['connections'])), 'pid': rpc.process.pid,
                 'process_group': rpc.process.pid, 'process_start_ticks': process_identity(rpc.process.pid)}
@@ -320,15 +337,42 @@ class ReadingJobs(ContextJobs):
             if found is None or 'image' not in found.get('inputModalities', []) or not any(
                     effort.get('reasoningEffort') == EFFORT for effort in found.get('supportedReasoningEfforts', [])):
                 raise JobError('model_capability_unavailable', 'The exact model/high/image combination is unavailable.')
-            thread = rpc.request('thread/start', {'model': MODEL, 'cwd': str(workspace),
+            previous = metadata.get('previous_reading_attempt_id')
+            reused_source = None
+            if previous:
+                if not isinstance(previous, str) or len(previous) != 32 or any(c not in '0123456789abcdef' for c in previous):
+                    raise JobError('attempt_invalid', 'Invalid previous reading attempt.')
+                original_path = work / 'application/reading-attempts' / previous / 'attempt.json'
+                original = json.loads(original_path.read_text())
+                turns = original.get('turns', [])
+                if (original['run_id'] != value['run_id'] or original['source'] != packet or
+                        original['runtime'] != self.runtime or original['context_runtime'] != self.context_runtime):
+                    raise JobError('reading_source_changed', 'Previous source reading has different bindings.')
+                if turns and turns[0]['stage'] == 'source' and turns[0]['state'] == 'completed' and turns[0].get('answer'):
+                    reused_source = original
+                    protocol = root / original['artifacts']['protocol']
+                    value['reused_source'] = {'attempt': {'path': str(original_path), 'sha256': sha(original_path)},
+                        'protocol': {'path': str(protocol), 'sha256': sha(protocol)}}
+            thread_params = {'model': MODEL, 'cwd': str(workspace),
                 'config': {'model_reasoning_effort': EFFORT}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
                 'runtimeWorkspaceRoots': [str(workspace), str(storage)], 'dynamicTools': TOOLS,
-                'developerInstructions': instructions}, notify)
+                'developerInstructions': instructions}
+            if reused_source:
+                thread_params['threadId'] = reused_source['thread_id']
+            thread = rpc.request('thread/resume' if reused_source else 'thread/start', thread_params, notify)
             value['thread_id'] = thread['thread']['id']
             value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort'), 'source': 'thread/start'}
             if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
                 raise JobError('model_configuration_mismatch', 'Reading thread did not confirm the exact requested model/high.')
-            source_turn, source = turn('source', instructions + '\nORIGINAL_SOURCE_PACKET\n' + json.dumps(packet), SOURCE_SCHEMA, packet['pages'])
+            if reused_source:
+                if value['thread_id'] != reused_source['thread_id']:
+                    raise JobError('codex_identity_mismatch', 'Resumed a different source thread.')
+                source_turn = copy.deepcopy(reused_source['turns'][0])
+                source = json.loads(source_turn['answer'])
+                value['turns'].append(source_turn)
+                self._event(job, 'reading_source_reused', original_attempt_id=previous, thread_id=value['thread_id'], turn_id=source_turn['turn_id'])
+            else:
+                source_turn, source = turn('source', instructions + '\nORIGINAL_SOURCE_PACKET\n' + json.dumps(packet), SOURCE_SCHEMA, packet['pages'])
             verify_source(packet, source)
             value['counts'].update(pages_read=len(source['read_pages']), lines_read=len(source['review']['lines']), units_read=len(source['review']['units']))
             phase = 'accounting'
@@ -350,7 +394,7 @@ class ReadingJobs(ContextJobs):
             value.update(state='completed', reading_complete=True, coverage=proposal['coverage'],
                 review_sha256=publication['project']['review_sha256'])
         except Exception as error:
-            value.update(state='interrupted' if job['cancel'] or getattr(error, 'code', None) == 'codex_turn_interrupted' else 'failed',
+            value.update(state='paused' if getattr(error, 'code', None) == 'autonomous_paused' else 'interrupted' if job['cancel'] or getattr(error, 'code', None) == 'codex_turn_interrupted' else 'failed',
                 error={'code': getattr(error, 'code', 'reading_protocol_invalid'), 'message': str(error)})
         finally:
             disconnect()

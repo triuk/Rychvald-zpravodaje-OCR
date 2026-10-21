@@ -58,6 +58,33 @@ def sha(path):
     return digest.hexdigest()
 
 
+def group_members(group):
+    """Kernel start identities of members observed in an owned new session."""
+    members = {}
+    for path in Path('/proc').iterdir():
+        if not path.name.isdecimal():
+            continue
+        try:
+            fields = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+            if int(fields[2]) == group and int(fields[3]) == group:
+                members[int(path.name)] = fields[19]
+        except (OSError, ValueError, IndexError):
+            continue
+    return members
+
+
+def stop_owned_group(process, members):
+    """A dead leader cannot exempt a proven surviving helper from cleanup."""
+    current = group_members(process.pid)
+    if process.poll() is None:
+        members.update(current)
+    if any(current.get(pid) == ticks for pid, ticks in members.items()):
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def verify_checkpoint(work, expected, events):
     checkpoint = work / 'preparation-checkpoint.json'
     value = json.loads(checkpoint.read_text(encoding='utf-8'))
@@ -101,7 +128,7 @@ class PreparationJobs:
         with self._lock:
             return self._active is not None
 
-    def start(self, root, run, environment=None):
+    def start(self, root, run, environment=None, *, resume=False):
         with self._lock:
             if self._active is not None:
                 raise JobError('operation_active', 'A local preparation is active; wait for it to finish.')
@@ -111,21 +138,24 @@ class PreparationJobs:
             directory = work / 'application' / 'attempts'
             directory.mkdir(parents=True, exist_ok=True)
             attempt_id = uuid.uuid4().hex
+            control = directory / (attempt_id + '.control.json')
+            atomic_json(control, {'attempt_id': attempt_id, 'run_id': run_id, 'action': 'run'})
             parameters = run['run']['profile']['parameters']
-            command = [*self.command, '--root', str(root), '--json', 'prepare', run_id,
+            operation = 'resume' if resume and (work / 'preparation-identity.json').is_file() else 'prepare'
+            command = [*self.command, '--root', str(root), '--json', operation, run_id,
                        '--dpi', str(parameters['dpi']), '--language', parameters['language'],
-                       '--progress-events', str(history), '--attempt-id', attempt_id]
+                       '--progress-events', str(history), '--attempt-id', attempt_id, '--control-file', str(control)]
             if environment is not None:
                 command.extend(['--environment', environment])
             manifest_path = directory / f'{attempt_id}.json'
             manifest = {'schema_version': 1, 'attempt_id': attempt_id, 'run_id': run_id,
-                        'root': str(root), 'operation': 'prepare', 'state': 'starting',
+                        'root': str(root), 'operation': operation, 'state': 'starting',
                         'started_at': datetime.now(timezone.utc).isoformat(), 'ended_at': None,
-                        'pid': None, 'process_group': None, 'command': command,
+                        'pid': None, 'process_group': None, 'command': command, 'control_file': str(control),
                         'expected': {'source_sha256': run['project']['source_sha256'],
                                      'source_path': str(root / run['artifacts']['source']['path']),
                                      'dpi': parameters['dpi'], 'language': parameters['language']},
-                        'environment': environment,
+                        'environment': environment, 'parent_binding': getattr(self, 'launch_parent', None),
                         'history': str(history.relative_to(root)),
                         'stdout': str((directory / f'{attempt_id}.stdout.json').relative_to(root)),
                         'stderr': str((directory / f'{attempt_id}.stderr.log').relative_to(root)), 'error': None}
@@ -154,13 +184,23 @@ class PreparationJobs:
         try:
             with (root / value['stdout']).open('wb') as stdout, (root / value['stderr']).open('wb') as stderr:
                 process = subprocess.Popen(value['command'], stdout=stdout, stderr=stderr, start_new_session=True)
+                members = group_members(process.pid)
+                job['members'] = members
+                cancelled_at = None
                 with self._lock:
                     job['process'] = process
-                    value.update(state='running', pid=process.pid, process_group=process.pid)
+                    from .codex import process_identity
+                    value.update(state='running', pid=process.pid, process_group=process.pid,
+                        process_start_ticks=process_identity(process.pid))
                     atomic_json(job['path'], value)
                 while process.poll() is None:
+                    members.update(group_members(process.pid))
                     if job['cancel']:
-                        os.killpg(process.pid, signal.SIGTERM)
+                        cancelled_at = cancelled_at or time.monotonic()
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL if time.monotonic() - cancelled_at >= 2 else signal.SIGTERM)
+                        except ProcessLookupError:
+                            pass
                     forward()
                     time.sleep(.05)
                 value['returncode'] = process.returncode
@@ -171,7 +211,7 @@ class PreparationJobs:
             if len(raw) > 4096:
                 raise JobError('ocr_protocol_invalid', 'Native summary exceeds 4 KiB.')
             response = json.loads(raw)
-            if not isinstance(response, dict) or response.get('protocol_version') != 1 or response.get('operation') != 'prepare':
+            if not isinstance(response, dict) or response.get('protocol_version') != 1 or response.get('operation') != value['operation']:
                 raise JobError('ocr_protocol_invalid', 'Native process returned an invalid preparation response.')
             if response.get('error'):
                 raise JobError(response['error']['code'], response['error']['message'])
@@ -180,12 +220,12 @@ class PreparationJobs:
             verify_checkpoint(job['work'], value['expected'], events)
             value['state'] = 'completed'
         except BaseException as error:
-            value['state'] = 'interrupted' if job['cancel'] else 'failed'
+            value['state'] = 'paused' if getattr(error, 'code', None) == 'autonomous_paused' else 'interrupted' if job['cancel'] else 'failed'
             value['error'] = {'code': getattr(error, 'code', 'prepare_failed'), 'message': str(error)}
             try:
                 events = read_history(root / value['history'])
                 if not any(event.get('attempt_id') == value['attempt_id'] and
-                           event.get('type') in ('attempt_failed', 'attempt_interrupted') for event in events):
+                           event.get('type') in ('attempt_failed', 'attempt_interrupted', 'attempt_paused') for event in events):
                     event = {'schema_version': 1, 'event_id': value['attempt_id'] + ':worker-terminal',
                              'attempt_id': value['attempt_id'], 'run_id': value['run_id'],
                              'type': 'attempt_interrupted' if job['cancel'] else 'attempt_failed',
@@ -211,6 +251,8 @@ class PreparationJobs:
                     process.wait()
                 except ProcessLookupError:
                     process.wait()
+            if process is not None:
+                stop_owned_group(process, job.get('members', {}))
             value['ended_at'] = datetime.now(timezone.utc).isoformat()
             with self._lock:
                 atomic_json(job['path'], value)
@@ -228,7 +270,7 @@ class PreparationJobs:
 
     def _status(self, root, run_id, work):
         paths = list((work / 'application' / 'attempts').glob('*.json'))
-        paths = [path for path in paths if not path.name.endswith('.stdout.json')]
+        paths = [path for path in paths if not path.name.endswith(('.stdout.json', '.control.json'))]
         if not paths:
             return {'run_id': run_id, 'state': 'not_started', 'events': [], 'counts': {}, 'checkpoint_valid': False}
         values = [json.loads(path.read_text(encoding='utf-8')) for path in paths]
@@ -247,7 +289,7 @@ class PreparationJobs:
                 active[step] = event
             elif kind in ('step_completed', 'step_failed', 'unit_completed', 'unit_cached'):
                 active.pop(step, None)
-            elif kind in ('attempt_completed', 'attempt_failed', 'attempt_interrupted'):
+            elif kind in ('attempt_completed', 'attempt_failed', 'attempt_interrupted', 'attempt_paused'):
                 active.clear()
             if kind in ('unit_completed', 'unit_cached'):
                 units[step] = event
@@ -278,3 +320,24 @@ class PreparationJobs:
             if process is not None and process.poll() is None:
                 os.killpg(process.pid, signal.SIGKILL)
                 job['thread'].join(timeout=3)
+
+    def control(self, action):
+        with self._lock:
+            if self._active:
+                job = self._active
+                if action == 'pause':
+                    value = job['manifest']
+                    control = Path(value['control_file'])
+                    with Path(str(control) + '.lock').open('a') as gate:
+                        fcntl.flock(gate, fcntl.LOCK_EX)
+                        atomic_json(control, {'attempt_id': value['attempt_id'], 'run_id': value['run_id'], 'action': action})
+                        event = {'schema_version': 1, 'event_id': value['attempt_id'] + ':pause:' + uuid.uuid4().hex,
+                            'attempt_id': value['attempt_id'], 'run_id': value['run_id'], 'type': 'pause_requested',
+                            'step_id': 'preparation', 'timestamp': datetime.now(timezone.utc).isoformat()}
+                        with (Path(value['root']) / value['history']).open('a') as stream:
+                            fcntl.flock(stream, fcntl.LOCK_EX)
+                            stream.write(json.dumps(event) + '\n')
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                else:
+                    job['cancel'] = True
