@@ -20,6 +20,7 @@ from .reading import ReadingJobs
 from .geometry import GeometryJobs
 from .output_review import OutputReviewJobs
 from .autonomous import AutonomousJobs
+from .corrections import CorrectionJobs
 
 
 class ApplicationError(Exception):
@@ -77,6 +78,7 @@ class Application:
         self.geometry = GeometryJobs(self.publish, codex_runtime, context_runtime, self.process)
         self.output_review = OutputReviewJobs(self.publish, codex_runtime, context_runtime, self.process)
         self.autonomous = AutonomousJobs(self)
+        self.corrections = CorrectionJobs(self, codex_runtime, context_runtime)
 
     def dispatch(self, operation, payload=None):
         with self._lock:
@@ -84,11 +86,11 @@ class Application:
                 if not isinstance(payload, (dict, type(None))):
                     raise ApplicationError('invalid_request', 'Request payload must be an object.')
                 payload = payload or {}
-                if (self.autonomous.busy() or self.output_review.busy()) and operation in (
+                if (self.autonomous.busy() or self.output_review.busy() or self.corrections.busy()) and operation in (
                         'open_registry', 'import_sources', 'create_run', 'start_preparation', 'start_model_diagnostic',
                         'start_context_diagnostic', 'prepare_context_diagnostic', 'start_reading', 'start_geometry',
                         'patch_geometry', 'recover_geometry', 'start_autonomous', 'start_first_export', 'start_output_review',
-                        'check_codex_account', 'start_codex_login'):
+                        'check_codex_account', 'start_codex_login', 'start_corrections'):
                     raise ApplicationError('operation_active', 'An autonomous/export operation is active; wait for its saved result.')
                 if operation == 'projects':
                     data = self.projects()
@@ -118,6 +120,16 @@ class Application:
                         self.root / run['artifacts']['workspace']['path'])
                 elif operation == 'output_results':
                     data = self.output_results(payload)
+                elif operation == 'start_corrections':
+                    data = self.start_corrections(payload)
+                elif operation == 'correction_status':
+                    run = self.select_run(payload.get('run_id'))
+                    data = self.corrections.status(self.root, run['project']['run_id'],
+                        self.root / run['artifacts']['workspace']['path'])
+                elif operation == 'correction_history':
+                    data = self.correction_history(payload)
+                elif operation == 'open_correction_artifact':
+                    data = self.open_correction_artifact(payload)
                 elif operation == 'open_output_artifact':
                     data = self.open_output_artifact(payload)
                 elif operation == 'preparation_status':
@@ -294,6 +306,7 @@ class Application:
 
     def close(self):
         self.autonomous.close()
+        self.corrections.close()
         self.preparation.close()
         self.codex.close()
         self.context.close()
@@ -301,6 +314,69 @@ class Application:
         self.geometry.close()
         self.output_review.close()
         self.autonomous.join()
+
+    def start_corrections(self, payload):
+        if any(manager.busy() for manager in (self.preparation, self.codex, self.context, self.reading, self.geometry,
+                self.output_review, self.corrections)):
+            raise ApplicationError('operation_active', 'Wait for the current native or AI operation before corrections.')
+        run = self.select_run(payload.get('run_id'))
+        if not run.get('run'):
+            raise ApplicationError('run_profile_required', 'Corrections require a named run and frozen profile.')
+        if not isinstance(payload.get('expected_iteration_id'), str) or not isinstance(payload.get('expected_validation_sha256'), str):
+            raise ApplicationError('invalid_request', 'Choose the current complete export iteration and native validation hash.')
+        try:
+            work = self.root / run['artifacts']['workspace']['path']
+            checkpoint = json.loads((work / 'geometry-checkpoint.json').read_text())
+            if checkpoint['runtime'] != self.corrections.runtime or checkpoint['context_runtime'] != self.corrections.context_runtime:
+                raise ValueError('Correction runtime differs from the completed run-local preflight.')
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise ApplicationError('correction_preflight_changed', str(error)) from error
+        return self.corrections.start_corrections(self.root, run, payload)
+
+    def correction_history(self, payload):
+        from .jobs import sha
+        run = self.select_run(payload.get('run_id'))
+        work = self.root / run['artifacts']['workspace']['path']
+        status = self.corrections.status(self.root, run['project']['run_id'], work)
+        artifacts = {}
+        for cycle in status['cycles']:
+            for key in ('plan', 'proposal', 'publication', 'outcome', 'attempt', 'patch'):
+                name = cycle.get(key)
+                if name and (work / name).is_file():
+                    path = (work / name).resolve()
+                    if not path.is_relative_to(work.resolve()):
+                        raise ApplicationError('artifact_unavailable', 'Correction evidence escapes this run.')
+                    artifacts[str(path.relative_to(self.root))] = sha(path)
+            if cycle.get('previous_snapshot'):
+                directory = (work / cycle['previous_snapshot']).resolve()
+                if not directory.is_relative_to((work / 'iterations').resolve()):
+                    raise ApplicationError('artifact_unavailable', 'Previous iteration escapes this run.')
+                manifest = json.loads((directory / 'snapshot.json').read_text())
+                artifacts[str((directory / 'snapshot.json').relative_to(self.root))] = sha(directory / 'snapshot.json')
+                for name, record in manifest['artifacts'].items():
+                    if record['stored']:
+                        path = (directory / name).resolve()
+                        if not path.is_relative_to(directory) or sha(path) != record['sha256']:
+                            raise ApplicationError('artifact_unavailable', 'Archived correction evidence changed.')
+                        artifacts[str(path.relative_to(self.root))] = record['sha256']
+        offset, limit = payload.get('offset', 0), payload.get('limit', 100)
+        if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 200:
+            raise ApplicationError('invalid_request', 'History pages require offset >=0 and limit 1..200.')
+        rows = [{'path': name, 'sha256': digest} for name, digest in artifacts.items()]
+        return {**status, 'artifacts': rows[offset:offset+limit], 'total_artifacts': len(rows),
+            'next_offset': offset+limit if offset+limit < len(rows) else None}
+
+    def open_correction_artifact(self, payload):
+        offset, item = 0, None
+        while offset is not None and item is None:
+            result = self.correction_history({**payload, 'offset': offset, 'limit': 200})
+            item = next((a for a in result['artifacts'] if a['path'] == payload.get('path') and a['sha256'] == payload.get('sha256')), None)
+            offset = result['next_offset']
+        if item is None:
+            raise ApplicationError('artifact_unavailable', 'Choose an original archived artifact and its exact hash.')
+        subprocess.Popen(['xdg-open', str(self.root / item['path'])], stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True)
+        return {'requested': True, 'path': item['path'], 'meaning': 'External open request; acceptance remains separate.'}
 
     def start_autonomous(self, payload, *, from_geometry=False):
         if any(manager.busy() for manager in (self.preparation, self.codex, self.context, self.reading, self.geometry, self.output_review)):
@@ -379,6 +455,8 @@ class Application:
                 except ApplicationError as error:
                     provenance = {'status': 'invalidated', 'code': error.code, 'message': str(error)}
             return {'run_id': run['project']['run_id'], 'project': run['project'], 'available': True,
+                'iteration_id': manifest['iteration_id'],
+                'validation_sha256': sha(work / 'checks/run-validation.json') if (work / 'checks/run-validation.json').exists() else None,
                 'workspace': str(work),
                 'reports': reports, 'report_provenance': provenance, 'prepared_resume': prepared_resume,
                 'artifacts': [{'path': name, 'sha256': digest} for name, digest in allowed.items()]}

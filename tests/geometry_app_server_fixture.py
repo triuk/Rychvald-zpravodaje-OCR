@@ -42,8 +42,28 @@ for raw in sys.stdin:
         prompt = params['input'][0]['text']
         source = 'SOURCE_GEOMETRY_PACKET\n' in prompt
         output = 'OUTPUT_PACKET\n' in prompt
-        packet = json.loads(prompt.split('OUTPUT_PACKET\n' if output else 'SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
-        if output:
+        correction = 'CORRECTION_PACKET\n' in prompt
+        packet = json.loads(prompt.split('CORRECTION_PACKET\n' if correction else 'OUTPUT_PACKET\n' if output else 'SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
+        if correction:
+            line = dict(packet['lines'][0], text='ABC', decision_basis='Controlled targeted source ABC crop reading')
+            if mode == 'repeated':
+                line['text'] = packet['lines'][0]['text']
+                line['selection_region'] = [0, 0, 90 + packet['index'], 20]
+            if mode == 'limit':
+                line['text'] = {1: 'AYC', 2: 'AZC', 3: 'AQC'}[packet['index']]
+            if mode == 'invalid':
+                line['selection_region'] = [0, 0, 99999, 20]
+            answer = {'expected_review_sha256': packet['expected_review_sha256'],
+                'expected_iteration_id': packet['expected_iteration_id'], 'target_finding_ids': packet['target_finding_ids'],
+                'images_examined': packet['images'], 'patch': {'lines': [{'line': line}]},
+                'decisions': [{'finding_id': key, 'reason': 'Controlled ABC scan supports changing mistaken AXC to ABC',
+                    'evidence': [packet['images'][0]['path']]} for key in packet['target_finding_ids']],
+                'remaining_uncertainties': ['Geometry remains approximate']}
+            if mode == 'noop':
+                answer['patch'] = {'lines': []}
+            if mode == 'publisher':
+                answer['patch']['lines'][0]['publisher_errors'] = []
+        elif output:
             visual = {**packet['visual_review'], 'reviewer': 'Explicit controlled model peer',
                 'pages_reviewed': packet['pages'], 'evidence': [i['path'] for i in packet['images']],
                 'geometry_status': 'approximation_requires_character_review',
@@ -53,6 +73,11 @@ for raw in sys.stdin:
                 'evidence': [packet['images'][0]['path']]} for row in packet['findings']['items']]}
             answer = {'preparation_sha256': packet['preparation_sha256'], 'images_examined': packet['images'],
                 'visual_review': visual, 'findings': findings}
+            if mode in ('repair', 'repeated', 'limit', 'invalid', 'noop', 'publisher'):
+                # Actual #17 OUTPUT_SCHEMA has no page/bbox/expected/actual in
+                # model finding rows. Native diagnostics own those details.
+                findings['items'] = [{key: row[key] for key in ('id', 'status', 'reason', 'evidence')}
+                    for row in findings['items']]
             if mode == 'waive_output':
                 visual['geometry_status'] = 'visually_verified'
                 for row in findings['items']:
@@ -82,7 +107,8 @@ for raw in sys.stdin:
                     'reason': 'Controlled original and overlay inspected; approximation retained',
                     'evidence': ['checks/geometry-review-001.png']} for key in packet['required_lines']],
                 'samples': [{'id': s['id'], 'status': 'examined_approximate', 'reason': 'Controlled source rectangle covers ABC or DEF',
-                    'evidence': ['raster/page-'+str(s['page'])+'.png']} for s in packet['source_samples']]}
+                    'evidence': [packet['images'][-1]['path']] if packet.get('correction_scope') else
+                        ['raster/page-'+str(s['page'])+'.png']} for s in packet['source_samples']]}
             if mode == 'missing_line':
                 answer['lines'] = answer['lines'][:-1]
             if mode == 'missing_image':

@@ -8,7 +8,7 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def verify_visual_turn(proof, work, images):
+def verify_visual_turn(proof, work, images, *, archive=None):
     protocol = Path(proof['protocol']['path'])
     if sha(protocol) != proof['protocol']['sha256']:
         raise ValueError('Original visual protocol changed')
@@ -27,7 +27,22 @@ def verify_visual_turn(proof, work, images):
         raise ValueError('Native thread did not confirm the requested visual model')
     requested_images = [i['path'] for i in request['input'] if i['type'] == 'localImage']
     expected = [str((Path(work) / i['path']).resolve()) for i in images]
-    if requested_images != expected or any(sha(path) != image['sha256'] for path, image in zip(expected, images)):
+    actual_images = expected
+    if archive is not None:
+        # Requested paths stay ORIGINAL aliases from the original native frame.
+        # Only pixel lookup changes, via an exact immutable snapshot SHA map.
+        archive = Path(archive).resolve()
+        if not archive.is_relative_to((Path(work) / 'iterations').resolve()):
+            raise ValueError('Historical pixels must belong to this run iteration archive')
+        records = json.loads((archive / 'snapshot.json').read_text())['artifacts']
+        actual_images = []
+        for path, image in zip(expected, images):
+            name = str(Path(path).relative_to(Path(work).resolve()))
+            record = records[name]
+            if record['sha256'] != image['sha256']:
+                raise ValueError('Historical image identity differs from original bound pixels')
+            actual_images.append(archive / name if record['stored'] else Path(path))
+    if requested_images != expected or any(sha(path) != image['sha256'] for path, image in zip(actual_images, images)):
         raise ValueError('Actual attached original/diagnostic images differ')
     terminals = [m['params']['turn'] for m in messages if m.get('method') == 'turn/completed' and
         m['params']['turn']['id'] == identifier and m['params'].get('threadId') == thread]

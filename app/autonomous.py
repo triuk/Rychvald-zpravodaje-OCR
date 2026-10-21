@@ -113,6 +113,24 @@ class AutonomousJobs:
                 allowed_returncodes=(0, 1, 2), timeout=120))
             value.update(state='completed', validation=result['project']['validation'],
                 phase=result['project']['phase'], acceptance=result['project']['acceptance'])
+            if not payload.get('defer_corrections') and result['project']['validation'] != 'failed':
+                saved = self.app.corrections.status(root, run_id, work)
+                if saved['state'] == 'not_started':
+                    from .jobs import sha
+                    selected = json.loads((work / 'output-manifest.json').read_text())
+                    child = self.app.start_corrections({**payload,
+                        'expected_iteration_id': selected['iteration_id'],
+                        'expected_validation_sha256': sha(work / 'checks/run-validation.json')})
+                    if child['state'] in ('starting', 'running'):
+                        value['state'] = 'running'
+                        def wait_correction():
+                            value['stages'][-1].update(attempt_id=child['attempt_id'], child_status_operation='correction_status')
+                            self._save(job)
+                            return self._wait(job, 'correction_status')
+                        corrected = self._stage(job, 'corrections', wait_correction)
+                        result = self.app.select_run(run_id)
+                        value.update(state='completed', validation=corrected['validation'],
+                            phase=result['project']['phase'], acceptance=corrected['acceptance'])
         except Exception as error:
             value.update(state='interrupted' if job['cancel'] else 'failed',
                 error={'code': getattr(error, 'code', 'autonomous_failed'), 'message': str(error)})
