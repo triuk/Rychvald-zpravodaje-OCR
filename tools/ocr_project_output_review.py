@@ -100,6 +100,14 @@ def prepare_output_review(registry, project_id, *, environment=None):
                     names.append(image['path'])
                 checkpoint = load(work / 'geometry-checkpoint.json')
                 observations = load(checkpoint['evidence']['proposal']['path'])
+                if geometry.get('correction_scope'):
+                    from ocr_project_corrections import historical_geometry_observations
+                    historical = historical_geometry_observations(work, geometry)
+                    for (kind, identifier), original in historical.items():
+                        row = original['observation']
+                        if row['status'] == 'open':
+                            protected.append({'id': f'geometry/observed/{kind}/{identifier}', 'status': 'open',
+                                'reason': row['reason'], 'evidence': original['evidence_aliases']})
                 for kind in ('lines', 'samples'):
                     for row in observations[kind]:
                         if row['status'] == 'open':

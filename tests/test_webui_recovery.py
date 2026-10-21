@@ -16,10 +16,11 @@ import test_webui_export as export_tests
 class RecoveryTests(unittest.TestCase):
     setUp = export_tests.AutonomousExportTests.setUp
 
-    def start(self):
+    def start(self, *, defer_corrections=True):
         profile = self.app.dispatch('inspect_profile', {'path': str(ROOT / 'profiles/faithful-reading.json')})['data']
         result = self.app.dispatch('start_autonomous', {'source_path': str(self.source), 'name': 'Recover me',
             'profile_path': profile['path'], 'profile_sha256': profile['sha256'],
+            'defer_corrections': defer_corrections,
             'environment': getattr(self, 'environment', os.environ.get('OCR_ENVIRONMENT'))})
         self.assertTrue(result['ok'], result)
         return result['data']
@@ -218,9 +219,45 @@ class RecoveryTests(unittest.TestCase):
         if resumed['ok']:
             self.wait(first['run_id'])
         self.assertEqual(json.loads(self.peer_state.read_text())['start_count'], 1)
+        outgoing = [json.loads(line) for path in protocol.parent.parent.rglob('protocol.jsonl')
+                    for line in path.read_text().splitlines()]
+        self.assertEqual(sum(row['direction'] == 'client' and row['message'].get('method') == 'turn/start'
+                             for row in outgoing), 1)
         self.assertFalse(resumed['ok'], resumed)
         self.assertEqual(resumed['error']['code'], 'original_result_unavailable')
         self.assertEqual(protocol.read_bytes(), before)
+
+    def test_pause_after_native_validation_does_not_reserve_the_next_correction(self):
+        self.app.close()
+        ready, release = self.directory / 'validation-done', self.directory / 'release-validation'
+        wrapper = self.directory / 'native-validation-gate.py'
+        wrapper.write_text('import pathlib,subprocess,sys,time\n'
+            'result=subprocess.run([sys.executable,"-B",' + repr(str(ROOT / 'tools/ocr_projects.py')) +
+            ',*sys.argv[1:]],capture_output=True)\n'
+            'if "validate" in sys.argv[1:]:\n'
+            ' pathlib.Path(' + repr(str(ready)) + ').touch()\n'
+            ' deadline=time.monotonic()+30\n'
+            ' while not pathlib.Path(' + repr(str(release)) + ').exists() and time.monotonic()<deadline: time.sleep(.01)\n'
+            'sys.stdout.buffer.write(result.stdout)\nsys.stderr.buffer.write(result.stderr)\n'
+            'raise SystemExit(result.returncode)\n')
+        self.app = Application(self.root, process_command=[sys.executable, '-B', str(wrapper)],
+            codex_runtime=self.runtime, context_runtime=self.context)
+        first = self.start(defer_corrections=False)
+        identity = {'run_id': first['run_id'], 'attempt_id': first['attempt_id']}
+        deadline = time.monotonic() + 70
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(.03)
+        self.assertTrue(ready.exists())
+        self.assertTrue(self.app.dispatch('pause_autonomous', identity)['ok'])
+        release.touch()
+        self.assertEqual(self.wait(first['run_id'])['state'], 'paused')
+        correction = self.app.dispatch('correction_status', identity)
+        self.assertTrue(correction['ok'], correction)
+        self.assertEqual(correction['data']['state'], 'not_started', correction)
+        self.assertEqual(correction['data']['cycles_used'], 0)
+        manual = self.app.dispatch('start_corrections', identity)
+        self.assertFalse(manual['ok'], manual)
+        self.assertEqual(manual['error']['code'], 'reconciliation_required')
 
     def test_lost_submission_ack_remains_unknown_and_cannot_be_replayed(self):
         self.interrupt_peer('lost_ack')

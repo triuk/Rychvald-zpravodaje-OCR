@@ -140,6 +140,8 @@ class AutonomousJobs:
             with self.app._lock:
                 if self.app._closing or job['cancel']:
                     raise JobError('operation_cancelled', 'Application is closing.')
+                if value.get('control') == 'pause':
+                    raise JobError('autonomous_paused', 'Paused before child allocation.')
                 name = value['stages'][-1]['stage']
                 previous = next((row for row in reversed(value['stages'][:-1]) if row['stage'] == name and row.get('attempt_id')), None)
                 child_payload = dict(payload)
@@ -166,6 +168,8 @@ class AutonomousJobs:
                 finally:
                     for manager in managers:
                         manager.launch_parent = None
+                if name == 'corrections' and child['state'] == 'completed' and not child.get('attempt_id'):
+                    return child  # Native reservation can truthfully stop without an AI child.
                 value['stages'][-1].update(attempt_id=child['attempt_id'], child_status_operation=status)
                 self._save(job)
             return self._wait(job, status, flag)
@@ -201,6 +205,22 @@ class AutonomousJobs:
                 owned=lambda process: self._native_started(job, process)))
             value.update(state='completed', validation=result['project']['validation'],
                 phase=result['project']['phase'], acceptance=result['project']['acceptance'])
+            if not payload.get('defer_corrections') and result['project']['validation'] != 'failed':
+                def correction_action():
+                    saved = self.app.corrections.status(root, run_id, work)
+                    if saved['state'] == 'not_started':
+                        selected = json.loads((work / 'output-manifest.json').read_text())
+                        return stage(lambda parameters: self.app.start_corrections({**parameters,
+                            'expected_iteration_id': selected['iteration_id'],
+                            'expected_validation_sha256': sha(work / 'checks/run-validation.json')}), 'correction_status')
+                    if saved['state'] == 'completed' and all(cycle['state'] == 'settled' for cycle in saved['cycles']):
+                        return saved
+                    raise JobError('correction_reconciliation_required', 'Original correction cycle and descendants require explicit recovery before continuation.')
+                value['state'] = 'running'
+                corrected = self._stage(job, 'corrections', correction_action)
+                result = self.app.select_run(run_id)
+                value.update(state='completed', validation=corrected['validation'],
+                    phase=result['project']['phase'], acceptance=corrected['acceptance'])
         except Exception as error:
             value.update(state='paused' if getattr(error, 'code', '') == 'autonomous_paused' else 'interrupted' if job['cancel'] else 'failed',
                 error={'code': getattr(error, 'code', 'autonomous_failed'), 'message': str(error)})
@@ -262,7 +282,12 @@ class AutonomousJobs:
         result = {'reconciliation_id': identifier, 'attempt_id': attempt_id, 'run_id': value['run_id'],
             'original_sha256': sha(path), 'checkpoint': {'valid': True}, 'provider': {'state': 'not_submitted'},
             'created_at': now()}
-        result['provider'] = inspect_original(self.app, work, value, path.parent / ('inspection-' + identifier))
+        if any(row['stage'] == 'corrections' and row['state'] != 'completed' for row in value['stages']):
+            result['provider'] = {'state': 'unknown', 'safe_to_continue': False, 'turns': [], 'originals': {},
+                'continuation_error': {'code': 'correction_reconciliation_required',
+                    'message': 'Original correction cycle and descendant turns require explicit recovery; no automatic replay.'}}
+        else:
+            result['provider'] = inspect_original(self.app, work, value, path.parent / ('inspection-' + identifier))
         result['stage_links'] = [{'intent_id': row.get('intent_id'), 'attempt_id': row['attempt_id']} for row in value['stages'] if row.get('attempt_id')]
         result['local_recovery'] = local_recovery_routes(work, value)
         try:

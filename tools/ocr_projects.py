@@ -389,6 +389,23 @@ def build_parser():
     command.add_argument('--environment', type=Path)
     command.add_argument('--reviewer-root', type=Path)
     command.add_argument('--geometry-checkpoint', type=Path)
+    command.add_argument('--previous-snapshot', type=Path)
+    command = commands.add_parser('reserve-correction')
+    command.add_argument('project_id')
+    command.add_argument('--expected-iteration-id', required=True)
+    command.add_argument('--expected-validation-sha256', required=True)
+    for operation in ('publish-correction', 'check-correction', 'prepare-correction-geometry', 'settle-correction', 'bind-correction'):
+        command = commands.add_parser(operation)
+        command.add_argument('project_id')
+        command.add_argument('--cycle-id', required=True)
+        if operation in ('publish-correction', 'check-correction'):
+            command.add_argument('--proposal', required=True, type=Path)
+        elif operation == 'prepare-correction-geometry':
+            command.add_argument('--environment', type=Path)
+        elif operation == 'bind-correction':
+            command.add_argument('--attempt', required=True, type=Path)
+        else:
+            command.add_argument('--reason', choices=['invalid_patch', 'no_valid_change', 'technical_failure', 'interrupted'])
     command = commands.add_parser('prepare-output-review')
     command.add_argument('project_id')
     command.add_argument('--environment', type=Path)
@@ -490,7 +507,13 @@ def main(argv=None):
         elif args.operation == 'verify-geometry':
             from ocr_project_geometry import verify_geometry
             record = registry.get(args.project_id)
-            verify_geometry(registry, record, examined=not args.prepared)
+            packet = verify_geometry(registry, record, examined=not args.prepared)
+            if not args.prepared and packet.get('correction_scope'):
+                from ocr_project_corrections import historical_geometry_observations
+                work = registry.root / record['artifacts']['workspace']
+                if json.loads((work / 'geometry-checkpoint.json').read_text()).get('correction_scope') != packet['correction_scope']:
+                    raise ProjectError('geometry_invalid', 'Original correction examination scope changed.')
+                historical_geometry_observations(work, packet)
             result = response(args.operation, **record)
         elif args.operation == 'publish-geometry':
             from ocr_project_geometry import publish_geometry
@@ -508,10 +531,28 @@ def main(argv=None):
             from ocr_project_output_review import verify_output_preparation
             result = response(args.operation, **verify_output_preparation(registry, args.project_id, args.sha256,
                 output_manifest_sha256=args.output_manifest_sha256))
+        elif args.operation == 'reserve-correction':
+            from ocr_project_corrections import reserve
+            result = response(args.operation, **reserve(registry, args.project_id,
+                args.expected_iteration_id, args.expected_validation_sha256))
+        elif args.operation in ('publish-correction', 'check-correction'):
+            from ocr_project_corrections import publish
+            result = response(args.operation, **publish(registry, args.project_id, args.cycle_id, args.proposal,
+                check_only=args.operation == 'check-correction'))
+        elif args.operation == 'bind-correction':
+            from ocr_project_corrections import bind_attempt
+            result = response(args.operation, **bind_attempt(registry, args.project_id, args.cycle_id, args.attempt))
+        elif args.operation == 'prepare-correction-geometry':
+            from ocr_project_corrections import prepare_geometry
+            result = response(args.operation, **prepare_geometry(registry, args.project_id, args.cycle_id, environment=args.environment))
+        elif args.operation == 'settle-correction':
+            from ocr_project_corrections import settle
+            result = response(args.operation, **settle(registry, args.project_id, args.cycle_id, reason=args.reason))
         elif args.operation == 'export':
             from ocr_project_export import export_project
             record = export_project(registry, args.project_id, environment=args.environment,
-                                    reviewer_root=args.reviewer_root, geometry_checkpoint=args.geometry_checkpoint)
+                                    reviewer_root=args.reviewer_root, geometry_checkpoint=args.geometry_checkpoint,
+                                    previous_snapshot=args.previous_snapshot)
             result = response(args.operation, **record)
         elif args.operation in ('publish-reading', 'check-reading'):
             from ocr_project_reading import publish_reading

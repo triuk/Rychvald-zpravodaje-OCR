@@ -69,6 +69,12 @@ automatically retried. For identified turns, a separate supported `thread/read`
 inspects the original turn before continuation. Completed provider output with
 failed local publication is revalidated/published locally where its original
 validated proposal is available, with a separate recovery record and no new AI.
+If the provider reports the exact original turn completed but a reusable local
+result is missing, reconciliation keeps the truthful provider `completed` state
+and marks continuation unavailable. Resume fails with `original_result_unavailable`
+before allocating any replacement child or submitting a turn. Supported completed
+partial source/context results remain reusable; completion alone never authorizes
+replaying their original work.
 
 ## Verification
 
@@ -113,6 +119,20 @@ earlier failed run stays preserved, rather than being relabelled as a full pass.
 The donor-import check verifies that an already paused native attempt imports no
 next raster/OCR unit and leaves the donor bytes and modification times unchanged.
 
+The merger's lost-completion scenario has a separate controlled RED proof:
+`completed-original-no-local-result-red.log` observed two provider starts before
+the fix. `completed-original-recovery-green.log` passed all four targeted cases
+in 44.701 seconds, including missing acknowledgement, interrupted usage and partial
+reading continuation. After syncing #18, `correction-admission-red.log` exposed
+correction allocation after a pause at native validation. Allocation now happens
+inside the durable parent stage admission gate and carries the parent intent.
+`post-18-recovery-admission-green.log` passed five cases in 114.386 seconds,
+including the existing full automatic correction workflow. These are controlled
+peers and fictional scan fixtures; no actual AI or GUI runs were added.
+The final two-case check (`final-admission-original-count-green.log`, 30.057
+seconds) also asserts exactly one outgoing original `turn/start` across all
+diagnostic attempts and rejects manual correction replay after a saved pause.
+
 ## Native GUI close and restart
 
 `tools/smoke_webui_recovery.py` runs `close` and `resume` in separate OS processes
@@ -140,5 +160,8 @@ browser profiles were released, without stopping unrelated desktop processes.
 This ticket proves first-pass lifecycle behavior independently of correction
 cycles. The optional correction manager receives the same pause/interrupt
 control; combined interruption, descendant-turn reconciliation and preserved
-cycle counting are part of final acceptance with #18/#23. Persistent queue
+cycle counting are part of final acceptance with #18/#23. Until that combined
+recovery is implemented, an unfinished correction stage is explicitly unknown
+and cannot resume or bypass reconciliation through a manual correction start.
+Persistent queue
 ordering and global AI availability handling are the downstream #20 increment.

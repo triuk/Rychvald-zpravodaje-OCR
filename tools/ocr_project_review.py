@@ -199,8 +199,8 @@ EXPORT_ARTIFACTS = (
 DERIVED_ARTIFACTS = SEGMENTATION_ARTIFACTS + EXPORT_ARTIFACTS + ('geometry-preparation.json', 'geometry-checkpoint.json')
 
 
-def patch_project(registry, project_id, patch, *, line_id=None, expected_review_sha256=None):
-    with registry.project_lock(project_id) as record:
+def patch_project(registry, project_id, patch, *, line_id=None, expected_review_sha256=None, _record=None):
+    with (registry.project_lock(project_id) if _record is None else contextlib.nullcontext(_record)) as record:
         work = registry.root / record['artifacts']['workspace']
         path = work / 'review.json'
         if expected_review_sha256 is not None and source_hash(path) != expected_review_sha256:

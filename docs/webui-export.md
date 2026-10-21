@@ -5,8 +5,9 @@ jeden zdrojový PDF, jméno průchodu a již prohlédnutý profil (`profile_path
 `profile_sha256`). Volitelné `environment` vybírá konkrétní nativní manifest.
 GUI používá stejnou akci tlačítkem **Spustit celý průchod ze zdrojového PDF**.
 Příprava, obrazová diagnostika, context-mode, nezávislé čtení, vyúčtování OCR
-kandidátů, geometrie, export, skutečné prohlédnutí výstupu a validace proběhnou
-v jednom vlastněném průchodu. Průběh, jednotlivé child attempt ID a chyby jsou
+kandidátů, geometrie, export, skutečné prohlédnutí výstupu, validace a případné
+[cílené opravné cykly](webui-corrections.md) proběhnou v jednom vlastněném průchodu.
+Průběh, jednotlivé child attempt ID a chyby jsou
 uložené v `application/autonomous-attempts/*/attempt.json`; sleduje je
 `autonomous_status`. Jiná mutující GUI akce nesmí mezi etapami převzít evidenci.
 
