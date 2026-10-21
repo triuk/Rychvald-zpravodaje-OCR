@@ -217,6 +217,24 @@ class GeometryJobs(ContextJobs):
             try:
                 self.process.request(root, 'verify-geometry', run_id)
                 checkpoint = json.loads((work/'geometry-checkpoint.json').read_text())
+                if checkpoint.get('correction_scope'):
+                    # The current checkpoint has a NEW local examination and
+                    # separately bound, unchanged observations from prior turns.
+                    packet = json.loads((work/'geometry-preparation.json').read_text())
+                    value['first_geometry_attempt_id'] = value.get('attempt_id')
+                    value['observations'] = json.loads(Path(checkpoint['evidence']['proposal']['path']).read_text())
+                    value['correction_scope'] = checkpoint['correction_scope']
+                    value['historical_observations'] = packet['historical_observations']
+                    ledger = json.loads((work/'application/corrections/ledger.json').read_text())
+                    cycle = next(c for c in ledger['cycles'] if c['cycle_id'] == checkpoint['correction_scope']['cycle_id'])
+                    value['attempt_id'] = cycle['attempt_id']
+                    value['counts'] = {'lines': len(value['observations']['lines']),
+                        'samples': len(value['observations']['samples']),
+                        'historical_lines': len(checkpoint['correction_scope']['unchanged_line_ids']),
+                        'historical_samples': len(checkpoint['correction_scope']['unchanged_sample_ids']),
+                        'open_items': sum(row['status'] == 'open' for row in
+                            value['observations']['lines']+value['observations']['samples']) +
+                            sum(row['observation']['status'] == 'open' for row in packet['historical_observations'])}
                 value['decision_artifacts'] = []
                 for name in ('proposal', 'sample_origin', 'recovery_descriptor'):
                     record = checkpoint['evidence'].get(name)

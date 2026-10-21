@@ -67,7 +67,9 @@ function renderGeometry(status) {
     document.querySelector('#reading-state')?.dataset.state !== 'completed' ||
     ['starting','running'].includes(document.querySelector('#preparation-state')?.dataset.state);
   const counts = status.counts || {};
-  document.querySelector('#geometry-counts').textContent = `Řádky: ${counts.lines || 0} · zdrojové vzorky: ${counts.samples || 0} · otevřené položky geometrie: ${counts.open_items || 0}. Exportní kontroly dosud neprovedeny; přijetí zadavatelem je samostatné.`;
+  document.querySelector('#geometry-counts').textContent = status.correction_scope ?
+    `Nově prohlédnuté řádky: ${counts.lines || 0} · vzorky: ${counts.samples || 0} · nezměněné z původních doložených tahů: ${counts.historical_lines || 0} řádků a ${counts.historical_samples || 0} vzorků · otevřené položky: ${counts.open_items || 0}. Výsledek exportních kontrol je uveden níže; přijetí zadavatelem zůstává samostatné.` :
+    `Řádky: ${counts.lines || 0} · zdrojové vzorky: ${counts.samples || 0} · otevřené položky geometrie: ${counts.open_items || 0}. Záznam předexportní geometrie; výsledek exportních kontrol a přijetí jsou uvedeny samostatně.`;
   const output = document.querySelector('#geometry-output'); output.replaceChildren();
   if (status.prepared) {
     const images = element('details'); images.append(element('summary', 'Otevřít originály, překryvy a zdrojové vzorky'));
@@ -93,6 +95,12 @@ function renderGeometry(status) {
     }
     for (const risk of status.observations.remaining_risks) observations.append(element('p', risk, 'hint'));
     output.append(observations);
+  }
+  if (status.historical_observations?.length) {
+    const history = element('details'); history.append(element('summary', 'Nezměněné řádky a vzorky: původní modelové doklady'));
+    for (const row of status.historical_observations) history.append(element('p',
+      `${row.id} · původní ${row.observation.status} · ${row.observation.reason} · doklad: ${row.checkpoint.path}`));
+    output.append(history);
   }
 }
 

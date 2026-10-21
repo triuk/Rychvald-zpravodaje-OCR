@@ -38,7 +38,7 @@ def workflow_command(work, native, command, *arguments, allowed=(0,)):
     return result.returncode
 
 
-def export_project(registry, project_id, *, environment=None, reviewer_root=None, geometry_checkpoint=None):
+def export_project(registry, project_id, *, environment=None, reviewer_root=None, geometry_checkpoint=None, previous_snapshot=None):
     current = registry.get(project_id)
     work = registry.root / current['artifacts']['workspace']
     native = project_environment(work, environment)
@@ -48,6 +48,11 @@ def export_project(registry, project_id, *, environment=None, reviewer_root=None
         if geometry_checkpoint is not None:
             from ocr_project_geometry import verify_geometry
             examined = verify_geometry(registry, record)
+            if examined.get('correction_scope'):
+                from ocr_project_corrections import historical_geometry_observations
+                if load(work / 'geometry-checkpoint.json').get('correction_scope') != examined['correction_scope']:
+                    raise ProjectError('geometry_invalid', 'Correction examination scope changed before export.')
+                historical_geometry_observations(work, examined)
             try:
                 if source_hash(geometry_checkpoint) != source_hash(work / 'geometry-checkpoint.json'):
                     raise ValueError('Selected checkpoint differs from the examined geometry')
@@ -70,7 +75,7 @@ def export_project(registry, project_id, *, environment=None, reviewer_root=None
         record['project'].update(phase='exporting', operation_state='running', validation='not_run')
         atomic_json(registry.root / record['artifacts']['project'], record)
         try:
-            export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined)
+            export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined, previous_snapshot)
         except (ProjectError, OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
             failure = error if isinstance(error, ProjectError) else ProjectError('export_failed', 'Export failed; inspect export-error.json.')
             atomic_json(work / 'export-error.json', {'code': failure.code, 'diagnostic': str(error)})
@@ -81,15 +86,22 @@ def export_project(registry, project_id, *, environment=None, reviewer_root=None
     return registry.get(project_id)
 
 
-def export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined=None):
+def export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined=None, previous_snapshot=None):
     project_id = record['project']['project_id']
     iteration = uuid.uuid4().hex
     pdf = registry.root / 'outputs' / f'{project_id}-{iteration}-ocr.pdf'
     txt = pdf.with_suffix('.txt')
     if pdf.exists() or txt.exists():
         raise ProjectError('output_collision', 'New iteration output already exists; preserve it and retry with a fresh iteration.')
-    previous = snapshot(work) if (work / 'output-manifest.json').exists() else None
-    if previous:
+    previous = snapshot(work) if previous_snapshot is None and (work / 'output-manifest.json').exists() else previous_snapshot
+    if previous_snapshot is not None:
+        previous = Path(previous_snapshot).resolve()
+        if not previous.is_relative_to((work / 'iterations').resolve()) or (previous / 'output-manifest.json').read_bytes() != (work / 'output-manifest.json').read_bytes():
+            raise ProjectError('snapshot_invalid', 'Select the unchanged snapshot of the previous export.')
+        for name, item in load(previous / 'snapshot.json')['artifacts'].items():
+            if item['stored'] and source_hash(previous / name) != item['sha256']:
+                raise ProjectError('snapshot_invalid', 'Previous iteration snapshot changed.')
+    if previous and previous_snapshot is None:
         atomic_json(previous / 'project.json', previous_record)
         archived = load(previous / 'snapshot.json')
         archived['artifacts']['project.json'] = {'sha256': source_hash(previous / 'project.json'), 'stored': True}
