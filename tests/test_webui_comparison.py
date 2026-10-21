@@ -219,6 +219,32 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)['error']['code'], 'configuration_changed')
         self.assertFalse((self.work(target) / 'raster/page-1.png').exists())
 
+    def test_native_import_rejects_manifest_and_profile_paths_escaping_registry(self):
+        donor = self.run_named('A')
+        self.prepare(donor)
+        project_path = self.root / donor['artifacts']['project']['path']
+        original = project_path.read_bytes()
+        external = {}
+        for key in ('run_manifest', 'profile_snapshot'):
+            path = self.directory / (key + '.json')
+            path.write_bytes((self.root / donor['artifacts'][key]['path']).read_bytes())
+            external[key] = path
+        before = {key: path.read_bytes() for key, path in external.items()}
+        for index, key in enumerate(('run_manifest', 'profile_snapshot')):
+            with self.subTest(escaping_artifact=key):
+                changed = json.loads(original)
+                changed['artifacts'][key] = '../' + external[key].name
+                project_path.write_text(json.dumps(changed))
+                target = self.run_named('escape-' + str(index))
+                result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py'),
+                    '--root', str(self.root), '--json', 'prepare', target['project']['run_id'],
+                    '--reuse-from-run-id', donor['project']['run_id']], capture_output=True)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertEqual(json.loads(result.stdout)['error']['code'], 'invalid_donor')
+                self.assertFalse((self.work(target) / 'preparation-checkpoint.json').exists())
+                self.assertEqual({name: path.read_bytes() for name, path in external.items()}, before)
+                project_path.write_bytes(original)
+
 
 class ComparisonWorkflowTests(unittest.TestCase):
     def test_two_complete_controlled_actions_compare_results_without_inheriting_ai(self):

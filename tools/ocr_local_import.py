@@ -63,7 +63,8 @@ def donor_snapshot(registry, donor_id, destination_id):
 
 def regular(root, relative):
     path = root / relative
-    if not path.is_relative_to(root):
+    if ('..' in Path(relative).parts or not path.is_relative_to(root)
+            or not path.resolve().is_relative_to(root.resolve())):
         raise ValueError('Import path escapes workspace')
     for component in (path, *path.parents):
         if component == root.parent:
