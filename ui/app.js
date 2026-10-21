@@ -28,6 +28,7 @@ let connected = false;
 let requestQueue = Promise.resolve();
 let progressRequestPending = false;
 let displayedPreparation = null;
+let editionCatalog = [];
 const preparationEnvironments = new Map();
 const diagnosticImages = new Map();
 let codexRequestPending = false;
@@ -70,6 +71,7 @@ async function perform(action) {
 }
 
 function renderEditions(data) {
+  editionCatalog = data.editions;
   rootInput.value = data.root;
   document.querySelector('#edition-count').textContent = data.editions.length;
   const list = document.querySelector('#editions');
@@ -83,6 +85,7 @@ function renderEditions(data) {
     choice.append(option);
   }
   if (data.editions.some(edition => edition.edition_id === previousEdition)) choice.value = previousEdition;
+  if (typeof updateComparisonChoices === 'function') updateComparisonChoices();
   if (!data.editions.length) {
     list.append(element('p', 'Evidence zatím neobsahuje průchody OCR. Otevřete adresář existující evidence.', 'hint'));
   }
@@ -157,12 +160,21 @@ function renderRun(data) {
   start.type = 'submit';
   start.disabled = !data.run;
   controls.append(environment, start);
+  const donor = element('select'); donor.id = 'preparation-donor';
+  donor.setAttribute('aria-label', 'Průchod s místními podklady k převzetí');
+  const fresh = element('option', 'Nová příprava / vlastní místní cache'); fresh.value = ''; donor.append(fresh);
+  for (const run of editionCatalog.find(e => e.edition_id === data.edition_id)?.runs || []) {
+    if (!run.run_name || run.run_id === project.run_id) continue;
+    const option = element('option', run.run_name); option.value = run.run_id; donor.append(option);
+  }
+  controls.prepend(donor);
   controls.addEventListener('submit', event => {
     event.preventDefault();
     perform(async () => {
       const payload = { run_id: project.run_id };
       preparationEnvironments.set(project.run_id, environment.value);
       if (environment.value.trim()) payload.environment = environment.value;
+      if (donor.value) payload.reuse_from_run_id = donor.value;
       const status = await request('start_preparation', payload);
       renderPreparation(status);
       return 'Místní příprava byla spuštěna. Přehled a výběr průchodů zůstávají dostupné.';
@@ -263,7 +275,9 @@ function renderPreparation(status) {
     units_planned: 'Načten počet stránek', checkpoint_completed: 'Checkpoint ověřen',
     attempt_completed: 'Pokus dokončen', step_failed: 'Krok selhal', attempt_failed: 'Pokus selhal', attempt_interrupted: 'Pokus přerušen' };
   for (const event of status.events.slice(-12)) {
-    const row = element('li', `${eventNames[event.type] || event.type} · ${stepLabel(event.step_id)}${event.duration_seconds !== undefined ? ` · ${event.duration_seconds.toFixed(2)} s` : ''}`);
+    const origin = event.origin === 'imported_local' ? ` · Převzaté místní podklady z ${event.donor_run_id}` :
+      event.origin === 'same_run_cache' ? ' · Vlastní místní cache' : event.origin === 'computed' ? ' · Nově spočítáno' : '';
+    const row = element('li', `${eventNames[event.type] || event.type} · ${stepLabel(event.step_id)}${origin}${event.duration_seconds !== undefined ? ` · ${event.duration_seconds.toFixed(2)} s` : ''}`);
     row.title = event.event_id;
     list.append(row);
   }

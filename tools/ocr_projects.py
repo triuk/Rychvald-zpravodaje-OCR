@@ -351,6 +351,7 @@ def build_parser():
     command.add_argument('--limit', type=int, default=10)
     command = commands.add_parser('prepare')
     command.add_argument('project_id')
+    command.add_argument('--reuse-from-run-id')
     command.add_argument('--dpi', type=int, default=300)
     command.add_argument('--language', default='ces')
     command.add_argument('--environment', type=Path)
@@ -549,7 +550,8 @@ def main(argv=None):
             prepare = resume_project if args.operation == 'resume' else prepare_project
             record = prepare(registry, args.project_id, dpi=args.dpi,
                                      language=args.language, environment=args.environment,
-                                     progress_events=args.progress_events, attempt_id=args.attempt_id)
+                                     progress_events=args.progress_events, attempt_id=args.attempt_id,
+                                     **({'reuse_from_run_id': args.reuse_from_run_id} if args.operation == 'prepare' else {}))
             result = response(args.operation, **record)
         elif args.operation == 'list':
             result = registry.list_projects(offset=args.offset, limit=args.limit)

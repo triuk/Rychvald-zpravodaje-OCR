@@ -9,6 +9,7 @@ document.querySelector('#start-autonomous').addEventListener('click', () => perf
     name: document.querySelector('#run-name').value,
     profile_path: selectedProfile.path, profile_sha256: selectedProfile.sha256,
     environment: document.querySelector('#autonomous-environment').value.trim() || null,
+    reuse_from_run_id: document.querySelector('#autonomous-donor').value || null,
   });
   selectedRun = status.run_id;
   renderEditions(await request('projects'));

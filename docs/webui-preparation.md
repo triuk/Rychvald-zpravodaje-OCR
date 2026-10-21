@@ -31,12 +31,14 @@ Nové operace používají stejný `Application.dispatch` jako ostatní GUI:
 
 | Operace | Payload | Výsledek |
 | --- | --- | --- |
-| `start_preparation` | `run_id`, volitelně `environment` | Okamžitě vrací novou identitu pokusu a stav `starting`/`running` |
+| `start_preparation` | `run_id`, volitelně `environment`, `reuse_from_run_id` | Okamžitě vrací novou identitu pokusu a stav `starting`/`running` |
 | `preparation_status` | `run_id` | Aktuální či poslední uložený pokus, kroky, čas, počty, události a platnost checkpointu |
 
 Parametry `dpi` a `language` v požadavku nelze použít ke změně uloženého
 profilu. Odlišné hodnoty vrátí `configuration_changed` před spuštěním a zápisy.
 Starší průchod bez profilu vrátí `run_profile_required`.
+Pravidla převzetí celostránkových místních podkladů a porovnání jsou popsána
+v [porovnání průchodů](webui-comparison.md).
 
 Stavy jsou `not_started`, `starting`, `running`, `completed`, `failed`,
 `interrupted` a `invalidated`. `completed` znamená ověřenou místní přípravu

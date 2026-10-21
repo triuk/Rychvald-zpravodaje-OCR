@@ -60,15 +60,17 @@ def saved_preparation(work):
 
 
 def prepare_project(registry, project_id, *, dpi=300, language='ces', environment=None, resume=False,
-                    progress_events=None, attempt_id=None):
+                    progress_events=None, attempt_id=None, reuse_from_run_id=None):
     from ocr_progress import ProgressReporter
     record = registry.get(project_id)
     work = registry.root / record['artifacts']['workspace']
     progress = ProgressReporter(progress_events, run_id=project_id, work=work, attempt_id=attempt_id)
     progress.emit('attempt_started', parameters={'dpi': dpi, 'language': language})
     try:
-        result = _prepare_project(registry, project_id, dpi=dpi, language=language, environment=environment,
-                                  resume=resume, progress=progress)
+        from ocr_local_import import donor_snapshot
+        with donor_snapshot(registry, reuse_from_run_id, project_id) as donor:
+            result = _prepare_project(registry, project_id, dpi=dpi, language=language, environment=environment,
+                                      resume=resume, progress=progress, donor=donor)
     except BaseException as error:
         progress.failed(error)
         raise
@@ -76,9 +78,11 @@ def prepare_project(registry, project_id, *, dpi=300, language='ces', environmen
     return result
 
 
-def _prepare_project(registry, project_id, *, dpi, language, environment, resume, progress):
+def _prepare_project(registry, project_id, *, dpi, language, environment, resume, progress, donor=None):
     if dpi <= 0:
         raise ProjectError('invalid_parameters', 'DPI must be positive.')
+    if donor and (donor['target_parameters']['dpi'] != dpi or donor['target_parameters']['language'] != language):
+        raise ProjectError('configuration_changed', 'Local import must use the destination immutable profile parameters.')
     try:
         progress.emit('step_started', 'environment')
         native = verify_environment(environment, language)
@@ -90,6 +94,11 @@ def _prepare_project(registry, project_id, *, dpi, language, environment, resume
     with registry.project_lock(project_id) as record:
         source = registry.root / record['artifacts']['source']
         work = registry.root / record['artifacts']['workspace']
+        if donor:
+            for directory in (work / 'raster', work / 'ocr'):
+                if any(path.is_symlink() or path.is_file() and path.stat().st_nlink > 1
+                       for path in (directory, *directory.rglob('*'))):
+                    raise ProjectError('invalid_import_destination', 'Destination preparation must own independent regular files.')
         if source_hash(source) != record['project']['source_sha256']:
             raise ProjectError('source_corrupt', 'Registered source differs from its content hash.')
         preparation_phases = {'registered', 'prepared', 'preparation_failed', 'preparation_interrupted'}
@@ -101,7 +110,7 @@ def _prepare_project(registry, project_id, *, dpi, language, environment, resume
             retained = previous_state
         try:
             counts = prepare_artifacts(source, work, dpi=dpi, language=language, native=native,
-                                       resume=resume, retained_state=retained, progress=progress)
+                                       resume=resume, retained_state=retained, progress=progress, donor=donor)
             if retained['phase'] in preparation_phases:
                 record['project'].update(phase='prepared', validation='not_run')
             else:
@@ -125,7 +134,7 @@ def _prepare_project(registry, project_id, *, dpi, language, environment, resume
     return registry.get(project_id)
 
 
-def prepare_artifacts(source, work, *, dpi, language, native, resume=False, retained_state=None, progress=None):
+def prepare_artifacts(source, work, *, dpi, language, native, resume=False, retained_state=None, progress=None, donor=None):
     """Use preserved raster and hOCR algorithms; record each completed unit."""
     import fitz
     from PIL import Image
@@ -139,6 +148,8 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
         progress = ProgressReporter(None, run_id='', work=work)
     identity = {'source_sha256': source_hash(source), 'dpi': dpi, 'language': language,
                 'psm': [3, 11], 'hocr_char_boxes': 1, 'environment': native.identity}
+    from ocr_local_import import LocalImporter
+    importer = LocalImporter(donor, work, identity, progress)
     checkpoint_path = work / 'preparation-checkpoint.json'
     anchor_path = work / 'preparation-identity.json'
     if checkpoint_path.exists() or anchor_path.exists():
@@ -179,6 +190,15 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
             source_geometry = {'page': number, 'rect': list(page.rect), 'mediabox': list(page.mediabox),
                                'cropbox': list(page.cropbox), 'rotation': page.rotation,
                                'existing_text_characters': len(page.get_text().strip())}
+            def valid_raster(saved):
+                data = saved.get('page', {})
+                if not isinstance(data, dict) or not all(data.get(key) == value for key, value in source_geometry.items()):
+                    return False
+                with Image.open(donor['work'] / f'raster/page-{number}.png') as image:
+                    return data.get('raster_size') == list(image.size) and data.get('raster_sha256') == saved['outputs'].get(f'raster/page-{number}.png')
+            importer.import_unit(step_id, f'raster/page-{number}-checkpoint.json',
+                {f'raster/page-{number}.png': f'raster/page-{number}.png',
+                 f'raster/overview-{number}.png': f'raster/overview-{number}.png'}, raster_identity, valid_raster)
             saved = read_checkpoint(raster_checkpoint)
             reusable = (saved.get('status') == 'completed' and saved.get('identity') == raster_identity and
                     isinstance(saved.get('page'), dict) and
@@ -194,7 +214,7 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
                 pages.append(saved['page'])
                 rasters_reused += 1
                 progress.emit('unit_cached', step_id, unit_kind='raster', page=number,
-                              outputs=saved['outputs'])
+                              outputs=saved['outputs'], **importer.origin(step_id, True))
                 continue
             atomic_json(raster_checkpoint, {'schema_version': 1, 'status': 'running',
                                            'identity': raster_identity, 'outputs': {}})
@@ -211,7 +231,7 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
                          'page': geometry})
             pages.append(geometry)
             progress.emit('unit_completed', step_id, unit_kind='raster', page=number,
-                          outputs=read_checkpoint(raster_checkpoint)['outputs'])
+                          outputs=read_checkpoint(raster_checkpoint)['outputs'], origin='computed')
         tesseract = workflow.run(['tesseract', '--version']).stdout.splitlines()[0]
         manifest = {'source': str(source.resolve()), 'source_sha256': identity['source_sha256'],
                     'pages': pages, 'dpi': dpi, 'transform': 'none', 'content_inputs': 'source raster only',
@@ -229,11 +249,21 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
             prefix = work / 'ocr' / f'page-{number}-psm{psm}'
             command = ['tesseract', str(work / 'raster' / f'page-{number}.png'), str(prefix),
                        '-l', language, '--psm', str(psm), '-c', 'hocr_char_boxes=1', 'hocr', 'tsv', 'txt', 'makebox']
+            if donor:
+                donor_command = list(command)
+                donor_command[1] = str(donor['work'] / f'raster/page-{number}.png')
+                donor_command[2] = str(donor['work'] / f'ocr/page-{number}-psm{psm}')
+                expected = {'command': native.command(donor_command),
+                    'image_sha256': source_hash(work / f'raster/page-{number}.png'), 'tesseract': tesseract,
+                    'language': language, 'models': {name: native.manifest['models'][name]['sha256'] for name in language.split('+')},
+                    'environment': native.identity}
+                importer.import_unit(step_id, f'ocr/page-{number}-psm{psm}-cache.json',
+                    {f'ocr/page-{number}-psm{psm}{suffix}': suffix for suffix in ('.hocr', '.tsv', '.txt', '.box')}, expected)
             reused = workflow.recognize_cached(command, prefix, work / 'raster' / f'page-{number}.png',
                                               ['.hocr', '.tsv', '.txt', '.box'], tesseract)
             progress.emit('unit_cached' if reused else 'unit_completed', step_id,
                           unit_kind='ocr', page=number, psm=psm,
-                          outputs=read_checkpoint(Path(str(prefix) + '-cache.json'))['outputs'])
+                          outputs=read_checkpoint(Path(str(prefix) + '-cache.json'))['outputs'], **importer.origin(step_id, reused))
             return {'page': number, 'psm': psm, 'command': native.command(command), 'cache_hit': reused}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
