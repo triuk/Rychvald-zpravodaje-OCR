@@ -346,6 +346,10 @@ def build_parser():
     command.add_argument('--source-sha256')
     command = commands.add_parser('status')
     command.add_argument('project_id')
+    command = commands.add_parser('verify-resume')
+    command.add_argument('project_id')
+    command.add_argument('--environment', type=Path)
+    command.add_argument('--output', action='store_true')
     command = commands.add_parser('list')
     command.add_argument('--offset', type=int, default=0)
     command.add_argument('--limit', type=int, default=10)
@@ -357,6 +361,7 @@ def build_parser():
     command.add_argument('--environment', type=Path)
     command.add_argument('--progress-events', type=Path)
     command.add_argument('--attempt-id')
+    command.add_argument('--control-file', type=Path)
     command = commands.add_parser('query')
     command.add_argument('project_id')
     command.add_argument('view', choices=['transcript', 'candidates', 'findings', 'unresolved', 'publisher-errors', 'reconstructions', 'units'])
@@ -436,6 +441,7 @@ def build_parser():
     command.add_argument('--environment', type=Path)
     command.add_argument('--progress-events', type=Path)
     command.add_argument('--attempt-id')
+    command.add_argument('--control-file', type=Path)
     return parser
 
 
@@ -464,6 +470,26 @@ def main(argv=None):
                                                         source_sha256=args.source_sha256)
                 result = response(args.operation, project=record['project'], artifacts=record['artifacts'],
                                   counts={'created': int(created), 'reused': int(not created)})
+        elif args.operation == 'verify-resume':
+            from ocr_environment import verify_environment
+            from ocr_project_prepare import saved_preparation, valid_identity
+            record = registry.get(args.project_id)
+            work = registry.root / record['artifacts']['workspace']
+            if source_hash(registry.root / record['artifacts']['source']) != record['project']['source_sha256']:
+                raise ProjectError('source_corrupt', 'Source bytes differ from the saved run.')
+            profile = json.loads((work / 'application/profile.json').read_text())
+            native = verify_environment(args.environment, profile['parameters']['language'])
+            saved = saved_preparation(work)
+            if saved and (not valid_identity(saved.get('identity')) or
+                    saved['identity']['environment'] != native.identity or
+                    saved['identity']['source_sha256'] != record['project']['source_sha256'] or
+                    saved['identity']['dpi'] != profile['parameters']['dpi'] or
+                    saved['identity']['language'] != profile['parameters']['language']):
+                raise ProjectError('checkpoint_identity_changed', 'Saved preparation has different source, profile or native resources.')
+            if args.output:
+                from ocr_project_output_review import output_identity
+                output_identity(record, work)
+            result = response(args.operation, **record)
         elif args.operation == 'validate':
             from ocr_project_export import validate_project
             record, exit_code = validate_project(registry, args.project_id, environment=args.environment)
@@ -551,6 +577,7 @@ def main(argv=None):
             record = prepare(registry, args.project_id, dpi=args.dpi,
                                      language=args.language, environment=args.environment,
                                      progress_events=args.progress_events, attempt_id=args.attempt_id,
+                                     control_file=args.control_file,
                                      **({'reuse_from_run_id': args.reuse_from_run_id} if args.operation == 'prepare' else {}))
             result = response(args.operation, **record)
         elif args.operation == 'list':

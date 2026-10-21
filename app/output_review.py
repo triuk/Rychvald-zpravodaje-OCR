@@ -100,7 +100,7 @@ class OutputReviewJobs(ContextJobs):
                 publication=str((work / 'output-review-publication.json').relative_to(root)))
             self._event(job, 'output_review_completed')
         except Exception as error:
-            value.update(state='interrupted' if job['cancel'] else 'failed',
+            value.update(state='paused' if getattr(error, 'code', None) == 'autonomous_paused' else 'interrupted' if job['cancel'] else 'failed',
                 error={'code': getattr(error, 'code', 'output_review_failed'), 'message': str(error)})
             self._event(job, 'output_review_failed')
         finally:

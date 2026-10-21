@@ -98,6 +98,8 @@ class ContextJobs(CodexJobs):
         started = time.monotonic()
         trace_lock = threading.Lock()
         value.update(context_verified=False, hook_events=[], connections=[], turns=[], completed_items=[], terminal_turns={})
+        reused_context = None
+        previous = (job.get('metadata') or {}).get('previous_context_attempt_id')
 
         def notify(message):
             if 'method' not in message:
@@ -135,7 +137,7 @@ class ContextJobs(CodexJobs):
 
             stderr = (job['directory'] / 'stderr.log').open('a', encoding='utf-8')
             rpc = RpcProcess(command(self.runtime, settings, trust), workspace, stderr, trace,
-                             lambda: job['cancel'], env=settings['process_environment'])
+                             lambda: job['cancel'], env=settings['process_environment'], paused=lambda: job.get('pause', False))
             job['rpc'], job['stderr'] = rpc, stderr
             identity = {'connection_id': connection_id, 'pid': rpc.process.pid, 'process_group': rpc.process.pid,
                         'process_start_ticks': process_identity(rpc.process.pid)}
@@ -183,6 +185,23 @@ class ContextJobs(CodexJobs):
             return record, items
 
         try:
+            if previous:
+                if not isinstance(previous, str) or len(previous) != 32 or any(c not in '0123456789abcdef' for c in previous):
+                    raise JobError('attempt_invalid', 'Invalid original context attempt identity.')
+                original_path = job['directory'].parent / previous / 'attempt.json'
+                original = json.loads(original_path.read_text())
+                routing = next((row for row in original.get('turns', []) if row['stage'] == 'routing' and row.get('state') == 'completed'), None)
+                if routing:
+                    if (original['run_id'] != value['run_id'] or original['runtime'] != self.runtime or
+                            original['context_runtime'] != self.context_runtime or original['profile_sha256'] != value['profile_sha256']):
+                        raise JobError('context_input_changed', 'Original context diagnostic has different bindings.')
+                    reused_context = original
+                    original_protocol = Path(value['root']) / original['artifacts']['protocol']
+                    value['reused_context'] = {'path': str(original_path), 'sha256': sha(original_path),
+                        'protocol': {'path': str(original_protocol), 'sha256': sha(original_protocol)}}
+                    value['turns'] = [copy.deepcopy(row) for row in original['turns'] if row.get('state') == 'completed']
+                    value['completed_items'] = copy.deepcopy(original['completed_items'])
+                    value['hook_events'] = copy.deepcopy(original['hook_events'])
             self._event(job, 'context_attempt_started')
             value['context_capabilities'] = verify_resources(self.context_runtime, self.runtime)
             work = job['directory'].parents[2]
@@ -240,12 +259,21 @@ class ContextJobs(CodexJobs):
                              'approvalPolicy': 'never', 'sandbox': 'workspace-write',
                              'runtimeWorkspaceRoots': [str(workspace), str(storage)],
                              'developerInstructions': 'Use the context-mode MCP tools and routing hooks. Work only in this run workspace. Never install or repair dependencies.'}
-            thread = rpc.request('thread/start', thread_params, notify)
+            if reused_context:
+                thread_params['threadId'] = reused_context['thread_id']
+            thread = rpc.request('thread/resume' if reused_context else 'thread/start', thread_params, notify)
             value['thread_id'] = thread['thread']['id']
             value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort'), 'source': 'thread/start'}
             if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
                 raise JobError('model_configuration_mismatch', 'Context thread did not confirm the exact model and high effort.')
-            routing, items = turn(rpc, 'routing', ROUTING_PROMPT)
+            if reused_context:
+                if value['thread_id'] != reused_context['thread_id']:
+                    raise JobError('codex_identity_mismatch', 'Resumed another original diagnostic thread.')
+                routing = next(row for row in value['turns'] if row['stage'] == 'routing')
+                items = [entry['item'] for entry in value['completed_items'] if entry.get('turnId') == routing['turn_id']]
+                self._event(job, 'context_routing_reused', original_attempt_id=previous, turn_id=routing['turn_id'])
+            else:
+                routing, items = turn(rpc, 'routing', ROUTING_PROMPT)
             hooks = [entry['params']['run'] for entry in value['hook_events'] if entry['method'] == 'hook/completed']
             verify_routing(items, hooks, oracle)
             if routing['answer'].strip() != oracle:
@@ -253,10 +281,12 @@ class ContextJobs(CodexJobs):
             value['oracle'] = oracle
             self._event(job, 'context_routing_completed', thread_id=value['thread_id'], turn_id=routing['turn_id'])
             count = sum(entry['item'].get('type') == 'contextCompaction' for entry in value['completed_items'])
-            rpc.request('thread/compact/start', {'threadId': value['thread_id']}, notify)
-            deadline = time.monotonic() + 180
-            while sum(entry['item'].get('type') == 'contextCompaction' for entry in value['completed_items']) == count and not value.get('compacted_notification'):
-                notify(rpc.receive(deadline))
+            compacted = reused_context and any(event['type'] == 'context_compaction_completed' for event in reused_context['events'])
+            if not compacted:
+                rpc.request('thread/compact/start', {'threadId': value['thread_id']}, notify)
+                deadline = time.monotonic() + 180
+                while sum(entry['item'].get('type') == 'contextCompaction' for entry in value['completed_items']) == count and not value.get('compacted_notification'):
+                    notify(rpc.receive(deadline))
             hooks = [entry['params']['run'] for entry in value['hook_events'] if entry['method'] == 'hook/completed']
             if not any(entry.get('eventName') == 'preCompact' and entry.get('status') == 'completed' for entry in hooks):
                 raise JobError('context_recovery_unverified', 'Codex compaction did not execute the trusted PreCompact hook.')
@@ -270,7 +300,12 @@ class ContextJobs(CodexJobs):
             if resumed['thread']['id'] != value['thread_id'] or resumed.get('model') != MODEL or resumed.get('reasoningEffort') != EFFORT:
                 raise JobError('model_configuration_mismatch', 'Resumed thread does not match the exact original configuration.')
             self._event(job, 'context_resumed', thread_id=value['thread_id'])
-            recovery, recovered_items = turn(rpc, 'recovery', RECOVERY_PROMPT)
+            recovery = next((row for row in value['turns'] if row['stage'] == 'recovery' and row['state'] == 'completed'), None)
+            if recovery:
+                recovered_items = [entry['item'] for entry in value['completed_items'] if entry.get('turnId') == recovery['turn_id']]
+                self._event(job, 'context_recovery_reused', original_attempt_id=previous, turn_id=recovery['turn_id'])
+            else:
+                recovery, recovered_items = turn(rpc, 'recovery', RECOVERY_PROMPT)
             recovered_calls = [item for item in recovered_items if item.get('type') == 'mcpToolCall'
                 and item.get('server') == 'context_mode' and item.get('tool') == 'ctx_search'
                 and item.get('status') == 'completed' and not item.get('error')]
@@ -283,7 +318,8 @@ class ContextJobs(CodexJobs):
             value['context_verified'] = True
             value['state'] = 'completed'
         except Exception as error:
-            value.update(state='failed', error={'code': getattr(error, 'code', 'context_runtime_invalid'), 'message': str(error)})
+            value.update(state='paused' if getattr(error, 'code', None) == 'autonomous_paused' else 'interrupted' if job['cancel'] else 'failed',
+                error={'code': getattr(error, 'code', 'context_runtime_invalid'), 'message': str(error)})
         finally:
             disconnect()
             value['ended_at'] = now()

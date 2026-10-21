@@ -18,7 +18,7 @@ import time
 import uuid
 from urllib.parse import urlparse
 
-from .jobs import JobError, atomic_json, sha
+from .jobs import JobError, atomic_json, sha, group_members, stop_owned_group
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = 'gpt-6.1-sol'
@@ -64,13 +64,20 @@ def scrub(value):
 
 
 class RpcProcess:
-    def __init__(self, command, workspace, stderr, record, cancelled, env=None):
+    def __init__(self, command, workspace, stderr, record, cancelled, env=None, paused=None):
         self.record, self.cancelled = record, cancelled
+        self.paused = paused or (lambda: False)
+        self.thread_id = self.turn_id = None
+        self.terminal = None
+        self.interrupt_deadline = None
+        self.interrupt_sent = False
+        self.pending = {}
         self.messages = queue.Queue()
         self.identifier = 0
         self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=stderr, cwd=workspace, start_new_session=True,
                                         text=True, encoding='utf-8', bufsize=1, env=env)
+        self.members = group_members(self.process.pid)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
@@ -82,6 +89,16 @@ class RpcProcess:
                     if not isinstance(value, dict):
                         raise ValueError()
                     self.record('server', value)
+                    self.members.update(group_members(self.process.pid))
+                    method = self.pending.get(value.get('id'))
+                    result = value.get('result', {})
+                    params = value.get('params', {})
+                    if method in ('thread/start', 'thread/resume'):
+                        self.thread_id = result.get('thread', {}).get('id', self.thread_id)
+                    if method == 'turn/start' or value.get('method') == 'turn/started':
+                        self.turn_id = (result if method == 'turn/start' else params).get('turn', {}).get('id', self.turn_id)
+                    if value.get('method') == 'turn/completed':
+                        self.terminal = params.get('turn')
                     self.messages.put(value)
                 except (ValueError, TypeError):
                     self.messages.put(JobError('codex_protocol_invalid', 'Codex stdout is not a JSON-RPC object.'))
@@ -92,6 +109,15 @@ class RpcProcess:
             self.messages.put(None)
 
     def send(self, value):
+        if value.get('method') == 'turn/start':
+            if self.paused():
+                raise JobError('autonomous_paused', 'Paused before admitting the next AI turn.')
+            if self.cancelled():
+                raise JobError('diagnostic_interrupted', 'No new turn may start after interruption.')
+            self.thread_id = value['params']['threadId']
+            self.turn_id, self.terminal = None, None
+        if 'id' in value and value.get('method'):
+            self.pending[value['id']] = value['method']
         self.record('client', value)
         try:
             self.process.stdin.write(json.dumps(value, ensure_ascii=False) + '\n')
@@ -101,8 +127,15 @@ class RpcProcess:
 
     def receive(self, deadline):
         while True:
-            if self.cancelled():
-                raise JobError('diagnostic_interrupted', 'Diagnostic attempt was interrupted.')
+            if self.cancelled() and self.interrupt_deadline is None:
+                self.interrupt_deadline = time.monotonic() + 3
+            if self.cancelled() and not self.interrupt_sent and self.thread_id and self.turn_id and self.terminal is None:
+                self.interrupt_sent = True
+                self.identifier += 1
+                self.send({'id': self.identifier, 'method': 'turn/interrupt',
+                    'params': {'threadId': self.thread_id, 'turnId': self.turn_id}})
+            if self.cancelled() and time.monotonic() >= self.interrupt_deadline:
+                raise JobError('diagnostic_interrupted', 'Interrupted; provider completion is reconciled separately.')
             if time.monotonic() >= deadline:
                 raise JobError('codex_timeout', 'Codex did not complete the requested operation in time.')
             try:
@@ -113,6 +146,8 @@ class RpcProcess:
                 raise JobError('codex_process_terminated', 'Codex closed its protocol stream.')
             if isinstance(value, Exception):
                 raise value
+            if self.pending.get(value.get('id')) == 'turn/interrupt' and 'method' not in value:
+                continue  # Preserve the control response in the original trace.
             return value
 
     def request(self, method, params, notify, timeout=45):
@@ -133,6 +168,8 @@ class RpcProcess:
 
     def close(self):
         if self.process.poll() is None:
+            self.members.update(group_members(self.process.pid))
+        if self.process.poll() is None:
             try:
                 os.killpg(self.process.pid, signal.SIGTERM)
                 self.process.wait(timeout=5)
@@ -141,6 +178,7 @@ class RpcProcess:
                 self.process.wait()
             except ProcessLookupError:
                 self.process.wait()
+        stop_owned_group(self.process, self.members)
         self.process.stdin.close()
         self.reader.join(timeout=2)
         self.process.stdout.close()
@@ -201,7 +239,8 @@ class CodexJobs:
                         'owner_pid': os.getpid(), 'owner_start_ticks': process_identity(os.getpid()),
                         'pid': None, 'process_group': None, 'process_start_ticks': None,
                         'usage_events': [], 'reroutes': [], 'tool_events': [], 'events': [], 'error': None,
-                        'combination_verified': False, 'autonomous_ocr_ready': False, 'artifacts': artifacts}
+                        'combination_verified': False, 'autonomous_ocr_ready': False, 'artifacts': artifacts,
+                        'parent_binding': copy.deepcopy(getattr(self, 'launch_parent', None))}
             atomic_json(directory / 'attempt.json', manifest)
             atomic_json(directory / 'request.json', {'operation': operation, 'profile_sha256': manifest['profile_sha256'],
                                                      'prompt': manifest['prompt'], 'image': image_record})
@@ -209,10 +248,20 @@ class CodexJobs:
                    'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
                    'metadata': copy.deepcopy(metadata)}
             self._active = job
-            job['thread'] = threading.Thread(target=self._run, args=(job,), name=f'Codex-{attempt_id}', daemon=True)
+            job['thread'] = threading.Thread(target=self._execute, args=(job,), name=f'Codex-{attempt_id}', daemon=True)
             result = copy.deepcopy(manifest)
             job['thread'].start()
             return result
+
+    def _execute(self, job):
+        process = getattr(self, 'process', None)
+        if process is not None:
+            process.bind_owner(job)
+        try:
+            self._run(job)
+        finally:
+            if process is not None:
+                process.release_owner()
 
     def _event(self, job, kind, **details):
         value = job['manifest']
@@ -283,7 +332,8 @@ class CodexJobs:
                 if not path.is_file() or sha(path) != item['sha256']:
                     raise JobError('codex_runtime_invalid', 'Pinned Codex runtime resource is missing or changed.')
             with (job['directory'] / 'stderr.log').open('w', encoding='utf-8') as stderr:
-                rpc = RpcProcess(self.runtime['command'], job['workspace'], stderr, trace, lambda: job['cancel'])
+                rpc = RpcProcess(self.runtime['command'], job['workspace'], stderr, trace, lambda: job['cancel'],
+                    paused=lambda: job.get('pause', False))
                 job['rpc'] = rpc
                 value.update(state='running', pid=rpc.process.pid, process_group=rpc.process.pid,
                              process_start_ticks=process_identity(rpc.process.pid))
@@ -375,7 +425,7 @@ class CodexJobs:
                     raise JobError('diagnostic_answer_missing', 'Completed Codex turn supplied no image transcription.')
                 value.update(state='completed', combination_verified=True)
         except Exception as error:
-            value.update(state='interrupted' if job['cancel'] or getattr(error, 'code', None) == 'codex_turn_interrupted' else 'failed',
+            value.update(state='paused' if getattr(error, 'code', None) == 'autonomous_paused' else 'interrupted' if job['cancel'] or getattr(error, 'code', None) == 'codex_turn_interrupted' else 'failed',
                          error={'code': getattr(error, 'code', 'codex_protocol_invalid'), 'message': str(error)})
         finally:
             if job['rpc'] is not None:
@@ -409,6 +459,16 @@ class CodexJobs:
         value = max(values, key=lambda item: item['started_at'])
         if value['root'] != str(root) or value['run_id'] != run_id:
             raise JobError('attempt_invalid', 'Saved Codex attempt belongs to a different run.')
+        recovery_path = (work / 'application' / self.namespace / value['attempt_id'] / 'local-recovery.json').resolve()
+        if not recovery_path.is_relative_to(work.resolve()):
+            raise JobError('attempt_invalid', 'Saved recovery path is outside the selected run.')
+        if recovery_path.exists():
+            recovery = json.loads(recovery_path.read_text())
+            if (sha(root / value['artifacts']['attempt']) != recovery['original_sha256'] or
+                    any(sha(root / path) != digest for path, digest in recovery['evidence'].items())):
+                raise JobError('checkpoint_invalid', 'Local recovery no longer matches original evidence.')
+            value.update(recovery['result'])
+            value['local_recovery'] = str(recovery_path.relative_to(root))
         if value['image'] is not None:
             image = (root / value['image']['path']).resolve()
             if not image.is_relative_to(work.resolve()) or not image.is_file() or sha(image) != value['image']['sha256']:
@@ -435,3 +495,8 @@ class CodexJobs:
                 job['cancel'] = True
         if job is not None:
             job['thread'].join(timeout=8)
+
+    def control(self, action):
+        with self._lock:
+            if self._active:
+                self._active['pause' if action == 'pause' else 'cancel'] = True

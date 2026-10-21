@@ -219,6 +219,33 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)['error']['code'], 'configuration_changed')
         self.assertFalse((self.work(target) / 'raster/page-1.png').exists())
 
+    def test_paused_native_admission_does_not_import_the_next_donor_unit(self):
+        donor = self.run_named('A')
+        self.prepare(donor)
+        old = self.work(donor)
+        before = {str(p.relative_to(old)): (hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_mtime_ns)
+                  for p in old.rglob('*') if p.is_file()}
+        target = self.run_named('B')
+        work = self.work(target)
+        control = work / 'application/paused-control.json'
+        control.parent.mkdir(parents=True, exist_ok=True)
+        attempt_id = '19191919191919191919191919191919'
+        control.write_text(json.dumps({'attempt_id': attempt_id,
+            'run_id': target['project']['run_id'], 'action': 'pause'}))
+        history = work / 'application/paused-import.jsonl'
+        result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py'),
+            '--root', str(self.root), '--json', 'prepare', target['project']['run_id'],
+            '--reuse-from-run-id', donor['project']['run_id'], '--control-file', str(control),
+            '--attempt-id', attempt_id, '--progress-events', str(history)], capture_output=True)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(json.loads(result.stdout)['error']['code'], 'autonomous_paused')
+        self.assertFalse(list((work / 'raster').glob('*.png')))
+        self.assertFalse(list((work / 'ocr').glob('*')))
+        events = [json.loads(line) for line in history.read_text().splitlines()]
+        self.assertFalse(any(e['type'] in ('unit_started', 'unit_cached', 'unit_completed') for e in events))
+        self.assertEqual({name: (hashlib.sha256((old / name).read_bytes()).hexdigest(),
+                                (old / name).stat().st_mtime_ns) for name in before}, before)
+
     def test_native_import_rejects_manifest_and_profile_paths_escaping_registry(self):
         donor = self.run_named('A')
         self.prepare(donor)

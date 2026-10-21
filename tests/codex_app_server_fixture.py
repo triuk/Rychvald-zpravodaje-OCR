@@ -2,9 +2,11 @@
 import json
 import sys
 import time
+from pathlib import Path
 
 mode = sys.argv[1]
 logged_in = mode not in ('login', 'missing_account')
+state_path = Path(sys.argv[2]) if mode in ('hold', 'lost_ack', 'completed_lost_terminal') else None
 
 
 def emit(value):
@@ -60,12 +62,23 @@ for raw in sys.stdin:
         if mode == 'slow':
             time.sleep(60)
         result = {'turn': {'id': 'fixture-turn-13', 'status': 'inProgress'}}
+        if mode == 'lost_ack':
+            state_path.write_text(json.dumps(result['turn']))
+            continue
         emit({'id': identifier, 'result': result})
         emit({'method': 'turn/started', 'params': {'threadId': 'fixture-thread-13', 'turn': result['turn']}})
         usage = {'inputTokens': 31, 'cachedInputTokens': 7, 'outputTokens': 9,
                  'reasoningOutputTokens': 3, 'totalTokens': 40}
         emit({'method': 'thread/tokenUsage/updated', 'params': {'threadId': 'fixture-thread-13',
               'turnId': 'fixture-turn-13', 'tokenUsage': {'last': usage, 'total': usage, 'modelContextWindow': None}}})
+        if mode == 'completed_lost_terminal':
+            previous = json.loads(state_path.read_text()) if state_path.exists() else {}
+            state_path.write_text(json.dumps({'id': 'fixture-turn-13', 'status': 'completed',
+                'start_count': previous.get('start_count', 0) + 1}))
+            break  # Provider completion is durable, but the transport loses its final frames.
+        if mode == 'hold':
+            state_path.write_text(json.dumps({'id': 'fixture-turn-13', 'status': 'inProgress'}))
+            continue
         if mode == 'rerouted':
             emit({'method': 'model/rerouted', 'params': {'threadId': 'fixture-thread-13', 'turnId': 'fixture-turn-13',
                   'fromModel': 'gpt-6.1-sol', 'toModel': 'gpt-6-sol', 'reason': 'fixture'}})
@@ -77,6 +90,16 @@ for raw in sys.stdin:
         emit({'method': 'turn/completed', 'params': {'threadId': 'fixture-thread-13',
               'turn': {'id': 'fixture-turn-13', 'status': 'interrupted' if mode == 'interrupted' else 'completed', 'items': []}}})
         continue
+    elif method == 'turn/interrupt' and mode in ('hold', 'lost_ack'):
+        assert request['params'] == {'threadId': 'fixture-thread-13', 'turnId': 'fixture-turn-13'}
+        state_path.write_text(json.dumps({'id': 'fixture-turn-13', 'status': 'interrupted'}))
+        emit({'id': identifier, 'result': {}})
+        emit({'method': 'turn/completed', 'params': {'threadId': 'fixture-thread-13',
+            'turn': {'id': 'fixture-turn-13', 'status': 'interrupted', 'items': []}}})
+        continue
+    elif method == 'thread/read' and mode in ('hold', 'lost_ack', 'completed_lost_terminal'):
+        assert request['params']['threadId'] == 'fixture-thread-13'
+        result = {'thread': {'id': 'fixture-thread-13', 'turns': [json.loads(state_path.read_text())]}}
     else:
         emit({'id': identifier, 'error': {'code': -32601, 'message': 'Unexpected method ' + str(method)}})
         continue

@@ -65,7 +65,7 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
         connection_id = str(len(value['connections']))
         stderr = (directory / 'stderr.log').open('a')
         rpc = RpcProcess(command(manager.runtime, settings, trust), workspace, stderr, trace,
-                         lambda: job['cancel'], env=settings['process_environment'])
+                         lambda: job['cancel'], env=settings['process_environment'], paused=lambda: job.get('pause', False))
         job['rpc'] = rpc
         value['connections'].append({'stage': stage, 'connection_id': str(len(value['connections'])),
             'pid': rpc.process.pid, 'process_start_ticks': process_identity(rpc.process.pid)})

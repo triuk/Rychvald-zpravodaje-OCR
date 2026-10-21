@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tomllib
 import time
+import os
 
 mode = sys.argv[1]
 settings = {}
@@ -84,8 +85,12 @@ for line in sys.stdin:
     elif method == 'model/list':
         result = {'data': [{'model': 'gpt-6.1-sol', 'inputModalities': ['text', 'image'],
             'supportedReasoningEfforts': [{'reasoningEffort': 'high'}]}], 'nextCursor': None}
-    elif method == 'thread/start':
+    elif method in ('thread/start', 'thread/resume'):
+        if method == 'thread/resume':
+            review = json.loads(Path('.saved-source-answer.json').read_text())['review']
         result = {'thread': {'id': 'reading-thread'}, 'model': 'gpt-6-sol' if mode == 'wrong_model' else 'gpt-6.1-sol', 'reasoningEffort': 'high'}
+    elif method == 'thread/read':
+        result = {'thread': {'id': 'reading-thread', 'turns': [{'id': 'source-turn', 'status': 'completed'}]}}
     elif method == 'turn/start':
         source = len([item for item in params['input'] if item['type'] == 'localImage']) > 0
         turn_id = 'source-turn' if source else 'accounting-turn'
@@ -115,6 +120,13 @@ for line in sys.stdin:
                     'source_crop': 'raster/page-2.png', 'bbox': [0, 0, 90, 20]}]
             if mode == 'partial_source':
                 source_answer['read_pages'] = [1]
+            gate = os.environ.get('RECOVERY_SOURCE_GATE')
+            if gate:
+                Path(gate + '.ready').write_text('original source turn in progress')
+                deadline = time.monotonic() + 20
+                while not Path(gate).exists() and time.monotonic() < deadline:
+                    time.sleep(.02)
+            Path('.saved-source-answer.json').write_text(json.dumps(source_answer))
             finish(turn_id, source_answer)
         else:
             metadata = json.loads(params['input'][0]['text'].split('READING_ACCOUNTING_PACKET\n', 1)[1])

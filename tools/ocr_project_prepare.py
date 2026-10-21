@@ -10,7 +10,7 @@ from ocr_projects import ProjectError, atomic_json, source_hash
 
 
 def resume_project(registry, project_id, *, dpi=None, language=None, environment=None,
-                   progress_events=None, attempt_id=None):
+                   progress_events=None, attempt_id=None, control_file=None):
     record = registry.get(project_id)
     if record['project']['operation_state'] == 'running':
         raise ProjectError('project_busy', 'Another operation is active for this project.')
@@ -25,7 +25,7 @@ def resume_project(registry, project_id, *, dpi=None, language=None, environment
         raise ProjectError('configuration_changed', 'Resume parameters differ from the original preparation; import an explicit new run.')
     return prepare_project(registry, project_id, dpi=identity['dpi'], language=identity['language'],
                            environment=environment or saved.get('environment_manifest'), resume=True,
-                           progress_events=progress_events, attempt_id=attempt_id)
+                           progress_events=progress_events, attempt_id=attempt_id, control_file=control_file)
 
 
 def valid_identity(identity):
@@ -60,11 +60,16 @@ def saved_preparation(work):
 
 
 def prepare_project(registry, project_id, *, dpi=300, language='ces', environment=None, resume=False,
-                    progress_events=None, attempt_id=None, reuse_from_run_id=None):
+                    progress_events=None, attempt_id=None, control_file=None, reuse_from_run_id=None):
     from ocr_progress import ProgressReporter
     record = registry.get(project_id)
     work = registry.root / record['artifacts']['workspace']
     progress = ProgressReporter(progress_events, run_id=project_id, work=work, attempt_id=attempt_id)
+    if control_file is not None:
+        control_file = Path(control_file).resolve()
+        if not control_file.is_relative_to(work.resolve()):
+            raise ProjectError('control_invalid', 'Control channel must belong to this workspace.')
+    progress.control_file = control_file
     progress.emit('attempt_started', parameters={'dpi': dpi, 'language': language})
     try:
         from ocr_local_import import donor_snapshot
@@ -72,7 +77,10 @@ def prepare_project(registry, project_id, *, dpi=300, language='ces', environmen
             result = _prepare_project(registry, project_id, dpi=dpi, language=language, environment=environment,
                                       resume=resume, progress=progress, donor=donor)
     except BaseException as error:
-        progress.failed(error)
+        if getattr(error, 'code', None) == 'autonomous_paused':
+            progress.emit('attempt_paused')
+        else:
+            progress.failed(error)
         raise
     progress.emit('attempt_completed', counts=result['counts'])
     return result
@@ -119,12 +127,17 @@ def _prepare_project(registry, project_id, *, dpi, language, environment, resume
             record['counts'].update(counts)
             record['artifacts']['preparation_checkpoint'] = str((work / 'preparation-checkpoint.json').relative_to(registry.root))
             record['artifacts']['input_manifest'] = str((work / 'input-manifest.json').relative_to(registry.root))
-        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as error:
-            failure = ProjectError('prepare_failed', 'Preparation failed; consult preparation-error.log and resume explicitly.')
-            failure.__cause__ = error
-            record['project'].update(phase='preparation_failed', operation_state='failed', validation='not_run')
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, ProjectError) as error:
+            paused = getattr(error, 'code', None) == 'autonomous_paused'
+            if isinstance(error, ProjectError) and not paused:
+                raise
+            failure = error if paused else ProjectError('prepare_failed', 'Preparation failed; consult preparation-error.log and resume explicitly.')
+            if not paused:
+                failure.__cause__ = error
+            record['project'].update(phase='preparation_interrupted' if paused else 'preparation_failed',
+                operation_state='interrupted' if paused else 'failed', validation='not_run')
             marker = read_checkpoint(work / 'preparation-checkpoint.json')
-            marker['status'] = 'failed'
+            marker['status'] = 'paused' if paused else 'failed'
             marker['previous_project_state'] = retained
             atomic_json(work / 'preparation-checkpoint.json', marker)
             (work / 'preparation-error.log').write_text(str(error), encoding='utf-8')
@@ -180,7 +193,7 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
         progress.emit('units_planned', pages_total=len(document), ocr_total=len(document) * 2)
         for number, page in enumerate(document, 1):
             step_id = f'raster:page:{number}'
-            progress.emit('unit_started', step_id, unit_kind='raster', page=number)
+            progress.admit(step_id, unit_kind='raster', page=number)
             raster = work / 'raster' / f'page-{number}.png'
             overview = work / 'raster' / f'overview-{number}.png'
             raster_checkpoint = work / 'raster' / f'page-{number}-checkpoint.json'
@@ -245,7 +258,7 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
         def recognize(job):
             number, psm = job
             step_id = f'ocr:page:{number}:psm:{psm}'
-            progress.emit('unit_started', step_id, unit_kind='ocr', page=number, psm=psm)
+            progress.admit(step_id, unit_kind='ocr', page=number, psm=psm)
             prefix = work / 'ocr' / f'page-{number}-psm{psm}'
             command = ['tesseract', str(work / 'raster' / f'page-{number}.png'), str(prefix),
                        '-l', language, '--psm', str(psm), '-c', 'hocr_char_boxes=1', 'hocr', 'tsv', 'txt', 'makebox']
@@ -269,6 +282,7 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             commands = list(pool.map(recognize, [(number, psm) for number in range(1, len(pages) + 1) for psm in [3, 11]]))
         atomic_json(work / 'ocr-commands.json', commands)
+        progress.admit()
         progress.emit('step_started', 'candidates')
         lines = []
         for number in range(1, len(pages) + 1):
@@ -279,6 +293,7 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
                   'ocr_computed': sum(not row['cache_hit'] for row in commands),
                   'ocr_reused': sum(row['cache_hit'] for row in commands), 'lines': len(lines)}
         progress.emit('step_started', 'artifact_validation')
+        progress.admit()
         outputs = verified_preparation_outputs(work, identity, len(pages), native, commands)
         progress.emit('step_completed', 'artifact_validation', outputs_verified=len(outputs))
         atomic_json(checkpoint_path, {'schema_version': 1, 'status': 'completed', 'identity': identity,
