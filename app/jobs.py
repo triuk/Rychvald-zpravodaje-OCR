@@ -128,7 +128,7 @@ class PreparationJobs:
         with self._lock:
             return self._active is not None
 
-    def start(self, root, run, environment=None, *, resume=False):
+    def start(self, root, run, environment=None, reuse_from_run_id=None, *, resume=False):
         with self._lock:
             if self._active is not None:
                 raise JobError('operation_active', 'A local preparation is active; wait for it to finish.')
@@ -147,6 +147,8 @@ class PreparationJobs:
                        '--progress-events', str(history), '--attempt-id', attempt_id, '--control-file', str(control)]
             if environment is not None:
                 command.extend(['--environment', environment])
+            if reuse_from_run_id is not None and operation == 'prepare':
+                command.extend(['--reuse-from-run-id', reuse_from_run_id])
             manifest_path = directory / f'{attempt_id}.json'
             manifest = {'schema_version': 1, 'attempt_id': attempt_id, 'run_id': run_id,
                         'root': str(root), 'operation': operation, 'state': 'starting',

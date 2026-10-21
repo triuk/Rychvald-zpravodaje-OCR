@@ -13,6 +13,7 @@
   <script src="reading.js" defer></script>
   <script src="geometry.js" defer></script>
   <script src="export.js" defer></script>
+  <script src="comparison.js" defer></script>
 </head>
 <body>
   <header class="app-header">
@@ -48,10 +49,21 @@
       <button id="start-autonomous" type="button" disabled>Spustit celý průchod ze zdrojového PDF</button>
       <label for="autonomous-environment">Nativní prostředí pro celý průchod (volitelné)</label>
       <input id="autonomous-environment" type="text" spellcheck="false" placeholder="Manifest prostředí OCR procesu">
+      <label for="autonomous-donor">Převzít ověřenou místní přípravu z průchodu (volitelné)</label>
+      <select id="autonomous-donor"><option value="">Nová místní příprava</option></select>
       <p class="hint">Nejdříve prohlédněte profil. Nový průchod uchová přesnou použitou podobu promptů a nastavení.</p>
     </form>
   </section>
   <div id="message" role="status" aria-live="polite">Připojování k aplikaci…</div>
+  <section class="comparison-panel" aria-label="Porovnání průchodů">
+    <h2>Porovnání průchodů stejného vydání</h2>
+    <form id="comparison-form" class="input-row">
+      <label for="comparison-left">První průchod</label><select id="comparison-left" required></select>
+      <label for="comparison-right">Druhý průchod</label><select id="comparison-right" required></select>
+      <button type="submit">Porovnat uložené průchody</button>
+    </form>
+    <div id="comparison-results" aria-live="polite"></div>
+  </section>
   <div class="workspace">
     <aside aria-label="Projekty vydání">
       <div class="section-heading"><h2>Projekty vydání</h2><span id="edition-count">0</span></div>

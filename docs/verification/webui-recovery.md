@@ -103,6 +103,16 @@ tests retain their expected priced counts; control sidecars are excluded from
 attempt enumeration. Legacy preflight records do not require new recovery fields
 unless they actually have a new recovery record.
 
+Before integration sync, all 57 affected tests passed in 331.421 seconds. After
+sync with #22, a 29-test recovery/comparison/preparation run found four native
+error-contract regressions and one invalid identity in the new pause-import test.
+The error fix preserves original `ProjectError` codes and checkpoint bytes except
+for the intentional pause transition. A fresh six-test run covering all five
+failures plus partial preparation pause/resume passed in 33.996 seconds. The
+earlier failed run stays preserved, rather than being relabelled as a full pass.
+The donor-import check verifies that an already paused native attempt imports no
+next raster/OCR unit and leaves the donor bytes and modification times unchanged.
+
 ## Native GUI close and restart
 
 `tools/smoke_webui_recovery.py` runs `close` and `resume` in separate OS processes
