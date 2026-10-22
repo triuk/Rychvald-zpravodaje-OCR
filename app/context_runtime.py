@@ -23,6 +23,35 @@ def toml(value):
 
 
 def default_context_runtime():
+    if os.environ.get('RYCHVALD_BUNDLE_ROOT'):
+        bundle = Path(os.environ['RYCHVALD_BUNDLE_ROOT']).resolve()
+        descriptor = Path(os.environ.get('RYCHVALD_CONTEXT_DESCRIPTOR', '')).resolve()
+        if bundle != ROOT or descriptor != bundle / 'native/bundled-context.json':
+            raise JobError('context_runtime_invalid', 'Installed context descriptor is outside its bundle.')
+        try:
+            runtime = json.loads(descriptor.read_text())
+
+            def relative(name):
+                path = Path(name)
+                if path.is_absolute() or '..' in path.parts:
+                    raise ValueError('Unsafe installed context path')
+                return str(bundle / path)
+
+            for name in ('node', 'package'):
+                runtime[name] = relative(runtime[name])
+            for item in [*runtime['files'], *runtime['interpreters']]:
+                item['path'] = relative(item['path'])
+            for name in ('node_command', 'env_command'):
+                runtime[name] = [relative(item) if index in (0, 3, 4) else item
+                                 for index, item in enumerate(runtime[name])]
+            runtime['probe_command'] = [*runtime['node_command'], '--input-type=module', '-e',
+                'import {DatabaseSync} from "node:sqlite"; const d=new DatabaseSync(":memory:");'
+                'd.exec("CREATE VIRTUAL TABLE verification USING fts5(value)");d.close();'
+                'console.log(JSON.stringify({node:process.version,sqlite_fts5:true}))']
+            runtime['bundled'] = True
+            return runtime
+        except (OSError, ValueError, KeyError, TypeError):
+            raise JobError('context_runtime_invalid', 'Installed context descriptor is missing or invalid.') from None
     lock = json.loads((ROOT / 'native/context-runtime.json').read_text())
     bundled = ROOT / lock['node']['bundled_path']
     node = bundled if bundled.is_file() else Path(lock['node']['development_path'])
@@ -84,24 +113,30 @@ def configuration(runtime, codex, workspace, storage):
     home.mkdir(exist_ok=True)
     context_env = {'CONTEXT_MODE_PLATFORM': 'codex', 'CONTEXT_MODE_PROJECT_DIR': str(workspace),
                    'CONTEXT_MODE_DIR': str(storage), 'TMPDIR': str(temporary), 'CODEX_HOME': str(home),
-                   'PATH': str(binary) + os.pathsep + '/usr/bin:/bin'}
+                   'PATH': str(binary) if runtime.get('bundled') else str(binary) + os.pathsep + '/usr/bin:/bin'}
+    if runtime.get('bundled'):
+        context_env['SHELL'] = str(binary / 'bash')
+        context_env['HOME'] = str(home)
     hooks = {}
     commands = {}
     for event, script in EVENTS.items():
         entry = Path(runtime['package']) / 'hooks/codex' / (script + '.mjs')
-        command = shlex.join(['/usr/bin/env', *[key + '=' + val for key, val in context_env.items()], runtime['node'], str(entry)])
+        command = shlex.join([*runtime.get('env_command', ['/usr/bin/env']),
+                              *[key + '=' + val for key, val in context_env.items()],
+                              *runtime.get('node_command', [runtime['node']]), str(entry)])
         handler = {'type': 'command', 'command': command, 'timeout': 30, 'additionalContextLimit': 8000}
         group = {'hooks': [handler]}
         if event == 'PreToolUse':
             group['matcher'] = 'local_shell|shell|shell_command|exec_command|Bash|Shell|apply_patch|Edit|Write|grep_files|ctx_execute|ctx_execute_file|ctx_batch_execute|ctx_search|ctx_index|mcp__'
         hooks[event] = [group]
         commands[command] = event[0].lower() + event[1:]
-    mcp = {'context_mode': {'command': runtime['node'], 'args': [str(Path(runtime['package']) / 'server.bundle.mjs')],
+    node_command = runtime.get('node_command', [runtime['node']])
+    mcp = {'context_mode': {'command': node_command[0], 'args': [*node_command[1:], str(Path(runtime['package']) / 'server.bundle.mjs')],
                            'env': context_env, 'startup_timeout_sec': 45, 'tool_timeout_sec': 90,
                            'enabled_tools': TOOLS, 'required': True,
                            'tools': {tool: {'approval_mode': 'approve'} for tool in TOOLS}}}
     return {'hooks': hooks, 'mcp_servers': mcp, 'commands': commands, 'context_environment': context_env,
-            'process_environment': {**os.environ, **{k: v for k, v in context_env.items() if k != 'CODEX_HOME'}}}
+            'process_environment': {**os.environ, **{k: v for k, v in context_env.items() if k not in ('CODEX_HOME', 'HOME')}}}
 
 
 def command(codex, settings, trust=None):

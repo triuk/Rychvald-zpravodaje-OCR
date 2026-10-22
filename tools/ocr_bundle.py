@@ -78,8 +78,168 @@ def capture(inputs, wheel_cache, download=False):
             'lock_sha256': sha(LOCK)}
 
 
-def build(inputs, output):
-    lock = json.loads(LOCK.read_text())
+def capture_release(inputs, selection):
+    """Capture only a reviewed closure; building subsequently needs this CAS alone."""
+    selection = Path(selection)
+    selected = json.loads(selection.read_text())
+    native_lock = json.loads(locked(selected['native_lock']['path'], selected['native_lock']['sha256']).read_text())
+    sources = []
+    for record in [native_lock['python_archive'], *native_lock['files'].values(),
+                   *native_lock['wheels'], *native_lock.get('licenses', {}).values()]:
+        sources.append((Path(selected['native_inputs']) / record['sha256'], record['sha256']))
+    resources = selected['resources']
+    for record in resources.values():
+        sources.append((Path(record['source']), record['sha256']))
+    # Source capture deliberately enumerates the whole application boundary, so
+    # newly integrated recovery tools are included without a stale hash allowlist.
+    source_files = [ROOT / 'main.py']
+    for folder in ('app', 'ui', 'profiles', 'tools', 'native'):
+        source_files.extend(path for path in (ROOT / folder).rglob('*')
+                            if path.is_file() and '__pycache__' not in path.parts
+                            and path.suffix not in ('.pyc', '.pyo'))
+    if any(path.is_symlink() for path in source_files):
+        raise BundleError('input_mismatch', 'Application source contains symbolic links')
+    application = {str(path.relative_to(ROOT)): {'sha256': sha(path),
+                   'executable': bool(path.stat().st_mode & 0o111)} for path in sorted(source_files)}
+    sources.extend((path, application[str(path.relative_to(ROOT))]['sha256']) for path in source_files)
+    for source, expected in sources:
+        locked(source, expected)
+    from prepare_context_runtime import prepare
+    with tempfile.TemporaryDirectory(prefix='rychvald-context-capture-') as temporary:
+        package = Path(temporary) / 'context-mode'
+        prepared = prepare(Path(selected['context_source']), package)
+        context_files = {str(path.relative_to(package)): {'sha256': sha(path), 'executable': False}
+                         for path in sorted(package.rglob('*')) if path.is_file()}
+        sources.extend((package / name, record['sha256']) for name, record in context_files.items())
+        inputs = Path(inputs)
+        if (inputs / 'release.json').exists():
+            raise BundleError('destination_exists', 'Release capture descriptor already exists')
+        inputs.mkdir(parents=True, exist_ok=True)
+        for source, expected in sources:
+            target = inputs / expected
+            if target.exists():
+                locked(target, expected)
+            else:
+                with tempfile.NamedTemporaryFile(dir=inputs, delete=False) as stream:
+                    candidate = Path(stream.name)
+                    with source.open('rb') as original:
+                        shutil.copyfileobj(original, stream)
+                locked(candidate, expected)
+                candidate.rename(target)
+        revision = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+        dirty = bool(subprocess.run(['git', '-C', str(ROOT), 'status', '--porcelain', '--untracked-files=normal'],
+                                   capture_output=True, text=True, check=True).stdout)
+        descriptor = {'schema_version': 1, 'kind': 'offline-gui-release', 'native_lock': native_lock,
+                      'native_lock_sha256': selected['native_lock']['sha256'],
+                      'selection_sha256': sha(selection), 'selection': selected,
+                      'source_revision': revision, 'source_dirty': dirty,
+                      'source_files': application, 'context_files': context_files,
+                      'prepared_context': prepared['tree_sha256'], 'resources': resources}
+        json_file(inputs / 'release.json', descriptor)
+    return {'inputs': str(inputs.resolve()), 'descriptor_sha256': sha(inputs / 'release.json'),
+            'source_revision': revision, 'source_dirty': dirty, 'source_files': len(application)}
+
+
+def build_release(inputs, output):
+    inputs = Path(inputs)
+    release = json.loads((inputs / 'release.json').read_text())
+    lock = release['native_lock']
+    for record in [lock['python_archive'], *lock['files'].values(), *lock['wheels'],
+                   *lock.get('licenses', {}).values(), *release['source_files'].values(),
+                   *release['context_files'].values(), *release['resources'].values()]:
+        locked(inputs / record['sha256'], record['sha256'])
+    with tempfile.TemporaryDirectory(prefix='rychvald-release-source-') as temporary:
+        root = Path(temporary)
+        for name, record in release['source_files'].items():
+            relative = safe_relative(name)
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(inputs / record['sha256'], target)
+            target.chmod(0o755 if record['executable'] else 0o644)
+        return build(inputs, output, source_root=root, native_lock=lock, release=release)
+
+
+def safe_relative(name):
+    path = Path(name)
+    if path.is_absolute() or '..' in path.parts or not path.parts:
+        raise BundleError('unsafe_archive', 'Unsafe release member: ' + name)
+    return path
+
+
+def populate_release(bundle, inputs, root, release):
+    for name, record in release['source_files'].items():
+        target = bundle / safe_relative(name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(inputs / record['sha256'], target)
+        target.chmod(0o755 if record['executable'] else 0o644)
+    for name, record in release['resources'].items():
+        target = bundle / safe_relative(name)
+        if target.exists() and sha(target) != record['sha256']:
+            raise BundleError('basename_collision', 'Conflicting release resource: ' + name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(inputs / record['sha256'], target)
+        target.chmod(0o755 if record['executable'] else 0o644)
+    for name, record in release['context_files'].items():
+        target = bundle / 'runtime/context-mode' / safe_relative(name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(inputs / record['sha256'], target)
+        target.chmod(0o644)
+
+    def wrapper(name, program, python=False):
+        target = bundle / 'runtime/bin' / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('#!/bin/sh\nroot=${0%/*}/../..\n'
+                          'unset LD_PRELOAD LD_LIBRARY_PATH' +
+                          (' PYTHONPATH PYTHONHOME PYTHONUSERBASE' if python else '') + '\n'
+                          'exec "$root/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "$root/lib" '
+                          '"$root/' + program + '"' + (' -I -B' if python else '') + ' "$@"\n')
+        target.chmod(0o755)
+
+    for name, program in [('node', 'runtime/native/node'), ('bash', 'runtime/native/bash'),
+                          ('sh', 'runtime/native/bash'), ('env', 'runtime/native/env'),
+                          ('python3', 'bin/python3.14')]:
+        wrapper(name, program, name == 'python3')
+    loader = ['lib/ld-linux-x86-64.so.2', '--inhibit-cache', '--library-path', 'lib']
+    context_lock = json.loads((root / 'native/context-runtime.json').read_text())
+    runtime_files = {name: record['sha256'] for name, record in release['resources'].items()
+                     if name.startswith(('lib/', 'runtime/native/')) and '/site-packages/' not in name}
+    runtime_files['bin/python3.14'] = sha(bundle / 'bin/python3.14')
+    for path in (bundle / 'runtime/bin').iterdir():
+        runtime_files[str(path.relative_to(bundle))] = sha(path)
+    descriptor = {'kind': 'native', 'version': context_lock['version'],
+                  'node': 'runtime/bin/node', 'node_command': [*loader, 'runtime/native/node'],
+                  'env_command': [*loader, 'runtime/native/env'],
+                  'package': 'runtime/context-mode', 'tree_sha256': release['prepared_context'],
+                  'files': [{'path': name, 'sha256': value} for name, value in sorted(runtime_files.items())],
+                  'interpreters': [{'name': name, 'path': 'runtime/bin/' + name} for name in ('python3', 'bash', 'sh')]}
+    json_file(bundle / 'native/bundled-context.json', descriptor)
+    shutil.copyfile(root / 'native/gui_bootstrap.py', bundle / 'gui_bootstrap.py')
+    launcher = bundle / 'bin/rychvald-ocr-gui'
+    launcher.write_text('#!/bin/sh\nroot=${0%/*}/..\n'
+                        'unset LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME PYTHONUSERBASE FONTCONFIG_PATH\n'
+                        'exec "$root/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "$root/lib" '
+                        '"$root/bin/python3.14" -I -B "$root/gui_bootstrap.py" "$@"\n')
+    launcher.chmod(0o755)
+    json_file(bundle / 'provenance/release.json', release)
+    json_file(bundle / 'provenance/source-files.json', release['source_files'])
+    (bundle / 'licenses/RELEASE-NOTICE.txt').write_text(
+        'Codex 0.162.0-alpha.17.2 and companion: LicenseRef-OpenAI-Proprietary; see Codex-LICENSE.\n'
+        'Node 24.21.0 is the selected CUA build; see node-LICENSE and node-manifest.json.\n'
+        'context-mode 1.0.169: Elastic License 2.0; runtime/context-mode/LICENSE and dependency licenses.\n'
+        'WebUI2 2.5.8 wrapper and native WebUI: MIT; copyright Hassan Draga, '
+        'https://github.com/webui-dev/webui and https://github.com/webui-dev/python-webui; '
+        'see lib/python3.14/site-packages/webui2-2.5.8.dist-info/licenses/LICENSE.\n'
+        'Selected native WebUI is an installed artifact, absent from wrapper RECORD; archive origin unestablished.\n'
+        'Bash/readline/coreutils GPL-3.0-or-later; coreutils also GFDL-1.3-or-later. '
+        'glibc LGPL-2.1-or-later/GPL-2.0-or-later; GCC libraries GPL-3.0-or-later '
+        'with GCC Runtime Library Exception; ncurses license: licenses/release/.\n'
+        'Package signature verification was not performed. Exact per-file provenance is in provenance/release.json.\n')
+
+
+def build(inputs, output, *, source_root=None, native_lock=None, release=None):
+    root = Path(source_root) if source_root else ROOT
+    lock = native_lock if native_lock is not None else json.loads(LOCK.read_text())
     inputs, output = Path(inputs), Path(output)
     locked(inputs / lock['python_archive']['sha256'], lock['python_archive']['sha256'])
     for record in [*lock['files'].values(), *lock['wheels'], *lock.get('licenses', {}).values()]:
@@ -91,7 +251,7 @@ def build(inputs, output):
         bundle = Path(temporary) / 'rychvald-ocr'
         for directory in ('bin', 'lib/python3.14', 'native', 'tools', 'fonts', 'tessdata/configs', 'licenses', 'provenance'):
             (bundle / directory).mkdir(parents=True, exist_ok=True)
-        manifest = json.loads((ROOT / 'native/environment.json').read_text())
+        manifest = json.loads((root / 'native/environment.json').read_text())
         manifest.update(root='.', build_id=lock['build_id'], profile='installed-linux-bundle',
                         library_dirs=['lib'], libraries={})
         manifest['python'].update(path='bin/python3.14', source=lock['python_archive']['source'])
@@ -173,22 +333,22 @@ def build(inputs, output):
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(payload)
                     target.chmod(0o644)
-        for source in sorted((ROOT / 'tools').glob('*.py')):
+        for source in sorted((root / 'tools').glob('*.py')):
             shutil.copyfile(source, bundle / 'tools' / source.name)
-        shutil.copyfile(ROOT / 'native/bundle_bootstrap.py', bundle / 'bootstrap.py')
+        shutil.copyfile(root / 'native/bundle_bootstrap.py', bundle / 'bootstrap.py')
         launcher = bundle / 'bin/rychvald-ocr'
         launcher.write_text('#!/bin/sh\nroot=${0%/*}/..\nunset LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME PYTHONUSERBASE FONTCONFIG_PATH\nexec "$root/lib/ld-linux-x86-64.so.2" --inhibit-cache --library-path "$root/lib" "$root/bin/python3.14" -I -B "$root/bootstrap.py" "$@"\n')
         launcher.chmod(0o755)
         json_file(bundle / 'environment.json', manifest)
         json_file(bundle / 'provenance/input-lock.json', lock)
         json_file(bundle / 'provenance/application-files.json',
-                  {str(path.relative_to(ROOT)): sha(path) for path in sorted((ROOT / 'tools').glob('*.py'))})
+                  {str(path.relative_to(root)): sha(path) for path in sorted((root / 'tools').glob('*.py'))})
         for source, record in lock.get('licenses', {}).items():
             locked(inputs / record['sha256'], record['sha256'])
             target = bundle / 'licenses' / source.lstrip('/')
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(inputs / record['sha256'], target)
-        for source in sorted((ROOT / 'native').glob('*LICENSE*')):
+        for source in sorted((root / 'native').glob('*LICENSE*')):
             shutil.copyfile(source, bundle / 'licenses' / source.name)
         # Canonical Apache license body has the exact pinned upstream Tesseract
         # and tessdata LICENSE hashes; retain attribution/source identities too.
@@ -196,6 +356,8 @@ def build(inputs, output):
         if apache:
             for name in ('Tesseract-LICENSE', 'tessdata-LICENSE'):
                 shutil.copyfile(inputs / apache['sha256'], bundle / 'licenses' / name)
+        if release is not None:
+            populate_release(bundle, inputs, root, release)
         inventory = {str(path.relative_to(bundle)): {'sha256': sha(path), 'executable': bool(path.stat().st_mode & 0o111)}
                      for path in sorted(bundle.rglob('*')) if path.is_file()}
         json_file(bundle / 'inventory.json', {'schema_version': 1, 'build_id': lock['build_id'], 'files': inventory})
@@ -254,13 +416,23 @@ def main(argv=None):
     command.add_argument('--inputs', required=True)
     command.add_argument('--wheel-cache', required=True)
     command.add_argument('--download', action='store_true')
+    command = commands.add_parser('capture-release')
+    command.add_argument('--selection', required=True)
+    command.add_argument('--inputs', required=True)
+    command = commands.add_parser('build-release')
+    command.add_argument('--inputs', required=True)
+    command.add_argument('--output', required=True)
     command = commands.add_parser('install')
     command.add_argument('--archive', required=True)
     command.add_argument('--sha256', required=True)
     command.add_argument('--destination', required=True)
     args = parser.parse_args(argv)
     try:
-        if args.operation == 'build':
+        if args.operation == 'capture-release':
+            result = capture_release(args.inputs, args.selection)
+        elif args.operation == 'build-release':
+            result = build_release(args.inputs, args.output)
+        elif args.operation == 'build':
             result = build(args.inputs, args.output)
         elif args.operation == 'capture':
             result = capture(args.inputs, args.wheel_cache, args.download)
