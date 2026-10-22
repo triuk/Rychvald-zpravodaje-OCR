@@ -32,6 +32,9 @@ odmítnutí AI. Nejasné původní zadání zachová stav `reconciliation_requir
 vlákno/tah a hash protokolu v `application/manual-execution.json`; nová práce
 se nepřijme. `queue_status.manual_execution` a rozbalitelná evidence fronty
 ukazují původní stav i bez autonomního rodiče. Původní protokol se nepřepisuje.
+U opravného cyklu se čtou také přesně navázané podřízené kontroly výstupu.
+Dokončený tah kořene neprokazuje ukončení jejich zadání. Nejasné doručení
+podřízeného pokusu zachová původní cyklus a brání dalšímu spuštění bez obnovy.
 
 Před pokračováním aktivní položky použijte **Ověřit původní pokus**. Kontrola
 `reconcile_autonomous` ověří přesný původní tah odděleným podporovaným čtením
@@ -74,6 +77,9 @@ Metriky čtou zaznamenané intervaly fronty a důvody. Práce probíhající př
 o pozastavení se nezapočítá zároveň jako čekání. Otevřené intervaly zůstávají
 neukončené; nepozorované mezery nejsou automaticky čekáním. Původní protokoly,
 spotřeba, částečné/neznámé údaje a pravidla deduplikace tahů se zachovají.
+Pokud je kterýkoliv interval neukončený, `queue.waiting_seconds` zůstává `null`
+a stav je `partial`; známá část je oddělené `observed_waiting_seconds`.
+Pouhé zařazení do fronty tak nikdy netvrdí změřenou nulovou dobu čekání.
 
 ## Ověření
 

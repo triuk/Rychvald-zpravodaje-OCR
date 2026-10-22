@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import json
+import shutil
 import os
 from pathlib import Path
 import sys
@@ -108,11 +109,17 @@ class CodexDiagnosticTests(unittest.TestCase):
         self.assertFalse(result['combination_verified'])
 
     def test_rejection_mismatch_reroute_protocol_and_tool_failures_cannot_verify_the_combination(self):
+        baseline = self.registry
+        self.app.close()
         for mode, code in [('missing_account', 'chatgpt_account_required'), ('no_vision', 'model_capability_unavailable'),
                            ('wrong_effort', 'model_configuration_mismatch'), ('wrong_model', 'model_configuration_mismatch'),
                            ('rejected', 'codex_request_rejected'), ('malformed', 'codex_protocol_invalid'),
                            ('rerouted', 'model_rerouted'), ('tool_used', 'diagnostic_tool_used')]:
             with self.subTest(mode=mode):
+                # Independent variants start from native setup only, before
+                # any AI attempt. An unknown prior delivery stays in its root.
+                self.registry = self.directory / ('registry-' + mode)
+                shutil.copytree(baseline, self.registry)
                 self.peer(mode)
                 started = self.app.dispatch('start_model_diagnostic', {'run_id': self.identifier, 'image_path': str(self.image)})
                 self.assertTrue(started['ok'], started)

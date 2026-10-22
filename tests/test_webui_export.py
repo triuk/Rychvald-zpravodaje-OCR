@@ -138,6 +138,7 @@ class AutonomousExportTests(unittest.TestCase):
         self.assertFalse(stale['ok'], stale)
         self.assertEqual(stale['error']['code'], 'output_review_invalid')
         resumed = self.app.dispatch('start_first_export', {'run_id': identifier, **selected,
+            'defer_corrections': True,
             'environment': os.environ.get('OCR_ENVIRONMENT')})
         self.assertTrue(resumed['ok'], resumed)
         deadline = time.monotonic() + 30

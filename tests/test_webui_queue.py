@@ -478,6 +478,46 @@ a.dispatch('enqueue_run',c['payload'])
             self.request('pause_queue')
             release.write_text('release controlled owner')
 
+    def test_standalone_correction_descendant_unknown_blocks_other_work_and_preserves_budget(self):
+        import test_webui_corrections as correction_scenarios
+        gate = self.directory / 'descendant-ack'
+        previous = os.environ.get('QUEUE_DESCENDANT_LOST_ACK')
+        os.environ['QUEUE_DESCENDANT_LOST_ACK'] = str(gate)
+        def restore():
+            if previous is None:
+                os.environ.pop('QUEUE_DESCENDANT_LOST_ACK', None)
+            else:
+                os.environ['QUEUE_DESCENDANT_LOST_ACK'] = previous
+        self.addCleanup(restore)
+        self.wait = lambda operation, seconds=90: correction_scenarios.CorrectionTests.wait(self, operation, seconds)
+        correction_scenarios.CorrectionTests.start(self)
+        other = self.enqueue('Do not bypass descendant')
+        gate.write_text('Only the later correction output review loses ACK')
+        manifest = json.loads((self.work / 'output-manifest.json').read_text())
+        started = self.request('start_corrections', {'run_id': self.identifier,
+            'expected_iteration_id': manifest['iteration_id'],
+            'expected_validation_sha256': hashlib.sha256((self.work / 'checks/run-validation.json').read_bytes()).hexdigest(),
+            'environment': os.environ.get('OCR_ENVIRONMENT')})
+        deadline = time.monotonic() + 70
+        while not Path(str(gate) + '.ready').exists() and time.monotonic() < deadline:
+            time.sleep(.03)
+        self.assertTrue(Path(str(gate) + '.ready').exists())
+        runtime = self.app.codex.runtime
+        self.app.close()
+        self.app = Application(self.root, codex_runtime=runtime, context_runtime=self.context)
+        manual = self.app.dispatch('start_preparation', {'run_id': other['run_id']})
+        self.assertFalse(manual['ok'], manual)
+        self.assertEqual(manual['error']['code'], 'reconciliation_required')
+        evidence = self.request('queue_status')['manual_execution']
+        self.assertEqual(evidence['child_attempt_id'], started['attempt_id'])
+        self.assertEqual(evidence['state'], 'reconciliation_required')
+        self.assertEqual(evidence['descendants'][-1]['delivery_state'], 'unknown')
+        original = self.root / evidence['descendants'][-1]['evidence_path']
+        raw = original.read_bytes()
+        self.request('queue_status')
+        self.assertEqual(original.read_bytes(), raw)
+        self.assertEqual(self.request('correction_status', {'run_id': self.identifier})['cycles_used'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
