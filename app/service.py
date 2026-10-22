@@ -12,6 +12,8 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+import time
+import uuid
 
 from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_run_name
 from .jobs import JobError, PreparationJobs, read_history, atomic_json
@@ -22,6 +24,7 @@ from .geometry import GeometryJobs
 from .output_review import OutputReviewJobs
 from .autonomous import AutonomousJobs
 from .corrections import CorrectionJobs
+from .run_queue import RunQueue
 
 
 class ApplicationError(Exception):
@@ -133,15 +136,32 @@ class Application:
         self.output_review = OutputReviewJobs(self.publish, codex_runtime, context_runtime, self.process)
         self.autonomous = AutonomousJobs(self)
         self.corrections = CorrectionJobs(self, codex_runtime, context_runtime)
+        self.queue = RunQueue(self)
+        self._manual_lease = None
+        self._manual_thread = None
 
     def dispatch(self, operation, payload=None):
         with self._lock:
+            manual_lease = None
             try:
                 if not isinstance(payload, (dict, type(None))):
                     raise ApplicationError('invalid_request', 'Request payload must be an object.')
                 payload = payload or {}
-                if self._closing and (operation.startswith('start_') or operation == 'resume_autonomous'):
+                if self._closing and (operation.startswith('start_') or operation in ('resume_autonomous', 'resume_queue', 'enqueue_run')):
                     raise ApplicationError('application_closing', 'Application is closing; no new work can start.')
+                if operation in ('start_preparation', 'start_model_diagnostic', 'start_context_diagnostic',
+                        'prepare_context_diagnostic', 'start_reading', 'start_geometry', 'patch_geometry',
+                        'recover_geometry', 'start_output_review', 'start_corrections', 'check_codex_account', 'start_codex_login'):
+                    manual_lease = self.autonomous._lease(inspection=operation in ('check_codex_account', 'start_codex_login'))
+                    self._manual_lease = manual_lease
+                    (self.root / 'application').mkdir(exist_ok=True)
+                    atomic_json(self.root / 'application/manual-execution.json', {'schema_version': 1,
+                        'manual_id': uuid.uuid4().hex, 'root': str(self.root),
+                        'state': 'running', 'operation': operation, 'run_id': payload.get('run_id'),
+                        'owner_pid': os.getpid(), 'owner_start_ticks': process_identity(os.getpid())})
+                    intent = json.loads((self.root / 'application/manual-execution.json').read_text())
+                    for manager in self.autonomous._managers():
+                        manager.launch_manual = {'manual_id': intent['manual_id']}
                 if operation in ('start_preparation', 'start_model_diagnostic', 'start_context_diagnostic',
                         'start_reading', 'start_geometry', 'start_output_review', 'start_first_export', 'start_corrections') and payload.get('run_id'):
                     saved_run = self.select_run(payload['run_id'])
@@ -155,7 +175,17 @@ class Application:
                         'patch_geometry', 'recover_geometry', 'start_autonomous', 'start_first_export', 'start_output_review',
                         'check_codex_account', 'start_codex_login', 'start_corrections'):
                     raise ApplicationError('operation_active', 'An autonomous/export operation is active; wait for its saved result.')
-                if operation == 'projects':
+                if operation == 'enqueue_run':
+                    data = self.queue.enqueue(payload)
+                elif operation == 'queue_status':
+                    data = self.queue.status()
+                elif operation == 'reorder_queue':
+                    data = self.queue.reorder(payload)
+                elif operation == 'resume_queue':
+                    data = self.queue.resume(payload)
+                elif operation in ('pause_queue', 'interrupt_queue'):
+                    data = self.queue.control('pause' if operation == 'pause_queue' else 'interrupt')
+                elif operation == 'projects':
                     data = self.projects()
                 elif operation == 'open_registry':
                     data = self.open_registry(payload.get('root'))
@@ -284,9 +314,38 @@ class Application:
                         'error': {'code': error.code, 'message': str(error)},
                         'event_cursor': self._sequence}
             except (OSError, ValueError, KeyError, TypeError) as error:
+                if operation in ('enqueue_run', 'queue_status', 'reorder_queue', 'pause_queue', 'interrupt_queue', 'resume_queue'):
+                    return {'ok': False, 'data': None, 'error': {'code': 'queue_invalid', 'message': str(error)}, 'event_cursor': self._sequence}
                 if operation in ('pause_autonomous', 'interrupt_autonomous', 'reconcile_autonomous', 'resume_autonomous', 'autonomous_status'):
                     return {'ok': False, 'data': None, 'error': {'code': 'checkpoint_invalid', 'message': str(error)}, 'event_cursor': self._sequence}
                 raise
+            finally:
+                if manual_lease is not None:
+                    for manager in self.autonomous._managers():
+                        manager.launch_manual = None
+                    if any(manager.busy() for manager in self.autonomous._managers()):
+                        self._manual_thread = threading.Thread(target=self._release_manual, args=(manual_lease, self.root),
+                            daemon=True, name='OCR-manual-ownership')
+                        self._manual_thread.start()
+                    else:
+                        self._release_manual(manual_lease, self.root)
+
+    def _release_manual(self, lease, root):
+        managers = self.autonomous._managers()
+        while any(manager.busy() for manager in managers):
+            time.sleep(.02)
+        with self._lock:
+            path = root / 'application/manual-execution.json'
+            value = json.loads(path.read_text())
+            from .manual_execution import settle
+            try:
+                value = settle(self, root, value)
+            except Exception as error:
+                value.update(state='reconciliation_required', delivery_state='unknown', failure={
+                    'code': getattr(error, 'code', 'manual_evidence_invalid'), 'message': str(error)})
+            atomic_json(path, value)
+            self._manual_lease = None
+            lease.close()
 
     def publish(self, event_type, **data):
         with self._lock:
@@ -294,6 +353,8 @@ class Application:
             self._events.append({'sequence': self._sequence, 'type': event_type, **data})
 
     def open_registry(self, root):
+        if self.queue.owns_schedule():
+            raise ApplicationError('operation_active', 'Pause the owned queue before switching its registry, including while it waits for another execution owner.')
         if self.preparation.busy() or self.codex.busy() or self.context.busy() or self.reading.busy() or self.geometry.busy():
             raise ApplicationError('operation_active', 'A preparation or Codex operation is active; wait before opening another registry.')
         if not isinstance(root, str) or not root.strip():
@@ -397,6 +458,7 @@ class Application:
     def close(self):
         with self._lock:
             self._closing = True
+            self.queue.close()
         self.autonomous.close()
         self.corrections.close()
         self.preparation.close()
@@ -406,6 +468,8 @@ class Application:
         self.geometry.close()
         self.output_review.close()
         self.autonomous.join()
+        if self._manual_thread is not None:
+            self._manual_thread.join(timeout=5)
 
     def start_corrections(self, payload):
         if any(manager.busy() for manager in (self.preparation, self.codex, self.context, self.reading, self.geometry,

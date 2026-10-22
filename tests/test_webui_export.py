@@ -76,6 +76,7 @@ class AutonomousExportTests(unittest.TestCase):
         profile = self.app.dispatch('inspect_profile', {'path': str(ROOT / 'profiles/faithful-reading.json')})['data']
         started = self.app.dispatch('start_autonomous', {'source_path': str(self.source), 'name': 'First autonomous',
             'profile_path': profile['path'], 'profile_sha256': profile['sha256'],
+            'defer_corrections': True,
             'environment': os.environ.get('OCR_ENVIRONMENT')})
         self.assertTrue(started['ok'], started)
         identifier = started['data']['run_id']

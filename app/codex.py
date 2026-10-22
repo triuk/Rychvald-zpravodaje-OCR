@@ -240,7 +240,8 @@ class CodexJobs:
                         'pid': None, 'process_group': None, 'process_start_ticks': None,
                         'usage_events': [], 'reroutes': [], 'tool_events': [], 'events': [], 'error': None,
                         'combination_verified': False, 'autonomous_ocr_ready': False, 'artifacts': artifacts,
-                        'parent_binding': copy.deepcopy(getattr(self, 'launch_parent', None))}
+                        'parent_binding': copy.deepcopy(getattr(self, 'launch_parent', None)),
+                        'manual_binding': copy.deepcopy(getattr(self, 'launch_manual', None))}
             atomic_json(directory / 'attempt.json', manifest)
             atomic_json(directory / 'request.json', {'operation': operation, 'profile_sha256': manifest['profile_sha256'],
                                                      'prompt': manifest['prompt'], 'image': image_record})
