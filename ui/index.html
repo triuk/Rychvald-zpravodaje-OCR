@@ -14,6 +14,7 @@
   <script src="geometry.js" defer></script>
   <script src="export.js" defer></script>
   <script src="comparison.js" defer></script>
+  <script src="queue.js" defer></script>
 </head>
 <body>
   <header class="app-header">
@@ -55,6 +56,20 @@
     </form>
   </section>
   <div id="message" role="status" aria-live="polite">Připojování k aplikaci…</div>
+  <section class="queue-panel" aria-label="Fronta průchodů OCR">
+    <h2>Fronta průchodů OCR</h2>
+    <p class="hint">Zpracovává se jeden průchod. Zařazení pouze uloží položku; spuštění a pokračování potvrďte tlačítkem níže.</p>
+    <div class="queue-actions">
+      <button id="queue-new" type="button">Zařadit nové PDF s vybraným profilem</button>
+      <button id="queue-selected" type="button" class="secondary">Zařadit vybraný existující průchod</button>
+      <button id="queue-resume" type="button">Spustit / pokračovat ve frontě</button>
+      <button id="queue-pause" type="button" class="secondary">Pozastavit po jednotce</button>
+      <button id="queue-interrupt" type="button" class="secondary">Přerušit nyní</button>
+    </div>
+    <p id="queue-state" role="status" aria-live="polite">Načítání fronty…</p>
+    <details><summary>Důvod zastavení a evidence ruční práce</summary><pre id="queue-evidence"></pre></details>
+    <ol id="queue-items"></ol>
+  </section>
   <section class="comparison-panel" aria-label="Porovnání průchodů">
     <h2>Porovnání průchodů stejného vydání</h2>
     <form id="comparison-form" class="input-row">

@@ -18,7 +18,7 @@ class AutonomousJobs:
         self.app = application
         self.active = None
 
-    def _lease(self):
+    def _lease(self, *, allow_attempt=None, inspection=False):
         self.app.root.mkdir(parents=True, exist_ok=True)
         stream = (self.app.root / '.application-execution.lock').open('a+')
         try:
@@ -26,6 +26,24 @@ class AutonomousJobs:
         except BlockingIOError:
             stream.close()
             raise JobError('operation_active', 'Another application owns this registry.') from None
+        try:
+            # A dead parent may have surviving native/provider work. A free OS
+            # lock is never proof that its original submission was not accepted.
+            for path in (self.app.root / 'work').glob('*/application/autonomous-attempts/*/attempt.json'):
+                saved = json.loads(path.read_text())
+                if saved['state'] in ('starting', 'running', 'interrupting') and saved['attempt_id'] != allow_attempt:
+                    raise JobError('reconciliation_required', 'An unsettled saved parent owns original work; reconcile it before admission.')
+                if not inspection and saved['attempt_id'] != allow_attempt and saved['state'] in ('paused', 'failed', 'interrupted'):
+                    from .failures import run_failure
+                    original = run_failure(self.app.root, self.app.select_run(saved['run_id'], notify=False), saved)
+                    if original['delivery_state'] in ('unknown', 'accepted'):
+                        raise JobError('reconciliation_required', 'An original provider submission remains unresolved; no other run may be admitted.')
+            manual = self.app.root / 'application/manual-execution.json'
+            if manual.exists() and json.loads(manual.read_text())['state'] != 'settled':
+                raise JobError('reconciliation_required', 'Unsettled manual work requires explicit recovery before new admission.')
+        except BaseException:
+            stream.close()
+            raise
         return stream
 
     def _bindings(self, run, payload):
@@ -53,7 +71,7 @@ class AutonomousJobs:
         return tuple(manager for manager in (self.app.preparation, self.app.codex, self.app.context,
             self.app.reading, self.app.geometry, self.app.output_review, getattr(self.app, 'corrections', None)) if manager is not None)
 
-    def start(self, run, payload, *, from_geometry=False, lease=None):
+    def start(self, run, payload, *, from_geometry=False, lease=None, identifier=None, queue_item_id=None):
         if self.busy():
             raise JobError('operation_active', 'An autonomous action is already active.')
         lease = lease or self._lease()
@@ -63,7 +81,7 @@ class AutonomousJobs:
             lease.close()
             raise
         work = self.app.root / run['artifacts']['workspace']['path']
-        identifier = uuid.uuid4().hex
+        identifier = identifier or uuid.uuid4().hex
         path = work / 'application/autonomous-attempts' / identifier / 'attempt.json'
         path.parent.mkdir(parents=True)
         value = {'schema_version': 1, 'attempt_id': identifier, 'run_id': run['project']['run_id'],
@@ -71,7 +89,7 @@ class AutonomousJobs:
             'started_at': now(), 'ended_at': None, 'error': None, 'mode': 'from_geometry' if from_geometry else 'source_to_export',
             'owner_pid': os.getpid(), 'owner_start_ticks': process_identity(os.getpid()),
             'acceptance': 'not_recorded', 'validation': 'not_run', 'payload': copy.deepcopy(payload),
-            'bindings': bindings, 'control': 'run', 'sessions': []}
+            'bindings': bindings, 'control': 'run', 'sessions': [], 'queue_item_id': queue_item_id}
         job = {'manifest': value, 'path': path, 'cancel': False, 'payload': copy.deepcopy(payload), 'lease': lease}
         atomic_json(path, value)
         self.active = job
@@ -327,7 +345,7 @@ class AutonomousJobs:
         self._verify_checkpoint(run, value)
         if proof['original_sha256'] != sha(path) or self._bindings(run, value['payload']) != value['bindings']:
             raise JobError('checkpoint_identity_changed', 'Reconciled work changed before resume.')
-        lease = self._lease()
+        lease = self._lease(allow_attempt=value['attempt_id'])
         try:
             if proof['original_sha256'] != sha(path) or self._bindings(run, value['payload']) != value['bindings']:
                 raise JobError('checkpoint_identity_changed', 'Saved work changed before ownership was acquired.')

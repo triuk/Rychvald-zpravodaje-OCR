@@ -1,5 +1,6 @@
 """Controlled native-protocol peer; never actual image-examination evidence."""
 import json
+import os
 import sys
 import tomllib
 from pathlib import Path
@@ -42,6 +43,10 @@ for raw in sys.stdin:
         prompt = params['input'][0]['text']
         source = 'SOURCE_GEOMETRY_PACKET\n' in prompt
         output = 'OUTPUT_PACKET\n' in prompt
+        gate = os.environ.get('QUEUE_DESCENDANT_LOST_ACK')
+        if output and gate and Path(gate).exists():
+            Path(gate + '.ready').write_text('Controlled descendant turn accepted; acknowledgement lost')
+            continue
         correction = 'CORRECTION_PACKET\n' in prompt
         packet = json.loads(prompt.split('CORRECTION_PACKET\n' if correction else 'OUTPUT_PACKET\n' if output else 'SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
         if correction:

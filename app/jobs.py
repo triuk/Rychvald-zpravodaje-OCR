@@ -158,6 +158,7 @@ class PreparationJobs:
                                      'source_path': str(root / run['artifacts']['source']['path']),
                                      'dpi': parameters['dpi'], 'language': parameters['language']},
                         'environment': environment, 'parent_binding': getattr(self, 'launch_parent', None),
+                        'manual_binding': getattr(self, 'launch_manual', None),
                         'history': str(history.relative_to(root)),
                         'stdout': str((directory / f'{attempt_id}.stdout.json').relative_to(root)),
                         'stderr': str((directory / f'{attempt_id}.stderr.log').relative_to(root)), 'error': None}

@@ -397,6 +397,23 @@ def collect(root, run):
         cost['reason'] = 'Some steps cannot be priced under the exact-model scenario.'
     active = [v for s in steps for v in s['timing']['active_intervals']]
     waiting = [v for s in steps for v in s['timing']['waiting_intervals']]
+    queue_intervals = []
+    queue_closed = []
+    queue_path = root / 'application/queue.json'
+    if queue_path.exists():
+        queue_bytes = queue_path.read_bytes()
+        queued = json.loads(queue_bytes)
+        if queued['schema_version'] != 1 or queued['root'] != str(root):
+            raise ValueError('Queue history belongs to another registry/schema.')
+        sources[str(queue_path.relative_to(root))] = hashlib.sha256(queue_bytes).hexdigest()
+        queue_intervals = [dict(interval, item_id=item['item_id']) for item in queued['items']
+            if item['run_id'] == rid for interval in item.get('waiting_intervals', [])]
+        for interval in queue_intervals:
+            a, b = stamp(interval['start']), stamp(interval['end'])
+            if a is not None and b is not None and b >= a:
+                waiting.append([a, b])
+                queue_closed.append([a, b])
+    queue_complete = bool(queue_intervals) and len(queue_closed) == len(queue_intervals)
     starts = [stamp(s['started_at']) for s in steps if stamp(s.get('started_at')) is not None]
     ends = [stamp(s['ended_at']) for s in steps if stamp(s.get('ended_at')) is not None]
     span = max(ends) - min(starts) if starts and len(ends) == len(steps) else None
@@ -404,6 +421,11 @@ def collect(root, run):
     result = {'schema_version': 1, 'policy': POLICY, 'run_id': rid,
               'source_hash': digest(sources), 'sources': sources, 'warnings': warnings,
               'tokens': usage, 'cost': cost, 'steps': steps, 'categories': CATEGORIES, 'cost_scale': COST_SCALE,
+              'queue': {'waiting_intervals': queue_intervals,
+                  'waiting_seconds': waiting_length(queue_closed, active) if queue_complete else None,
+                  'observed_waiting_seconds': waiting_length(queue_closed, active) if queue_closed else None,
+                  'status': 'complete' if queue_complete else 'partial' if queue_intervals else 'unknown',
+                  'basis': 'Explicit queue admission/pause/outage intervals; open intervals remain unbounded.'},
               'timing': {'active_seconds': union_length(active) if active else None,
                          'waiting_seconds': waiting_length(waiting, active) if waiting else None,
                          'observed_span_seconds': span,

@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 
 mode = sys.argv[1]
-logged_in = mode not in ('login', 'missing_account')
-state_path = Path(sys.argv[2]) if mode in ('hold', 'lost_ack', 'completed_lost_terminal') else None
+logged_in = mode not in ('login', 'missing_account', 'queue_auth')
+state_path = Path(sys.argv[2]) if mode in ('hold', 'lost_ack', 'completed_lost_terminal', 'queue_quota') else None
 
 
 def emit(value):
@@ -38,7 +38,7 @@ for raw in sys.stdin:
         result = {'data': [{'id': 'gpt-6.1-sol', 'model': 'gpt-6.1-sol',
                             'inputModalities': ['text', 'image'],
                             'supportedReasoningEfforts': [{'reasoningEffort': 'high'}]}], 'nextCursor': None}
-        if mode == 'no_vision':
+        if mode in ('no_vision', 'queue_model'):
             result['data'][0]['inputModalities'] = ['text']
     elif method == 'thread/start':
         params = request['params']
@@ -53,6 +53,8 @@ for raw in sys.stdin:
         params = request['params']
         assert params['model'] == 'gpt-6.1-sol' and params['effort'] == 'high'
         assert params['input'][1]['type'] == 'localImage'
+        if mode == 'queue_network':
+            break  # Original outgoing request exists; acceptance is unknown.
         if mode == 'rejected':
             emit({'id': identifier, 'error': {'code': -32000, 'message': 'Exact model access denied'}})
             continue
@@ -71,6 +73,12 @@ for raw in sys.stdin:
                  'reasoningOutputTokens': 3, 'totalTokens': 40}
         emit({'method': 'thread/tokenUsage/updated', 'params': {'threadId': 'fixture-thread-13',
               'turnId': 'fixture-turn-13', 'tokenUsage': {'last': usage, 'total': usage, 'modelContextWindow': None}}})
+        if mode == 'queue_quota' and not Path(str(state_path) + '.restored').exists():
+            state_path.write_text(json.dumps({'id': 'fixture-turn-13', 'status': 'failed',
+                'error': {'message': 'Controlled provider quota', 'codexErrorInfo': 'usageLimitExceeded'}}))
+            emit({'method': 'turn/completed', 'params': {'threadId': 'fixture-thread-13',
+                'turn': json.loads(state_path.read_text())}})
+            continue
         if mode == 'completed_lost_terminal':
             previous = json.loads(state_path.read_text()) if state_path.exists() else {}
             state_path.write_text(json.dumps({'id': 'fixture-turn-13', 'status': 'completed',
@@ -97,7 +105,7 @@ for raw in sys.stdin:
         emit({'method': 'turn/completed', 'params': {'threadId': 'fixture-thread-13',
             'turn': {'id': 'fixture-turn-13', 'status': 'interrupted', 'items': []}}})
         continue
-    elif method == 'thread/read' and mode in ('hold', 'lost_ack', 'completed_lost_terminal'):
+    elif method == 'thread/read' and mode in ('hold', 'lost_ack', 'completed_lost_terminal', 'queue_quota'):
         assert request['params']['threadId'] == 'fixture-thread-13'
         result = {'thread': {'id': 'fixture-thread-13', 'turns': [json.loads(state_path.read_text())]}}
     else:
