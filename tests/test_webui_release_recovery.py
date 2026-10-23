@@ -32,6 +32,9 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_resume_after_published_repair_keeps_parent_child_cycle_and_original_turn(self):
         self.resume_scenario('publish-correction')
 
+    def test_retired_ancestor_protocol_and_proposal_resolve_only_by_exact_snapshot_catalog(self):
+        self.resume_scenario('publish-correction', retire_ancestor=True)
+
     def test_resume_after_committed_export_adopts_same_iteration_without_new_geometry_turn(self):
         self.resume_scenario('export')
 
@@ -49,6 +52,9 @@ class ReleaseRecoveryTests(unittest.TestCase):
 
     def test_native_crash_after_raw_render_before_manifest_binding_recovers_the_same_bytes(self):
         self.owner_crash_scenario('render-manifest')
+
+    def test_native_crash_before_exported_ledger_commit_keeps_the_same_final_bytes(self):
+        self.owner_crash_scenario('export-ledger')
 
     def owner_crash_scenario(self, fault_mode):
         self.app.close()
@@ -120,7 +126,7 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(len(list((work / 'application/output-review-attempts').glob('*/attempt.json'))), 2)
         self.assertEqual(output['parent_binding']['cycle_id'], crashed['cycle_id'])
 
-    def resume_scenario(self, gate):
+    def resume_scenario(self, gate, *, retire_ancestor=False):
         self.app.close()
         ready, release = self.directory / 'patch-published', self.directory / 'release-patch'
         native = self.directory / 'native-gate.py'
@@ -175,6 +181,30 @@ class ReleaseRecoveryTests(unittest.TestCase):
             for p in (work / 'iterations').rglob('*') if p.is_file()}
         original = work / 'application/correction-attempts' / before['attempt_id'] / 'attempt.json'
         original_turns = json.loads(original.read_text())['turns']
+        if retire_ancestor:
+            previous = work / before['cycles'][0]['previous_snapshot']
+            checkpoint = json.loads((previous / 'geometry-checkpoint.json').read_text())
+            pointers = [checkpoint['visual_turn']['protocol'], checkpoint['evidence']['proposal']]
+            inventory = self.directory / 'retired-ancestor-inputs.json'
+            inventory.write_text(json.dumps({'records': [{'original_path': item['path'], 'sha256': item['sha256'],
+                'kind': 'whole_file', 'source': {'path': str(previous / Path(item['path']).relative_to(work))},
+                'proof': {'native_snapshot': str(previous / 'snapshot.json'),
+                    'native_snapshot_sha256': hashlib.sha256((previous / 'snapshot.json').read_bytes()).hexdigest()}}
+                for item in pointers]}))
+            archive = self.directory / 'retired-ancestor-archive'
+            captured = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_evidence_archive.py'),
+                'capture', '--inventory', str(inventory), '--output', str(archive)], capture_output=True, text=True)
+            self.assertEqual(captured.returncode, 0, captured.stderr + captured.stdout)
+            old_catalog = os.environ.get('OCR_EVIDENCE_CATALOG')
+            os.environ['OCR_EVIDENCE_CATALOG'] = str(archive / 'catalog.json')
+            def restore_catalog():
+                if old_catalog is None:
+                    os.environ.pop('OCR_EVIDENCE_CATALOG', None)
+                else:
+                    os.environ['OCR_EVIDENCE_CATALOG'] = old_catalog
+            self.addCleanup(restore_catalog)
+            for item in pointers:
+                Path(item['path']).unlink()
         selected_output = self.app.dispatch('output_review_status', identity)['data'] if gate == 'output-child' else None
         if selected_output:
             binding = selected_output.get('parent_binding')

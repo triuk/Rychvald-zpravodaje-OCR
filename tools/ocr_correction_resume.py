@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from ocr_projects import ProjectError, source_hash
-from ocr_quality import load, check_bindings, patched_review
+from ocr_quality import load, load_bound, check_bindings, patched_review
 from ocr_project_corrections import checked, cycle_record, ledger_path
 from ocr_visual_evidence import verify_visual_turn
 from ocr_correction_graph import output_child
@@ -20,7 +20,7 @@ def archived_bindings(work, archive, records):
             if old and old['stored'] and old['sha256'] == item['sha256']:
                 path = archive / name
         selected[key] = {**item, 'path': str(path)}
-    check_bindings(selected)
+    check_bindings(selected, historical=True)
 
 
 def verify_archive(work, archive, record):
@@ -51,7 +51,7 @@ def verify_archive(work, archive, record):
         archived_bindings(work, archive, proof['evidence'])
         answer = verify_visual_turn(proof['visual_turn'], work, packet['images'], archive=archive)
         proposal = proof['evidence']['proposal']
-        if answer != load(proposal['path']):
+        if answer != load_bound(proposal):
             raise ValueError('Original examination differs from original assistant JSON')
     if source_hash(archive / 'samples.json') != source_hash(work / 'samples.json'):
         raise ValueError('Frozen export samples changed during correction')
@@ -139,14 +139,24 @@ def verify(registry, run_id, attempt, ledger_sha256):
         normalize_native_render(registry, record, work, cycle, load(work / cycle['export_intent']), manifest)
     exported = not raw_render_pending and manifest['iteration_id'] != cycle['source_iteration_id']
     if exported:
-        from ocr_project_output_review import output_identity
-        output_identity(record, work)
-        if (not geometry_published or manifest['iteration_id'] != cycle.get('exported_iteration_id') or
-                manifest['iteration_id'] != load(work / cycle['export_intent'])['iteration_id'] or
-                source_hash(work / 'output-manifest.json') != cycle.get('exported_manifest_sha256') or
-                record['artifacts'].get('previous_iteration') != str((work / cycle['previous_snapshot']).relative_to(registry.root)) or
-                manifest['examined_geometry']['checkpoint_sha256'] != source_hash(work / 'geometry-checkpoint.json')):
-            raise ValueError('Current export is not the exact committed correction iteration')
+        if not geometry_published or not rendered:
+            raise ValueError('Current export has no exact rendered correction proof')
+        export_intent = load(work / cycle['export_intent'])
+        expected = {**load(work / cycle['export_rendered']),
+            'pdf': export_intent['pdf'], 'txt': export_intent['txt']}
+        if manifest != expected or any(source_hash(manifest[key]) != manifest[key + '_sha256'] for key in ('pdf', 'txt')):
+            raise ValueError('Current export differs from the exact reserved/rendered bytes')
+        if 'exported_iteration_id' not in cycle and 'exported_manifest_sha256' not in cycle:
+            if record['project']['iteration_id'] != cycle['source_iteration_id']:
+                raise ValueError('Uncommitted correction export has another registry iteration')
+            exported = False  # Finish only this reserved local commit, using its already rendered bytes.
+        else:
+            from ocr_project_output_review import output_identity
+            output_identity(record, work)
+            if (manifest['iteration_id'] != cycle.get('exported_iteration_id') or
+                    source_hash(work / 'output-manifest.json') != cycle.get('exported_manifest_sha256') or
+                    record['artifacts'].get('previous_iteration') != str((work / cycle['previous_snapshot']).relative_to(registry.root))):
+                raise ValueError('Current export is not the exact committed correction iteration')
     intent, output = output_child(work, child, cycle['cycle_id'])
     if intent is not None:
         if (not exported or intent['cycle_index'] != cycle['index'] or

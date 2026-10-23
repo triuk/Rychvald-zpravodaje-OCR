@@ -9,7 +9,7 @@ import uuid
 from functools import wraps
 
 from ocr_projects import ProjectError, atomic_json, source_hash
-from ocr_quality import load, bindings, check_bindings, patched_review, validate_review, snapshot
+from ocr_quality import load, load_bound, bindings, check_bindings, patched_review, validate_review, snapshot
 from ocr_project_output_review import output_identity, verify_output_review
 from ocr_project_geometry import verify_committed_samples, identity, adapter_snapshot
 from ocr_project_export import project_environment, workflow_command, WORKFLOW
@@ -536,7 +536,7 @@ def historical_geometry_observations(work, packet, *, preparing=False):
             raise ValueError('Historical geometry was bound to another preparation')
         from ocr_visual_evidence import verify_visual_turn
         answer = verify_visual_turn(checkpoint['visual_turn'], work, old_packet['images'], archive=previous)
-        if answer != load(checkpoint['evidence']['proposal']['path']):
+        if answer != load_bound(checkpoint['evidence']['proposal']):
             raise ValueError('Historical observations differ from original native assistant JSON')
         if answer['preparation_sha256'] != scope['previous_preparation_sha256']:
             raise ValueError('Original historical model examined another packet')
