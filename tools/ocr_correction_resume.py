@@ -100,6 +100,8 @@ def verify(registry, run_id, attempt, ledger_sha256):
                     source_hash(work / 'review.json') != cycle['review_sha256']):
                 raise ValueError('Current review differs from the committed correction')
     cycle = ledger['cycles'][-1]
+    from ocr_correction_outcome import verify_all
+    outcome_pending = verify_all(work, record, ledger['cycles'])
     child = load(work / cycle['attempt'])
     if cycle['attempt_id'] != attempt or child['attempt_id'] != attempt or child['run_id'] != run_id:
         raise ValueError('Reserved correction child cannot be replaced')
@@ -182,5 +184,6 @@ def verify(registry, run_id, attempt, ledger_sha256):
             raise ValueError('Original output child has a different frozen profile')
     record.setdefault('counts', {}).update(correction_geometry_prepared=int(geometry_prepared),
         correction_geometry_published=int(geometry_published), correction_export_committed=int(exported),
-        correction_export_rendered=int(rendered), correction_patch_pending=int(cycle['state'] == 'reserved' and bool(cycle.get('patch_intent'))))
+        correction_export_rendered=int(rendered), correction_patch_pending=int(cycle['state'] == 'reserved' and bool(cycle.get('patch_intent'))),
+        correction_outcome_pending=int(outcome_pending))
     return record

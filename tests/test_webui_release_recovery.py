@@ -68,6 +68,12 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_native_crash_after_patch_before_cycle_commit_adopts_original_patch_without_new_snapshot(self):
         self.owner_crash_scenario('patch-ledger')
 
+    def test_native_crash_during_patch_metadata_commit_finishes_only_missing_transaction_writes(self):
+        self.owner_crash_scenario('patch-chain')
+
+    def test_native_crash_after_outcome_before_ledger_adopts_original_result_without_revalidation(self):
+        self.owner_crash_scenario('outcome-ledger')
+
     def test_unknown_repair_delivery_keeps_reserved_budget_and_cannot_replay(self):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
@@ -167,9 +173,12 @@ class ReleaseRecoveryTests(unittest.TestCase):
         child_path = work / 'application/correction-attempts' / crashed['correction_attempt_id'] / 'attempt.json'
         old_correction = json.loads(child_path.read_text())
         original_turns = old_correction['turns']
-        original_visual_reuse = visual_publication or fault_mode == 'patch-ledger'
+        original_visual_reuse = visual_publication or fault_mode in ('patch-ledger', 'patch-chain')
         original_visual = Path(crashed['original_visual_turn']['protocol']['path']).read_bytes() if original_visual_reuse else None
-        self.assertFalse(old_correction.get('children'))
+        if fault_mode == 'outcome-ledger':
+            self.assertEqual(len(old_correction['children']), 1)
+        else:
+            self.assertFalse(old_correction.get('children'))
         self.assertEqual(hashlib.sha256(child_path.read_bytes()).hexdigest(), crashed['original_parent_manifest_sha256'])
         checked = self.app.dispatch('reconcile_autonomous', identity)
         self.assertTrue(checked['ok'], checked)
@@ -183,6 +192,12 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(correction['cycles_used'], 1)
         self.assertEqual(correction['cycles'][0]['cycle_id'], crashed['cycle_id'])
         output = self.app.dispatch('output_review_status', identity)['data']
+        if fault_mode == 'outcome-ledger':
+            self.assertEqual(output['attempt_id'], crashed['output_attempt_id'])
+            self.assertEqual(hashlib.sha256((work / correction['cycles'][0]['outcome']).read_bytes()).hexdigest(), crashed['outcome_sha256'])
+            self.assertEqual(hashlib.sha256((work / 'checks/run-validation.json').read_bytes()).hexdigest(), crashed['validation_sha256'])
+            history = self.app.dispatch('select_run', identity)['data']['history']
+            self.assertEqual(sum(row['type'] == 'correction_validation_started' for row in history), 1)
         if fault_mode == 'output-link':
             self.assertEqual(output['attempt_id'], crashed['output_attempt_id'])
         elif not original_visual_reuse:
@@ -198,10 +213,12 @@ class ReleaseRecoveryTests(unittest.TestCase):
             repaired = [turn for turn in json.loads(child_path.read_text())['turns'] if turn['stage'] == phase]
             self.assertEqual(len(repaired), 1)
             self.assertEqual(repaired[0]['turn_id'], crashed['original_visual_turn']['turn_id'])
-            if fault_mode == 'patch-ledger':
+            if fault_mode in ('patch-ledger', 'patch-chain'):
                 self.assertEqual(correction['cycles'][0]['previous_snapshot'], crashed['previous_snapshot'])
                 self.assertEqual(hashlib.sha256((work / 'review.json').read_bytes()).hexdigest(), crashed['review_sha256'])
                 self.assertEqual(len(list((work / 'iterations').glob('*/snapshot.json'))), 1)
+                if fault_mode == 'patch-chain':
+                    self.assertTrue(crashed['metadata_not_committed'])
         else:
             self.assertEqual(json.loads(child_path.read_text())['turns'], original_turns)
         self.assertEqual(len(list((work / 'application/output-review-attempts').glob('*/attempt.json'))), 2)

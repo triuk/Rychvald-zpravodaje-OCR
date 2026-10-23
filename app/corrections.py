@@ -223,6 +223,22 @@ class CorrectionJobs(ContextJobs):
                 packet = json.loads((work / cycle['plan']).read_text())
                 value.update(cycle_id=cycle_id, cycle_index=cycle['index'])
                 self._boundary(job)
+                outcome = work / 'application/corrections' / cycle_id / 'outcome.json'
+                if cycle['state'] == 'settled' or outcome.is_file():
+                    self.process.request(root, 'verify-correction-resume', value['run_id'],
+                        '--attempt', value['attempt_id'], '--ledger-sha256', sha(work / 'application/corrections/ledger.json'))
+                    if cycle['state'] != 'settled':
+                        self.process.request(root, 'adopt-correction-outcome', value['run_id'], '--cycle-id', cycle_id)
+                    ledger = json.loads((work / 'application/corrections/ledger.json').read_text())
+                    self._event(job, 'correction_outcome_adopted', cycle_id=cycle_id,
+                        outcome_sha256=sha(outcome), stop_reason=ledger['stop_reason'])
+                    if ledger['stop_reason']:
+                        break
+                    self._boundary(job)
+                    saved = json.loads(outcome.read_text())
+                    self.process.request(root, 'reserve-correction', value['run_id'],
+                        '--expected-iteration-id', saved['iteration_id'], '--expected-validation-sha256', saved['validation_sha256'])
+                    continue
                 if cycle['state'] == 'reserved':
                     value['stage'] = 'targeted_repair'
                     if cycle.get('patch_intent'):

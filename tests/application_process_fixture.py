@@ -125,13 +125,32 @@ def crash_native_before_patch_ledger(event, arguments):
     if event != 'os.rename':
         return
     source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
-    if destination.name != 'ledger.json' or destination.parent.name != 'corrections' or not source.is_file() or not destination.is_file():
+    if not source.is_file():
         return
-    old, new = json.loads(destination.read_text()), json.loads(source.read_text())
-    cycle = new['cycles'][-1]
-    if cycle['state'] != 'published' or old['cycles'][-1]['state'] != 'reserved':
-        return
-    work = destination.parents[2]
+    if fault_mode == 'patch-chain':
+        if destination.name != 'review-patch-chain.json':
+            return
+        work = destination.parent
+        ledger = work / 'application/corrections/ledger.json'
+        if not ledger.is_file():
+            return
+        cycle = json.loads(ledger.read_text())['cycles'][-1]
+        if cycle['state'] != 'reserved' or not cycle.get('patch_intent'):
+            return
+        intent = json.loads((work / cycle['patch_intent']).read_text())
+        if hashlib.sha256(source.read_bytes()).hexdigest() != intent['writes']['review-patch-chain.json']['sha256']:
+            return
+        cycle = {**cycle, 'previous_snapshot': intent['previous_snapshot'],
+            'publication': str(Path(intent['inputs']['publication']['path']).relative_to(work)),
+            'review_sha256': intent['record']['project']['review_sha256']}
+    else:
+        if destination.name != 'ledger.json' or destination.parent.name != 'corrections' or not destination.is_file():
+            return
+        old, new = json.loads(destination.read_text()), json.loads(source.read_text())
+        cycle = new['cycles'][-1]
+        if cycle['state'] != 'published' or old['cycles'][-1]['state'] != 'reserved':
+            return
+        work = destination.parents[2]
     correction = work / cycle['attempt']
     saved = json.loads(correction.read_text())
     publication = json.loads((work / cycle['publication']).read_text())
@@ -139,10 +158,43 @@ def crash_native_before_patch_ledger(event, arguments):
     stat = Path('/proc/' + str(owner['pid']) + '/stat').read_text()
     if stat.rsplit(')', 1)[1].split()[19] != owner['start_ticks']:
         raise RuntimeError('Refuse to signal a different application owner')
-    marker.write_text(json.dumps({'boundary': 'before_published_patch_ledger_rename',
+    marker.write_text(json.dumps({'boundary': 'before_' + fault_mode + '_rename',
         'parent_attempt_id': saved['parent_binding']['parent_attempt_id'], 'correction_attempt_id': saved['attempt_id'],
         'cycle_id': cycle['cycle_id'], 'previous_snapshot': cycle['previous_snapshot'],
         'review_sha256': cycle['review_sha256'], 'original_visual_turn': publication['visual_turn'],
+        'metadata_not_committed': fault_mode == 'patch-chain' and (not destination.exists() or
+            hashlib.sha256(destination.read_bytes()).hexdigest() != hashlib.sha256(source.read_bytes()).hexdigest()),
+        'original_parent_manifest_sha256': hashlib.sha256(correction.read_bytes()).hexdigest(),
+        'native_pid': os.getpid(), 'owner': owner}) + '\n')
+    os.kill(owner['pid'], signal.SIGKILL)
+    os._exit(92)
+
+
+def crash_native_before_outcome_ledger(event, arguments):
+    if event != 'os.rename':
+        return
+    source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
+    if destination.name != 'ledger.json' or destination.parent.name != 'corrections' or not source.is_file() or not destination.is_file():
+        return
+    old, new = json.loads(destination.read_text()), json.loads(source.read_text())
+    cycle = new['cycles'][-1]
+    if cycle['state'] != 'settled' or old['cycles'][-1]['state'] == 'settled':
+        return
+    work = destination.parents[2]
+    correction = work / cycle['attempt']
+    saved = json.loads(correction.read_text())
+    manifest = json.loads((work / 'output-manifest.json').read_text())
+    owner = json.loads(owner_path.read_text())
+    stat = Path('/proc/' + str(owner['pid']) + '/stat').read_text()
+    if stat.rsplit(')', 1)[1].split()[19] != owner['start_ticks']:
+        raise RuntimeError('Refuse to signal a different application owner')
+    marker.write_text(json.dumps({'boundary': 'before_original_outcome_ledger_rename',
+        'parent_attempt_id': saved['parent_binding']['parent_attempt_id'], 'correction_attempt_id': saved['attempt_id'],
+        'cycle_id': cycle['cycle_id'], 'iteration_id': manifest['iteration_id'],
+        'rendered_pdf_sha256': manifest['pdf_sha256'], 'rendered_txt_sha256': manifest['txt_sha256'],
+        'output_attempt_id': saved['children'][-1]['attempt_id'],
+        'outcome_sha256': hashlib.sha256((work / cycle['outcome']).read_bytes()).hexdigest(),
+        'validation_sha256': hashlib.sha256((work / 'checks/run-validation.json').read_bytes()).hexdigest(),
         'original_parent_manifest_sha256': hashlib.sha256(correction.read_bytes()).hexdigest(),
         'native_pid': os.getpid(), 'owner': owner}) + '\n')
     os.kill(owner['pid'], signal.SIGKILL)
@@ -153,7 +205,8 @@ if sys.argv[1] == '--native':
     marker, owner_path = Path(sys.argv[2]), Path(sys.argv[3])
     fault_mode = sys.argv[4]
     arguments = sys.argv[5:]
-    sys.addaudithook(crash_native_before_patch_ledger if fault_mode == 'patch-ledger' else crash_native_before_render_binding)
+    sys.addaudithook(crash_native_before_outcome_ledger if fault_mode == 'outcome-ledger' else
+        crash_native_before_patch_ledger if fault_mode in ('patch-ledger', 'patch-chain') else crash_native_before_render_binding)
     sys.path.insert(0, str(ROOT / 'tools'))
     sys.argv = [str(ROOT / 'tools/ocr_projects.py'), *arguments]
     runpy.run_path(sys.argv[0], run_name='__main__')

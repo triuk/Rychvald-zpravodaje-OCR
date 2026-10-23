@@ -357,6 +357,9 @@ def build_parser():
     command = commands.add_parser('adopt-correction-patch')
     command.add_argument('project_id')
     command.add_argument('--cycle-id', required=True)
+    command = commands.add_parser('adopt-correction-outcome')
+    command.add_argument('project_id')
+    command.add_argument('--cycle-id', required=True)
     command = commands.add_parser('prepare-correction-export')
     command.add_argument('project_id')
     command.add_argument('--cycle-id', required=True)
@@ -512,6 +515,9 @@ def main(argv=None):
             result = response(args.operation, **prepare(registry, args.project_id, args.cycle_id))
         elif args.operation == 'adopt-correction-patch':
             from ocr_correction_patch import adopt
+            result = response(args.operation, **adopt(registry, args.project_id, args.cycle_id))
+        elif args.operation == 'adopt-correction-outcome':
+            from ocr_correction_outcome import adopt
             result = response(args.operation, **adopt(registry, args.project_id, args.cycle_id))
         elif args.operation == 'render-correction-export':
             from ocr_correction_export import render
