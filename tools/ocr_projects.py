@@ -350,6 +350,17 @@ def build_parser():
     command.add_argument('project_id')
     command.add_argument('--environment', type=Path)
     command.add_argument('--output', action='store_true')
+    command = commands.add_parser('verify-correction-resume')
+    command.add_argument('project_id')
+    command.add_argument('--attempt', required=True)
+    command.add_argument('--ledger-sha256', required=True)
+    command = commands.add_parser('prepare-correction-export')
+    command.add_argument('project_id')
+    command.add_argument('--cycle-id', required=True)
+    command = commands.add_parser('render-correction-export')
+    command.add_argument('project_id')
+    command.add_argument('--cycle-id', required=True)
+    command.add_argument('--environment', type=Path)
     command = commands.add_parser('list')
     command.add_argument('--offset', type=int, default=0)
     command.add_argument('--limit', type=int, default=10)
@@ -490,6 +501,15 @@ def main(argv=None):
                 from ocr_project_output_review import output_identity
                 output_identity(record, work)
             result = response(args.operation, **record)
+        elif args.operation == 'verify-correction-resume':
+            from ocr_correction_resume import verify
+            result = response(args.operation, **verify(registry, args.project_id, args.attempt, args.ledger_sha256))
+        elif args.operation == 'prepare-correction-export':
+            from ocr_correction_export import prepare
+            result = response(args.operation, **prepare(registry, args.project_id, args.cycle_id))
+        elif args.operation == 'render-correction-export':
+            from ocr_correction_export import render
+            result = response(args.operation, **render(registry, args.project_id, args.cycle_id, environment=args.environment))
         elif args.operation == 'validate':
             from ocr_project_export import validate_project
             record, exit_code = validate_project(registry, args.project_id, environment=args.environment)

@@ -1,11 +1,14 @@
 """Actual exported-page examination; publication remains a native transaction."""
 import copy
 import json
+import os
 from pathlib import Path
+import threading
 import time
+import uuid
 
 from .context import ContextJobs
-from .codex import now
+from .codex import now, process_identity
 from .jobs import JobError, atomic_json, sha
 from .visual_session import examine
 
@@ -59,12 +62,41 @@ class OutputReviewJobs(ContextJobs):
         super().__init__(publish, runtime, context_runtime)
         self.process = process
 
+    def resume_original(self, root, run, identifier, preparation_sha256, environment, binding):
+        with self._lock:
+            if self._active is not None:
+                raise JobError('operation_active', 'An original output examination is still owned.')
+            work = root / run['artifacts']['workspace']['path']
+            directory = work / 'application/output-review-attempts' / identifier
+            value = json.loads((directory / 'attempt.json').read_text())
+            if (value['parent_binding'] != binding or value['run_id'] != run['project']['run_id'] or
+                    value['root'] != str(root) or value['profile_sha256'] != run['run']['profile_sha256']):
+                raise JobError('attempt_conflict', 'Original output examination belongs to another correction/run.')
+            self.process.request(root, 'verify-output-preparation', value['run_id'], '--sha256', preparation_sha256)
+            session = directory / 'recovery-sessions' / uuid.uuid4().hex
+            session.mkdir(parents=True)
+            atomic_json(session / 'original-attempt.json', value)
+            value.setdefault('recovery_sessions', []).append({'path': str(session.relative_to(work)),
+                'original_sha256': sha(session / 'original-attempt.json'), 'started_at': now()})
+            value.update(state='starting', error=None, ended_at=None, owner_pid=os.getpid(),
+                owner_start_ticks=process_identity(os.getpid()))
+            atomic_json(directory / 'attempt.json', value)
+            job = {'manifest': value, 'directory': directory, 'workspace': directory / 'workspace',
+                'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
+                'metadata': {'environment': environment, 'prepared_review_sha256': preparation_sha256},
+                'recovery_directory': session}
+            self._active = job
+            job['thread'] = threading.Thread(target=self._execute, args=(job,), daemon=True)
+            job['thread'].start()
+            return copy.deepcopy(value)
+
     def _run(self, job):
         value = job['manifest']
         started = time.monotonic()
         job['root'] = root = Path(value['root'])
         work = job['directory'].parents[2]
-        value.update(output_review_complete=False, turns=[], context_runtime=copy.deepcopy(self.context_runtime))
+        value.update(output_review_complete=False, context_runtime=copy.deepcopy(self.context_runtime))
+        value.setdefault('turns', [])
         try:
             value['state'] = 'running'
             self._event(job, 'output_review_started')
@@ -79,9 +111,16 @@ class OutputReviewJobs(ContextJobs):
             packet['preparation_sha256'] = sha(path)
             if selected and packet['preparation_sha256'] != selected:
                 raise JobError('output_review_invalid', 'Explicitly disclosed output review preparation changed.')
+            directory = job['directory'] / 'output_examination'
+            if job.get('recovery_directory') and directory.exists():
+                protocol = directory / 'protocol.jsonl'
+                frames = [json.loads(raw) for raw in protocol.read_text().splitlines()] if protocol.exists() else []
+                if any(row['direction'] == 'client' and row['message'].get('method') == 'turn/start' for row in frames):
+                    raise JobError('original_result_unavailable', 'An original submitted output examination cannot be replayed.')
+                directory = job['recovery_directory'] / 'output_examination'
             answer, proof, proposal = examine(self, job, 'output_examination',
                 OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA, work, packet['images'],
-                instructions=OUTPUT_INSTRUCTIONS)
+                instructions=OUTPUT_INSTRUCTIONS, directory=directory)
             publication = {'schema_version': 1, 'preparation_sha256': packet['preparation_sha256'],
                 'preparation': str(work / packet['preparation_artifact']),
                 'runtime': self.runtime, 'context_runtime': self.context_runtime,

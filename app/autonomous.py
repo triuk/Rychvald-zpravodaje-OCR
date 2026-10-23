@@ -132,7 +132,11 @@ class AutonomousJobs:
         value = job['manifest']
         value['stage'] = name
         entry = {'stage': name, 'state': 'running', 'started_at': now(), 'ended_at': None, 'intent_id': uuid.uuid4().hex}
-        value['stages'].append(entry)
+        if name == 'corrections' and job.get('correction_resume'):
+            entry = next(row for row in reversed(value['stages']) if row['stage'] == name)
+            entry.update(state='running', ended_at=None)
+        else:
+            value['stages'].append(entry)
         self._save(job)
         result = action()
         entry.update(state='completed', ended_at=now())
@@ -233,6 +237,9 @@ class AutonomousJobs:
                             'expected_validation_sha256': sha(work / 'checks/run-validation.json')}), 'correction_status')
                     if saved['state'] == 'completed' and all(cycle['state'] == 'settled' for cycle in saved['cycles']):
                         return saved
+                    if job.get('correction_resume') == saved.get('attempt_id'):
+                        self.app.corrections.resume_original(root, run, saved['attempt_id'], payload)
+                        return self._wait(job, 'correction_status')
                     raise JobError('correction_reconciliation_required', 'Original correction cycle and descendants require explicit recovery before continuation.')
                 value['state'] = 'running'
                 corrected = self._stage(job, 'corrections', correction_action)
@@ -300,12 +307,7 @@ class AutonomousJobs:
         result = {'reconciliation_id': identifier, 'attempt_id': attempt_id, 'run_id': value['run_id'],
             'original_sha256': sha(path), 'checkpoint': {'valid': True}, 'provider': {'state': 'not_submitted'},
             'created_at': now()}
-        if any(row['stage'] == 'corrections' and row['state'] != 'completed' for row in value['stages']):
-            result['provider'] = {'state': 'unknown', 'safe_to_continue': False, 'turns': [], 'originals': {},
-                'continuation_error': {'code': 'correction_reconciliation_required',
-                    'message': 'Original correction cycle and descendant turns require explicit recovery; no automatic replay.'}}
-        else:
-            result['provider'] = inspect_original(self.app, work, value, path.parent / ('inspection-' + identifier))
+        result['provider'] = inspect_original(self.app, work, value, path.parent / ('inspection-' + identifier))
         result['stage_links'] = [{'intent_id': row.get('intent_id'), 'attempt_id': row['attempt_id']} for row in value['stages'] if row.get('attempt_id')]
         result['local_recovery'] = local_recovery_routes(work, value)
         try:
@@ -358,6 +360,10 @@ class AutonomousJobs:
         value.update(state='starting', control='run', ended_at=None, error=None,
             owner_pid=os.getpid(), owner_start_ticks=process_identity(os.getpid()))
         job = {'manifest': value, 'path': path, 'cancel': False, 'payload': value['payload'], 'lease': lease}
+        pending_correction = next((row for row in reversed(value['stages']) if row['stage'] == 'corrections' and
+            row['state'] != 'completed'), None)
+        if pending_correction:
+            job['correction_resume'] = pending_correction.get('attempt_id')
         self.active = job
         atomic_json(path, value)
         job['thread'] = threading.Thread(target=self._run, args=(job, value['mode'] == 'from_geometry'), daemon=True)
@@ -367,8 +373,28 @@ class AutonomousJobs:
     def _verify_checkpoint(self, run, value):
         from .context_runtime import verify_resources
         verify_resources(self.app.context.context_runtime, self.app.codex.runtime)
+        work = self.app.root / run['artifacts']['workspace']['path']
+        correction = next((row for row in reversed(value['stages']) if row['stage'] == 'corrections' and
+            row.get('attempt_id')), None)
+        archives = []
+        if correction:
+            ledger_path = work / 'application/corrections/ledger.json'
+            self.app.process.request(self.app.root, 'verify-correction-resume', value['run_id'],
+                '--attempt', correction['attempt_id'], '--ledger-sha256', sha(ledger_path))
+            ledger = json.loads(ledger_path.read_text())
+            archives = [work / cycle['previous_snapshot'] for cycle in ledger['cycles'] if cycle.get('previous_snapshot')]
+
+        def original_path(relative, digest):
+            path = (self.app.root / relative).resolve()
+            if path.is_relative_to(work.resolve()):
+                for archive in archives:
+                    candidate = archive / path.relative_to(work.resolve())
+                    if candidate.is_file() and sha(candidate) == digest:
+                        return candidate
+            return path
+
         arguments = ['verify-resume', value['run_id']]
-        if any(row['stage'] == 'export' and row['state'] == 'completed' for row in value['stages']):
+        if not correction and any(row['stage'] == 'export' and row['state'] == 'completed' for row in value['stages']):
             arguments.append('--output')
         if value['payload'].get('environment'):
             arguments += ['--environment', value['payload']['environment']]
@@ -377,10 +403,18 @@ class AutonomousJobs:
             if row['state'] != 'completed':
                 continue
             for relative, digest in row.get('evidence', {}).items():
-                path = (self.app.root / relative).resolve()
+                path = original_path(relative, digest)
                 if not path.is_relative_to(self.app.root) or not path.is_file() or sha(path) != digest:
                     raise JobError('checkpoint_invalid', 'Completed stage evidence changed: ' + relative)
             operation = row.get('child_status_operation')
+            if correction and row['stage'] in ('reading', 'geometry', 'output_review'):
+                namespace = {'reading': 'reading-attempts', 'geometry': 'geometry-attempts',
+                    'output_review': 'output-review-attempts'}[row['stage']]
+                attempts = [archive / 'application' / namespace / row['attempt_id'] / 'attempt.json' for archive in archives]
+                if not any(path.is_file() and json.loads(path.read_text()).get('attempt_id') == row['attempt_id'] and
+                        json.loads(path.read_text()).get('state') == 'completed' for path in attempts):
+                    raise JobError('checkpoint_invalid', 'Original completed child is absent from the verified ancestor.')
+                operation = None
             if operation:
                 response = self.app.dispatch(operation, {'run_id': value['run_id']})
                 if not response['ok']:
@@ -388,7 +422,7 @@ class AutonomousJobs:
                 status = response['data']
                 if status.get('attempt_id') != row['attempt_id'] or status['state'] != 'completed':
                     raise JobError('checkpoint_invalid', 'Completed child checkpoint failed validation: ' + row['stage'])
-            if row['stage'] == 'export':
+            if row['stage'] == 'export' and not correction:
                 # PDF/TXT/source hashes were checked by verify-resume --output.
                 self.app.process.request(self.app.root, 'verify-geometry', value['run_id'])
 

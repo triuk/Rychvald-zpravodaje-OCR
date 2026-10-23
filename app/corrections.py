@@ -1,8 +1,11 @@
 """Owned bounded correction worker; opening history never submits a provider request."""
 import copy
 import json
+import os
 from pathlib import Path
+import threading
 import time
+import uuid
 
 from .context import ContextJobs
 from .codex import now, process_identity
@@ -10,6 +13,7 @@ from .jobs import JobError, atomic_json, sha
 from .visual_session import examine
 from .geometry_contract import GEOMETRY_PROMPT, GEOMETRY_SCHEMA
 from .reading_contract import obj, array, LINE, UNIT, UNRESOLVED, PUBLISHER, RISK, STRING
+from tools.ocr_correction_graph import output_binding, output_child
 
 
 REPAIR_PROMPT = '''Read the attached targeted ORIGINAL source crops and bound findings. Use the frozen
@@ -86,6 +90,104 @@ class CorrectionJobs(ContextJobs):
                 value['evidence']['runtime_' + str(index)] = {'path': item['path'], 'sha256': item['sha256']}
         return value
 
+    def resume_original(self, root, run, identifier, payload):
+        """Continue an independently reconciled child without allocating a cycle."""
+        with self._lock:
+            if self._active is not None:
+                raise JobError('operation_active', 'An original correction is still owned.')
+            work = root / run['artifacts']['workspace']['path']
+            directory = work / 'application/correction-attempts' / identifier
+            value = json.loads((directory / 'attempt.json').read_text())
+            ledger = work / 'application/corrections/ledger.json'
+            self.process.request(root, 'verify-correction-resume', value['run_id'], '--attempt', identifier,
+                '--ledger-sha256', sha(ledger))
+            session = directory / 'recovery-sessions' / uuid.uuid4().hex
+            session.mkdir(parents=True)
+            atomic_json(session / 'original-attempt.json', value)
+            value.setdefault('recovery_sessions', []).append({'path': str(session.relative_to(work)),
+                'original_sha256': sha(session / 'original-attempt.json'), 'started_at': now()})
+            value.update(state='starting', error=None, ended_at=None, owner_pid=os.getpid(),
+                owner_start_ticks=process_identity(os.getpid()))
+            atomic_json(directory / 'attempt.json', value)
+            job = {'manifest': value, 'directory': directory, 'workspace': directory / 'workspace',
+                'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
+                'metadata': {'payload': payload}, 'resume_original': True, 'recovery_directory': session}
+            self._active = job
+            job['thread'] = threading.Thread(target=self._execute, args=(job,), daemon=True)
+            job['thread'].start()
+            return copy.deepcopy(value)
+
+    def _examine(self, job, stage, prompt, schema, work, images):
+        directory = job['directory'] / stage
+        if job.get('resume_original') and directory.exists():
+            protocol = directory / 'protocol.jsonl'
+            frames = [json.loads(raw) for raw in protocol.read_text().splitlines()] if protocol.exists() else []
+            if any(row['direction'] == 'client' and row['message'].get('method') == 'turn/start' for row in frames):
+                raise JobError('original_result_unavailable', 'An original submitted visual phase cannot be replayed.')
+            # Initialization stopped before submission. Keep its original files;
+            # the first actual turn gets a separately recorded physical workspace.
+            directory = job['recovery_directory'] / stage
+        return examine(self, job, stage, prompt, schema, work, images, directory=directory)
+
+    def _boundary(self, job):
+        if job['cancel']:
+            raise JobError('operation_cancelled', 'Correction stopped before the next phase.')
+        if job.get('pause'):
+            raise JobError('autonomous_paused', 'Correction paused before the next phase.')
+
+    def _output_review(self, job, cycle, payload):
+        value, root, work = job['manifest'], job['root'], job['directory'].parents[2]
+        try:
+            intent, original = output_child(work, value, cycle['cycle_id'])
+        except ValueError as error:
+            raise JobError('attempt_conflict', str(error)) from error
+        environment = ['--environment', payload['environment']] if payload.get('environment') else []
+        if intent is None:
+            self.process.request(root, 'prepare-output-review', value['run_id'], *environment, timeout=120)
+            self._boundary(job)
+            intent = {'cycle_id': cycle['cycle_id'], 'cycle_index': cycle['index'], 'stage_intent_id': uuid.uuid4().hex,
+                'preparation_sha256': sha(work / 'output-review-preparation.json'),
+                'output_manifest_sha256': sha(work / 'output-manifest.json'),
+                'iteration_id': json.loads((work / 'output-manifest.json').read_text())['iteration_id']}
+            intent['binding'] = output_binding(value, intent)
+            value.setdefault('output_intents', []).append(intent)
+            self._event(job, 'correction_output_intent_saved', cycle_id=cycle['cycle_id'], stage_intent_id=intent['stage_intent_id'])
+        if sha(work / 'output-manifest.json') != intent['output_manifest_sha256']:
+            raise JobError('checkpoint_invalid', 'Original correction output iteration changed.')
+        self._boundary(job)
+        with self.app._lock:
+            if original is None:
+                self.app.output_review.launch_parent = intent['binding']
+                try:
+                    child = self.app.start_output_review({'run_id': value['run_id'], 'environment': payload.get('environment'),
+                        'prepared_review_sha256': intent['preparation_sha256']})
+                finally:
+                    self.app.output_review.launch_parent = None
+                intent['attempt_id'] = child['attempt_id']
+            else:
+                child = self.app.output_review.status(root, value['run_id'], work)
+                if child.get('attempt_id') != original['attempt_id']:
+                    raise JobError('attempt_conflict', 'A different output child replaced the reserved correction child.')
+                if child['state'] != 'completed':
+                    if not job.get('resume_original'):
+                        raise JobError('reconciliation_required', 'Original output child requires explicit reconciliation.')
+                    run = self.app.select_run(value['run_id'])
+                    child = self.app.output_review.resume_original(root, run, original['attempt_id'],
+                        intent['preparation_sha256'], payload.get('environment'), intent['binding'])
+            intent['attempt_id'] = child['attempt_id']
+            if not any(row['cycle_id'] == cycle['cycle_id'] and row['stage'] == 'output_review' for row in value.get('children', [])):
+                value.setdefault('children', []).append({'cycle_id': cycle['cycle_id'], 'stage': 'output_review',
+                    'attempt_id': child['attempt_id']})
+            self._event(job, 'correction_output_review_started', cycle_id=cycle['cycle_id'], child_attempt_id=child['attempt_id'])
+        while not job['cancel']:
+            child = self.app.output_review.status(root, value['run_id'], work)
+            if child.get('attempt_id') != intent.get('attempt_id', original['attempt_id'] if original else None):
+                raise JobError('attempt_conflict', 'A different output child replaced the reserved correction child.')
+            if child['state'] not in ('starting', 'running'):
+                return child
+            time.sleep(.05)
+        raise JobError('operation_cancelled', 'Correction stopped during original output examination.')
+
     def _run(self, job):
         value = job['manifest']
         root = job['root'] = Path(value['root'])
@@ -94,63 +196,72 @@ class CorrectionJobs(ContextJobs):
         environment = ['--environment', payload['environment']] if payload.get('environment') else []
         started = time.monotonic()
         cycle_id = None
-        value.update(state='running', turns=[], context_runtime=copy.deepcopy(self.context_runtime))
+        value.update(state='running', context_runtime=copy.deepcopy(self.context_runtime))
+        value.setdefault('turns', [])
         try:
             while not job['cancel']:
                 ledger = json.loads((work / 'application/corrections/ledger.json').read_text())
                 cycle = ledger['cycles'][-1]
                 cycle_id = job['cycle_id'] = cycle['cycle_id']
-                self.process.request(root, 'bind-correction', value['run_id'], '--cycle-id', cycle_id,
-                    '--attempt', job['directory'] / 'attempt.json')
+                if cycle.get('attempt_id') != value['attempt_id']:
+                    self.process.request(root, 'bind-correction', value['run_id'], '--cycle-id', cycle_id,
+                        '--attempt', job['directory'] / 'attempt.json')
                 packet = json.loads((work / cycle['plan']).read_text())
-                value.update(stage='targeted_repair', cycle_id=cycle_id, cycle_index=cycle['index'])
-                self._event(job, 'correction_started', cycle_id=cycle_id, cycle_index=cycle['index'])
-                answer, proof, proposal = examine(self, job, 'repair_' + str(cycle['index']),
-                    REPAIR_PROMPT + json.dumps(packet, ensure_ascii=False), REPAIR_SCHEMA, work, packet['images'])
-                publication = job['directory'] / ('publication-' + cycle_id + '.json')
-                atomic_json(publication, self._publication(proof, proposal))
-                self.process.request(root, 'publish-correction', value['run_id'], '--cycle-id', cycle_id,
-                    '--proposal', publication)
+                value.update(cycle_id=cycle_id, cycle_index=cycle['index'])
+                self._boundary(job)
+                if cycle['state'] == 'reserved':
+                    value['stage'] = 'targeted_repair'
+                    self._event(job, 'correction_started', cycle_id=cycle_id, cycle_index=cycle['index'])
+                    answer, proof, proposal = self._examine(job, 'repair_' + str(cycle['index']),
+                        REPAIR_PROMPT + json.dumps(packet, ensure_ascii=False), REPAIR_SCHEMA, work, packet['images'])
+                    publication = job['directory'] / ('publication-' + cycle_id + '.json')
+                    atomic_json(publication, self._publication(proof, proposal))
+                    self.process.request(root, 'publish-correction', value['run_id'], '--cycle-id', cycle_id,
+                        '--proposal', publication)
                 value['stage'] = 'geometry'
                 self._event(job, 'correction_patch_published', cycle_id=cycle_id)
-                self.process.request(root, 'prepare-correction-geometry', value['run_id'], '--cycle-id', cycle_id,
-                    *environment, timeout=120)
-                prepared_path = work / 'geometry-preparation.json'
-                prepared = json.loads(prepared_path.read_text())
-                prepared['preparation_sha256'] = sha(prepared_path)
-                observations, proof, proposal = examine(self, job, 'geometry_' + str(cycle['index']),
-                    GEOMETRY_PROMPT + json.dumps(prepared, ensure_ascii=False), GEOMETRY_SCHEMA, work, prepared['images'])
-                checkpoint = self._publication(proof, proposal)
+                self._boundary(job)
+                verified = self.process.request(root, 'verify-correction-resume', value['run_id'],
+                    '--attempt', value['attempt_id'], '--ledger-sha256', sha(work / 'application/corrections/ledger.json'))['counts']
                 previous = json.loads((work / 'application/corrections/ledger.json').read_text())['cycles'][-1]
-                old_checkpoint = json.loads((work / previous['previous_snapshot'] / 'geometry-checkpoint.json').read_text())
-                checkpoint.update(status='examined_with_remaining_approximations',
-                    preparation_sha256=sha(prepared_path), identity=prepared['identity'],
-                    historical_reading=old_checkpoint['historical_reading'],
-                    source_samples_sha256=sha(work / 'geometry-source-samples.json'),
-                    export_validation='not_run', acceptance='separate_user_decision')
-                checkpoint['correction_scope'] = prepared['correction_scope']
-                checkpoint['evidence']['sample_origin'] = {'path': str(work / 'geometry-sample-origin.json'),
-                    'sha256': sha(work / 'geometry-sample-origin.json')}
-                checkpoint_path = job['directory'] / ('checkpoint-' + cycle_id + '.json')
-                atomic_json(checkpoint_path, checkpoint)
-                self.process.request(root, 'publish-geometry', value['run_id'], '--checkpoint', checkpoint_path)
-                if job['cancel']:
-                    raise JobError('operation_cancelled', 'Correction stopped before export.')
+                if not verified['correction_geometry_published']:
+                    if not verified['correction_geometry_prepared']:
+                        self.process.request(root, 'prepare-correction-geometry', value['run_id'], '--cycle-id', cycle_id,
+                            *environment, timeout=120)
+                    self._boundary(job)
+                    prepared_path = work / 'geometry-preparation.json'
+                    prepared = json.loads(prepared_path.read_text())
+                    prepared['preparation_sha256'] = sha(prepared_path)
+                    observations, proof, proposal = self._examine(job, 'geometry_' + str(cycle['index']),
+                        GEOMETRY_PROMPT + json.dumps(prepared, ensure_ascii=False), GEOMETRY_SCHEMA, work, prepared['images'])
+                    checkpoint = self._publication(proof, proposal)
+                    old_checkpoint = json.loads((work / previous['previous_snapshot'] / 'geometry-checkpoint.json').read_text())
+                    checkpoint.update(status='examined_with_remaining_approximations',
+                        preparation_sha256=sha(prepared_path), identity=prepared['identity'],
+                        historical_reading=old_checkpoint['historical_reading'],
+                        source_samples_sha256=sha(work / 'geometry-source-samples.json'),
+                        export_validation='not_run', acceptance='separate_user_decision')
+                    checkpoint['correction_scope'] = prepared['correction_scope']
+                    checkpoint['evidence']['sample_origin'] = {'path': str(work / 'geometry-sample-origin.json'),
+                        'sha256': sha(work / 'geometry-sample-origin.json')}
+                    checkpoint_path = job['directory'] / ('checkpoint-' + cycle_id + '.json')
+                    atomic_json(checkpoint_path, checkpoint)
+                    self.process.request(root, 'publish-geometry', value['run_id'], '--checkpoint', checkpoint_path)
+                self._boundary(job)
                 value['stage'] = 'export'
-                self._event(job, 'correction_export_started', cycle_id=cycle_id)
-                self.process.request(root, 'export', value['run_id'], '--geometry-checkpoint', work / 'geometry-checkpoint.json',
-                    '--previous-snapshot', work / previous['previous_snapshot'], *environment, timeout=180)
+                if not verified['correction_export_committed']:
+                    self.process.request(root, 'prepare-correction-export', value['run_id'], '--cycle-id', cycle_id)
+                    self._boundary(job)
+                    if not verified['correction_export_rendered']:
+                        self.process.request(root, 'render-correction-export', value['run_id'], '--cycle-id', cycle_id,
+                            *environment, timeout=180)
+                    self._boundary(job)
+                    self._event(job, 'correction_export_started', cycle_id=cycle_id)
+                    self.process.request(root, 'export', value['run_id'], '--geometry-checkpoint', work / 'geometry-checkpoint.json',
+                        '--previous-snapshot', work / previous['previous_snapshot'], *environment, timeout=180)
+                self._boundary(job)
                 value['stage'] = 'output_review'
-                with self.app._lock:
-                    child = self.app.start_output_review({'run_id': value['run_id'], 'environment': payload.get('environment')})
-                    value.setdefault('children', []).append({'cycle_id': cycle_id, 'stage': 'output_review',
-                        'attempt_id': child['attempt_id']})
-                    self._event(job, 'correction_output_review_started', cycle_id=cycle_id, child_attempt_id=child['attempt_id'])
-                while not job['cancel']:
-                    child = self.app.output_review.status(root, value['run_id'], work)
-                    if child['state'] not in ('starting', 'running'):
-                        break
-                    time.sleep(.05)
+                child = self._output_review(job, previous, payload)
                 if job['cancel']:
                     raise JobError('operation_cancelled', 'Correction stopped during output examination.')
                 if child['state'] != 'completed' or not child.get('output_review_complete'):

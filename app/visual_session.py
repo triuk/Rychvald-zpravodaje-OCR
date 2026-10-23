@@ -10,10 +10,10 @@ from .context_runtime import verify_resources, configuration, command, verify_ho
 from .jobs import JobError, atomic_json, sha
 
 
-def examine(manager, job, stage, prompt, schema, work, images, *, instructions=None):
+def examine(manager, job, stage, prompt, schema, work, images, *, instructions=None, directory=None):
     """No automatic retries; every accepted turn remains durable even on local failure."""
     value = job['manifest']
-    directory = job['directory'] / stage
+    directory = directory or job['directory'] / stage
     directory.mkdir()
     workspace = directory / 'workspace'
     storage = directory / 'context'
@@ -117,7 +117,7 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
         identifier = result['turn']['id']
         value['turn_id'] = identifier
         record = {'stage': stage, 'thread_id': value['thread_id'], 'turn_id': identifier, 'state': 'running',
-            'prompt': prompt, 'protocol': str(protocol.relative_to(job['root']))}
+            'prompt': prompt, 'protocol': str(protocol.relative_to(job['root'])), 'connection_id': connection_id}
         value['turns'].append(record)
         manager._event(job, 'geometry_turn_submitted', stage=stage, thread_id=value['thread_id'], turn_id=identifier)
         deadline = time.monotonic()+600
