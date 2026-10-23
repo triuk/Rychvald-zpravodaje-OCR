@@ -91,12 +91,15 @@ class ReleaseCaptureTests(unittest.TestCase):
 
     def test_selected_context_runs_original_hooks_and_real_mcp_without_host_runtime(self):
         installed = Path((PROOF / 'latest-helper-installation.txt').read_text().strip())
-        proof = installed.parent
+        proof = installed.parent / ('context-proof-' + str(time.time_ns()))
+        proof.mkdir()
         script = proof / 'context-check.py'
         script.write_text('''import json, os, pathlib, subprocess, sys
 assert not pathlib.Path('/usr').exists() and not pathlib.Path('/home').exists()
-sys.path.insert(0, '/app')
-os.environ.update(RYCHVALD_BUNDLE_ROOT='/app', RYCHVALD_CONTEXT_DESCRIPTOR='/app/native/bundled-context.json', RYCHVALD_CODEX_RUNTIME='/app/runtime/codex/codex')
+app = pathlib.Path(sys.argv[1] if len(sys.argv)>1 else '/app')
+assert app==pathlib.Path('/app') or not pathlib.Path('/app').exists()
+sys.path.insert(0, str(app))
+os.environ.update(RYCHVALD_BUNDLE_ROOT=str(app), RYCHVALD_CONTEXT_DESCRIPTOR=str(app/'native/bundled-context.json'), RYCHVALD_CODEX_RUNTIME=str(app/'runtime/codex/codex'))
 from app.context_runtime import default_context_runtime, verify_resources, configuration
 from app.codex import default_runtime
 r, c = default_context_runtime(), default_runtime()
@@ -104,21 +107,36 @@ capability = verify_resources(r, c)
 work, storage = pathlib.Path('/work/context-work'), pathlib.Path('/work/context-store')
 work.mkdir(exist_ok=True); storage.mkdir(exist_ok=True)
 settings = configuration(r, c, work, storage)
-assert settings['context_environment']['PATH'] == str(work / '.runtime-bin')
+binary = pathlib.Path(settings['context_environment']['PATH'])
+assert binary.parent == work / '.runtime-bin' and not binary.is_symlink()
 for event, groups in settings['hooks'].items():
  command = groups[0]['hooks'][0]['command']
  result = subprocess.run(command, shell=True, input=json.dumps({'cwd':str(work),'session_id':'offline-release-check','hook_event_name':event}),capture_output=True,text=True,timeout=20)
  assert result.returncode == 0, (event,result.returncode,command,result.stdout,result.stderr)
 mcp = settings['mcp_servers']['context_mode']
-messages = [{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'release-offline-check','version':'1'}}}, {'jsonrpc':'2.0','method':'notifications/initialized'}, {'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}}, {'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'ctx_execute','arguments':{'language':'javascript','code':'console.log("offline-release-mcp-ok")'}}}]
+cases = [('javascript', 'console.log(["offline","release","javascript","ok"].join("-")); process.exitCode=0;', 'offline-release-javascript-ok'), ('python', 'import sys; print("-".join(["offline","release","python","ok"])); sys.exit(0)', 'offline-release-python-ok'), ('shell', 'printf "%s-%s-%s-%s\\\\n" offline release shell ok; exit 0', 'offline-release-shell-ok')]
+messages = [{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'release-offline-check','version':'1'}}}, {'jsonrpc':'2.0','method':'notifications/initialized'}, {'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}}]
+messages += [{'jsonrpc':'2.0','id':index,'method':'tools/call','params':{'name':'ctx_execute','arguments':{'language':language,'code':code}}} for index,(language,code,marker) in enumerate(cases,3)]
 result = subprocess.run([mcp['command'],*mcp['args']],input=''.join(json.dumps(m)+'\\n' for m in messages),cwd=work,env={**os.environ,**mcp['env']},capture_output=True,text=True,timeout=30)
 assert result.returncode == 0, result.stderr
 replies = [json.loads(line) for line in result.stdout.splitlines()]
+pathlib.Path('/work/mcp-replies-'+app.name+'.json').write_text(json.dumps(replies,indent=2))
 listed = next(v for v in replies if v.get('id')==2)
 assert {'ctx_execute','ctx_search'} <= {t['name'] for t in listed['result']['tools']}, listed
-called = next(v for v in replies if v.get('id')==3)
-assert 'offline-release-mcp-ok' in json.dumps(called) and not called.get('error'), called
-print(json.dumps({'capability':capability,'original_hooks':len(settings['hooks']),'mcp_call':called,'host_usr_visible':False,'host_home_visible':False}))
+executed = {}
+for index,(language,code,marker) in enumerate(cases,3):
+ called = next(v for v in replies if v.get('id')==index)
+ assert not called.get('error') and called['result'].get('isError',False) is False, called
+ text = ''.join(block['text'] for block in called['result']['content'] if block['type']=='text')
+ actual_stdout = text.split('```',2)[2].strip()
+ assert actual_stdout == marker and marker not in code, (language,actual_stdout,called)
+ executed[language] = {'mcp_call':called,'actual_stdout':actual_stdout}
+launchers = {}
+for name,args,marker in [('node',['-e',cases[0][1]],cases[0][2]),('python3',['-c',cases[1][1]],cases[1][2]),('bash',['-c',cases[2][1]],cases[2][2]),('sh',['-c',cases[2][1]],cases[2][2])]:
+ launched = subprocess.run([str(binary/name),*args],capture_output=True,text=True,env={**os.environ,**settings['context_environment']})
+ launchers[name] = {'exit_code':launched.returncode,'stdout':launched.stdout,'stderr':launched.stderr}
+ assert launched.returncode == 0 and launched.stdout.strip()==marker, (name,launchers[name])
+print(json.dumps({'capability':capability,'original_hooks':len(settings['hooks']),'mcp_execution':executed,'launchers':launchers,'binary':str(binary),'host_usr_visible':False,'host_home_visible':False}))
 ''')
         vector = ['/usr/bin/bwrap', '--unshare-all', '--die-with-parent', '--new-session', '--clearenv',
             '--ro-bind', str(installed), '/app', '--bind', str(proof), '/work',
@@ -137,6 +155,18 @@ print(json.dumps({'capability':capability,'original_hooks':len(settings['hooks']
         evidence = json.loads(result.stdout)
         self.assertEqual(evidence['original_hooks'], 6)
         self.assertTrue(evidence['capability']['sqlite_fts5'])
+        before = {str(path.relative_to(proof)): path.read_bytes()
+                  for path in (proof / 'context-work/.runtime-bin').rglob('*') if path.is_file()}
+        moved = [item.replace('/app', '/replacement', 1) if item.startswith('/app') else item for item in vector]
+        moved += ['/replacement']
+        result = subprocess.run(moved, capture_output=True, text=True, timeout=100)
+        (proof / 'context-relocated.stdout').write_text(result.stdout)
+        (proof / 'context-relocated.stderr').write_text(result.stderr)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        relocated = json.loads(result.stdout)
+        self.assertNotEqual(relocated['binary'], evidence['binary'])
+        for name, payload in before.items():
+            self.assertEqual((proof / name).read_bytes(), payload)
 
     def test_tampered_capture_or_gui_closure_fails_before_native_wrapper_import(self):
         installed = Path((PROOF / 'latest-helper-installation.txt').read_text().strip())

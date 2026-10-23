@@ -1,4 +1,5 @@
 """Pinned offline context-mode closure and process-local Codex configuration."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -44,6 +45,10 @@ def default_context_runtime():
             for name in ('node_command', 'env_command'):
                 runtime[name] = [relative(item) if index in (0, 3, 4) else item
                                  for index, item in enumerate(runtime[name])]
+            runtime['launcher_commands'] = {
+                name: [relative(item) if index in (0, 3, 4) else item
+                       for index, item in enumerate(vector)]
+                for name, vector in runtime['launcher_commands'].items()}
             runtime['probe_command'] = [*runtime['node_command'], '--input-type=module', '-e',
                 'import {DatabaseSync} from "node:sqlite"; const d=new DatabaseSync(":memory:");'
                 'd.exec("CREATE VIRTUAL TABLE verification USING fts5(value)");d.close();'
@@ -98,16 +103,34 @@ def verify_resources(runtime, codex):
 
 def configuration(runtime, codex, workspace, storage):
     binary = workspace / '.runtime-bin'
+    if binary.is_symlink():
+        raise JobError('context_runtime_invalid', 'Runtime command directory was replaced.')
     binary.mkdir(exist_ok=True)
     executables = [{'name': 'node', 'path': runtime['node']}, {'name': 'codex', 'path': codex['command'][0]},
                    *runtime.get('interpreters', [])]
-    for item in executables:
-        link = binary / item['name']
-        if link.is_symlink():
-            link.unlink()
-        if link.exists():
-            raise JobError('context_runtime_invalid', 'Runtime command path was replaced.')
-        link.symlink_to(item['path'])
+    if runtime.get('bundled'):
+        vectors = {**runtime['launcher_commands'], 'codex': [codex['command'][0]]}
+        identity = hashlib.sha256(json.dumps(vectors, sort_keys=True).encode()).hexdigest()
+        binary = binary / identity
+        if binary.is_symlink():
+            raise JobError('context_runtime_invalid', 'Runtime command directory was replaced.')
+        binary.mkdir(exist_ok=True)
+        for name, vector in vectors.items():
+            path = binary / name
+            content = '#!/bin/sh\nunset LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME PYTHONUSERBASE\nexec ' + shlex.join(vector) + ' "$@"\n'
+            if path.is_symlink() or (path.exists() and (not path.is_file() or path.read_text() != content or path.stat().st_mode & 0o777 != 0o700)):
+                raise JobError('context_runtime_invalid', 'Runtime command path was replaced.')
+            if not path.exists():
+                path.write_text(content)
+                path.chmod(0o700)
+    else:
+        for item in executables:
+            link = binary / item['name']
+            if link.is_symlink():
+                link.unlink()
+            if link.exists():
+                raise JobError('context_runtime_invalid', 'Runtime command path was replaced.')
+            link.symlink_to(item['path'])
     temporary, home = storage / 'tmp', storage / 'config'
     temporary.mkdir(parents=True, exist_ok=True)
     home.mkdir(exist_ok=True)

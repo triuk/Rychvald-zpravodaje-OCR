@@ -42,7 +42,13 @@ ignores development runtime overrides, selects its bundled OCR/Codex, and reads
 `native/bundled-context.json`. Raw native executable hashes remain distinct from
 generated loader command vectors. Hooks and MCP use bundled env/Node/Python/
 Bash/sh and libraries; their PATH contains only the per-run runtime directory.
-The six original context-mode hook entrypoints are unchanged. Hook/MCP HOME and
+Installed per-run interpreter commands are executable shims generated from the
+verified descriptor's absolute loader/native vectors. They do not invoke the
+bundle's location-relative shell wrappers through symlinks. Each resolved command
+set gets a separate directory under `.runtime-bin`; relocation or replacement
+selects a new set without rewriting previous run files. Existing generated shims
+must still match their expected bytes/modes. The six original context-mode hook
+entrypoints are unchanged. Hook/MCP HOME and
 CODEX_HOME are per-run storage; the Codex process retains the caller's separately
 provided account environment. Credentials are not distributed with the program.
 

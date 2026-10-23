@@ -213,6 +213,11 @@ def populate_release(bundle, inputs, root, release):
                   'package': 'runtime/context-mode', 'tree_sha256': release['prepared_context'],
                   'files': [{'path': name, 'sha256': value} for name, value in sorted(runtime_files.items())],
                   'interpreters': [{'name': name, 'path': 'runtime/bin/' + name} for name in ('python3', 'bash', 'sh')]}
+    descriptor['launcher_commands'] = {
+        'node': [*loader, 'runtime/native/node'],
+        'python3': [*loader, 'bin/python3.14', '-I', '-B'],
+        'bash': [*loader, 'runtime/native/bash'],
+        'sh': [*loader, 'runtime/native/bash']}
     json_file(bundle / 'native/bundled-context.json', descriptor)
     shutil.copyfile(root / 'native/gui_bootstrap.py', bundle / 'gui_bootstrap.py')
     launcher = bundle / 'bin/rychvald-ocr-gui'
