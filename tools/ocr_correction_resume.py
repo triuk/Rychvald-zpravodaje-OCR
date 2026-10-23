@@ -151,12 +151,16 @@ def verify(registry, run_id, attempt, ledger_sha256):
                 raise ValueError('Uncommitted correction export has another registry iteration')
             exported = False  # Finish only this reserved local commit, using its already rendered bytes.
         else:
-            from ocr_project_output_review import output_identity
-            output_identity(record, work)
             if (manifest['iteration_id'] != cycle.get('exported_iteration_id') or
-                    source_hash(work / 'output-manifest.json') != cycle.get('exported_manifest_sha256') or
-                    record['artifacts'].get('previous_iteration') != str((work / cycle['previous_snapshot']).relative_to(registry.root))):
+                    source_hash(work / 'output-manifest.json') != cycle.get('exported_manifest_sha256')):
                 raise ValueError('Current export is not the exact committed correction iteration')
+            if record['project']['iteration_id'] == cycle['source_iteration_id'] and record['project']['phase'] in ('exporting', 'export_interrupted'):
+                exported = False  # The ledger committed before its exact project transaction.
+            else:
+                from ocr_project_output_review import output_identity
+                output_identity(record, work)
+                if record['artifacts'].get('previous_iteration') != str((work / cycle['previous_snapshot']).relative_to(registry.root)):
+                    raise ValueError('Current export has another correction ancestor')
     intent, output = output_child(work, child, cycle['cycle_id'])
     if intent is not None:
         if (not exported or intent['cycle_index'] != cycle['index'] or

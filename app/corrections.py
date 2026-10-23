@@ -286,11 +286,18 @@ class CorrectionJobs(ContextJobs):
             value.update(state='paused' if paused else 'interrupted' if job['cancel'] else 'failed',
                 error={'code': getattr(error, 'code', 'correction_failed'), 'message': str(error)})
             if cycle_id and not job['cancel'] and not paused:
-                reason = ('no_valid_change' if getattr(error, 'code', None) == 'correction_no_valid_change' else
-                    'invalid_patch' if value.get('stage') == 'targeted_repair' and getattr(error, 'code', None) == 'correction_invalid' else
-                    'technical_failure')
                 try:
-                    self.process.request(root, 'settle-correction', value['run_id'], '--cycle-id', cycle_id, '--reason', reason)
+                    from .failures import run_failure
+                    failure = run_failure(root, self.app.select_run(value['run_id'], notify=False), {
+                        'attempt_id': value.get('parent_binding', {}).get('parent_attempt_id', value['attempt_id']),
+                        'error': value['error'], 'stages': [{'stage': 'corrections', 'attempt_id': value['attempt_id']}]})
+                    if failure['delivery_state'] in ('unknown', 'accepted'):
+                        value['settlement_pending'] = failure
+                    else:
+                        reason = ('no_valid_change' if getattr(error, 'code', None) == 'correction_no_valid_change' else
+                            'invalid_patch' if value.get('stage') == 'targeted_repair' and getattr(error, 'code', None) == 'correction_invalid' else
+                            'technical_failure')
+                        self.process.request(root, 'settle-correction', value['run_id'], '--cycle-id', cycle_id, '--reason', reason)
                 except Exception as settle_error:
                     value['settlement_error'] = str(settle_error)
         finally:

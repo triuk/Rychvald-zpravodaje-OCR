@@ -48,6 +48,10 @@ for raw in sys.stdin:
             Path(gate + '.ready').write_text('Controlled descendant turn accepted; acknowledgement lost')
             continue
         correction = 'CORRECTION_PACKET\n' in prompt
+        lost_repair_ack = os.environ.get('RELEASE_REPAIR_LOST_ACK')
+        if correction and lost_repair_ack:
+            Path(lost_repair_ack).write_text('Controlled repair request received; delivery acknowledgement lost')
+            raise SystemExit(0)
         packet = json.loads(prompt.split('CORRECTION_PACKET\n' if correction else 'OUTPUT_PACKET\n' if output else 'SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
         if correction:
             line = dict(packet['lines'][0], text='ABC', decision_basis='Controlled targeted source ABC crop reading')

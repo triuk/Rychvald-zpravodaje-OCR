@@ -49,7 +49,23 @@ def crash_native_before_render_binding(event, arguments):
     source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
     if not source.is_file():
         return
-    if fault_mode == 'export-ledger':
+    if fault_mode == 'export-project':
+        if destination.name != 'project.json' or not destination.is_file():
+            return
+        work = destination.parent
+        ledger_path = work / 'application/corrections/ledger.json'
+        if not ledger_path.is_file():
+            return
+        old, new = json.loads(destination.read_text()), json.loads(source.read_text())
+        cycle = json.loads(ledger_path.read_text())['cycles'][-1]
+        if (not cycle.get('exported_iteration_id') or new['project']['phase'] != 'exported' or
+                new['project']['iteration_id'] != cycle['exported_iteration_id'] or
+                old['project']['iteration_id'] == new['project']['iteration_id']):
+            return
+        directory = ledger_path.parent / cycle['cycle_id']
+        rendered = json.loads((directory / 'export-rendered.json').read_text())
+        boundary = 'before_exported_project_rename'
+    elif fault_mode == 'export-ledger':
         if destination.name != 'ledger.json' or destination.parent.name != 'corrections' or not destination.is_file():
             return
         old, new = json.loads(destination.read_text()), json.loads(source.read_text())

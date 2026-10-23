@@ -56,6 +56,62 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_native_crash_before_exported_ledger_commit_keeps_the_same_final_bytes(self):
         self.owner_crash_scenario('export-ledger')
 
+    def test_native_crash_after_exported_ledger_before_project_commit_keeps_same_iteration(self):
+        self.owner_crash_scenario('export-project')
+
+    def test_unknown_repair_delivery_keeps_reserved_budget_and_cannot_replay(self):
+        self.app.close()
+        peer = ROOT / 'tests/corrections_app_server_fixture.py'
+        marker = self.directory / 'repair-delivery-unknown'
+        wrapper = self.directory / 'unknown-repair-peer.py'
+        wrapper.write_text('import os,runpy,sys\nos.environ["RELEASE_REPAIR_LOST_ACK"]=' + repr(str(marker)) +
+            '\nsys.argv.insert(1,"repair")\nrunpy.run_path(' + repr(str(peer)) + ',run_name="__main__")\n')
+        self.runtime = {**self.runtime, 'command': [sys.executable, '-B', str(wrapper)],
+            'files': [*self.runtime['files'], *[{'path': str(p), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in (peer, wrapper)]]}
+        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        def preserve():
+            self.app.close()
+            destination = PROOF / (self._testMethodName + '-' + str(time.time_ns()))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(self.directory, destination)
+        self.addCleanup(preserve)
+        profile = ROOT / 'profiles/faithful-reading.json'
+        started = self.app.dispatch('start_autonomous', {'source_path': str(self.source),
+            'name': 'Unknown original repair delivery', 'profile_path': str(profile),
+            'profile_sha256': hashlib.sha256(profile.read_bytes()).hexdigest(),
+            'environment': os.environ.get('OCR_ENVIRONMENT')})
+        self.assertTrue(started['ok'], started)
+        identity = {key: started['data'][key] for key in ('run_id', 'attempt_id')}
+        self.assertEqual(self.wait(identity['run_id'])['state'], 'failed')
+        self.assertTrue(marker.is_file())
+        correction = self.app.dispatch('correction_status', identity)['data']
+        detail = self.app.dispatch('select_run', identity)['data']
+        work = self.root / detail['artifacts']['workspace']['path']
+        protocol = work / 'application/correction-attempts' / correction['attempt_id'] / 'protocol.jsonl'
+        original = protocol.read_bytes()
+        self.app.close()
+        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        checked = self.app.dispatch('reconcile_autonomous', identity)
+        self.assertTrue(checked['ok'], checked)
+        self.assertEqual(checked['data']['provider']['state'], 'unknown')
+        self.assertFalse(checked['data']['provider']['safe_to_continue'])
+        denied = self.app.dispatch('resume_autonomous', {**identity, 'reconciliation_id': checked['data']['reconciliation_id']})
+        self.assertFalse(denied['ok'], denied)
+        self.assertEqual(denied['error']['code'], 'reconciliation_required')
+        manual = self.app.dispatch('start_model_diagnostic', identity)
+        self.assertFalse(manual['ok'], manual)
+        self.assertEqual(manual['error']['code'], 'reconciliation_required')
+        self.assertEqual(protocol.read_bytes(), original)
+        starts = [json.loads(line) for line in original.splitlines()]
+        self.assertEqual(sum(row['direction'] == 'client' and row['message'].get('method') == 'turn/start' for row in starts), 1)
+        retained = self.app.dispatch('correction_status', identity)['data']
+        self.assertEqual(retained['attempt_id'], correction['attempt_id'])
+        self.assertEqual(retained['cycles_used'], 1)
+        self.assertEqual(retained['cycles'][0]['cycle_id'], correction['cycles'][0]['cycle_id'])
+        self.assertEqual(retained['cycles'][0]['state'], 'reserved', retained)
+        self.assertIsNone(retained['stop_reason'], retained)
+
     def owner_crash_scenario(self, fault_mode):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
