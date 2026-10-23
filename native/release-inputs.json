@@ -1,0 +1,494 @@
+{
+  "context_source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/context-pristine-source",
+  "native_inputs": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs",
+  "native_lock": {
+    "path": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovery-bundle-inputs.json",
+    "sha256": "0e4f04d70571ae9e64c31f4510d1a294a8e52607274007a5386ea7b5204bf0a4"
+  },
+  "platform": "Linux x86_64-v3; captured loader/libc; external desktop browser/display or loopback browser seam required",
+  "resources": {
+    "lib/ld-linux-x86-64.so.2": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "glibc",
+      "sha256": "2a950d46575efa0210d22440988f5a6b4507ebddc6c86d9a42e6e7ef6f01463e",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/2a950d46575efa0210d22440988f5a6b4507ebddc6c86d9a42e6e7ef6f01463e",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "lib/libc.so.6": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "glibc",
+      "sha256": "071e34179e645b25f8a8c2e7108894dc665caa9f5f8c939cd579a75b6638bc3f",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/071e34179e645b25f8a8c2e7108894dc665caa9f5f8c939cd579a75b6638bc3f",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "lib/libdl.so.2": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "glibc",
+      "sha256": "336a6874f359104ec9bef6d2f2948f11e0f079d347e986880a240f1156a42d4d",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/336a6874f359104ec9bef6d2f2948f11e0f079d347e986880a240f1156a42d4d",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "lib/libgcc_s.so.1": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "libgcc",
+      "sha256": "571745fb27883c763315fab54a536906064c1df6804d1a7884713dac259da68d",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/571745fb27883c763315fab54a536906064c1df6804d1a7884713dac259da68d",
+      "version": "16.2.1+r23+gd564253eb6c8-1"
+    },
+    "lib/libm.so.6": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "glibc",
+      "sha256": "58b6b82e39d59d7810d402ba4ec34359fde058204fdb7cd5a269fda256a35421",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/58b6b82e39d59d7810d402ba4ec34359fde058204fdb7cd5a269fda256a35421",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "lib/libncursesw.so.6": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "ncurses",
+      "sha256": "f58d9552e04abc427fb21bd7118eee77e3f216b64b2aaafd768d74bf26507153",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/f58d9552e04abc427fb21bd7118eee77e3f216b64b2aaafd768d74bf26507153",
+      "version": "6.6-2.1"
+    },
+    "lib/libpthread.so.0": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "glibc",
+      "sha256": "bcdf5c8472353bd04780314cee7d27e07594153332ac526a390d6e5b38792ee4",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/bcdf5c8472353bd04780314cee7d27e07594153332ac526a390d6e5b38792ee4",
+      "version": "2.44+r50+g1848099f063e-3"
+    },
+    "lib/libreadline.so.8": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "readline",
+      "sha256": "0a4a775df47a19d2407ba2b2eb2a1fb37b59b1b1608074987e5fa36f6be04ef7",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/0a4a775df47a19d2407ba2b2eb2a1fb37b59b1b1608074987e5fa36f6be04ef7",
+      "version": "8.3.6-1.1"
+    },
+    "lib/libstdc++.so.6": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "libstdc++",
+      "sha256": "412e0fc561a10581aaff2d101206939a31fa12c696590d8d4a5ec3655953ffe0",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/412e0fc561a10581aaff2d101206939a31fa12c696590d8d4a5ec3655953ffe0",
+      "version": "16.2.1+r23+gd564253eb6c8-1"
+    },
+    "lib/python3.14/site-packages/webui/__init__.py": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/__init__.py",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/bootstrap.bat": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "9944a92b4352f255b09885af6366ab0b68459602bd56fb9897edbdbe28739143",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/bootstrap.bat",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/bootstrap.sh": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "8e584da550c36dee19e21ae34d602dbd257622df50c09e7297179ab7fa6635f4",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/bootstrap.sh",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/load_library.py": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "5fd7e4becc25a4225b2723392c679a3b40c18b134555411fa351b311b53e13de",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/load_library.py",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/py.typed": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/py.typed",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui-linux-clang-x64/libwebui-2.so": {
+      "archive_provenance": "not established; absent from wrapper RECORD",
+      "executable": false,
+      "kind": "locked-installed-native-artifact",
+      "license": "MIT",
+      "sha256": "59b7230ee0a6608ea6fa5bd38cf327851c0a0cc980976b13793723d25dacf768",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui-linux-clang-x64/libwebui-2.so",
+      "upstream": "https://github.com/webui-dev/webui"
+    },
+    "lib/python3.14/site-packages/webui/webui-linux-gcc-arm/libwebui-2.so": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "17e8cf6ad73166c90ae01dd2aacb8e9bae1b9736f3bf7cfc6067227526403557",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui-linux-gcc-arm/libwebui-2.so",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui-linux-gcc-arm64/libwebui-2.so": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "26fcfb15bc15ff015b931eb11067d11a460fff10cafc4401434a5f44308c2f34",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui-linux-gcc-arm64/libwebui-2.so",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui-linux-gcc-x64/libwebui-2.so": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "57b95facdc0983f4f05e2b3fb07d1e7db01ef071de2d227a6fc2a195b4016c29",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui-linux-gcc-x64/libwebui-2.so",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui-macos-clang-arm64/libwebui-2.dylib": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "d08ca52233915287bbb75db1c6a9d36b1c26476a4b3dabe91f0172263d88fee1",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui-macos-clang-arm64/libwebui-2.dylib",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui-macos-clang-x64/libwebui-2.dylib": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "c0a5e951bb0e635c3c514df2424bcfb111557cee28c8cc41640772913572662a",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui-macos-clang-x64/libwebui-2.dylib",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui-windows-msvc-x64/webui-2.dll": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "c2324ee9be352fe1a89597637233467892e431ea0254c85fa47ffbaec538be62",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui-windows-msvc-x64/webui-2.dll",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui.py": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "03dc3f3ce9e34d174a8e7fd26774c153c40f7e8ab44624743828631dff4fc104",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui.py",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui/webui_bindings.py": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "d62a839d6951cbcb9837a713a2f771a9d36afe89d26974f038db6c58843a9222",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui/webui_bindings.py",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui2-2.5.8.dist-info/INSTALLER": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "ceebae7b8927a3227e5303cf5e0f1f7b34bb542ad7250ac03fbcde36ec2f1508",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui2-2.5.8.dist-info/INSTALLER",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui2-2.5.8.dist-info/METADATA": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "1d6d5b160ea758284b520f471028102f07604dac4b7e3381a9ec6d160f7c99b3",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui2-2.5.8.dist-info/METADATA",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui2-2.5.8.dist-info/RECORD": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui2-2.5.8.dist-info/RECORD",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui2-2.5.8.dist-info/REQUESTED": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui2-2.5.8.dist-info/REQUESTED",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui2-2.5.8.dist-info/WHEEL": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "69e6228a0d35958183cc1812f07c565ce837b95eb51bd8a33acba9fa4f68d6c9",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui2-2.5.8.dist-info/WHEEL",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui2-2.5.8.dist-info/licenses/LICENSE": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "68f136713e8a1094450191a67cc9f7a0ab93f523c900b553e5b7d96e2e6a2a27",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui2-2.5.8.dist-info/licenses/LICENSE",
+      "wrapper_version": "2.5.8"
+    },
+    "lib/python3.14/site-packages/webui2-2.5.8.dist-info/top_level.txt": {
+      "executable": false,
+      "kind": "locked-installed-wrapper-file",
+      "license": "MIT",
+      "record_lf_sha256": "e31e52dedc5777ee56a75ea5620d2615f23842e7ccf01463629e66eea2bf8d19",
+      "record_raw_sha256": "5a560358aa463738eeb4614a797cc81df40f1e7587b8f2c8666393477cb699a8",
+      "sha256": "4df7d096e96fe170baa9304938ecdf4ae30ed4cc3cf95ea01ccb0d52d32971b6",
+      "source": "/home/gordon/Dokumenty/pdf-ocr-reviewer/.venv/lib/python3.14/site-packages/webui2-2.5.8.dist-info/top_level.txt",
+      "wrapper_version": "2.5.8"
+    },
+    "licenses/Codex-LICENSE": {
+      "archive_member": "usr/share/licenses/chatgpt-bin/LICENSE",
+      "archive_sha256": "85a1626517420e61f79a794831bddfb727ef3ec816985b442a3a33580b06751a",
+      "executable": false,
+      "kind": "exact-package-member-match",
+      "sha256": "ddd13d7256e03b29bb3f879f07266ba4d6572c161ccddf7a8a2f82e47b24b2b4",
+      "source": "/usr/share/licenses/chatgpt-bin/LICENSE"
+    },
+    "licenses/node-LICENSE": {
+      "executable": false,
+      "sha256": "5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/context-stable-runtime/node-LICENSE"
+    },
+    "licenses/release/usr/share/licenses/libgcc/RUNTIME.LIBRARY.EXCEPTION": {
+      "executable": false,
+      "kind": "package-provided",
+      "owners": [
+        "libgcc"
+      ],
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+    },
+    "licenses/release/usr/share/licenses/libstdc++/RUNTIME.LIBRARY.EXCEPTION": {
+      "executable": false,
+      "kind": "package-provided",
+      "owners": [
+        "libstdc++"
+      ],
+      "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74"
+    },
+    "licenses/release/usr/share/licenses/ncurses/COPYING": {
+      "executable": false,
+      "kind": "package-provided",
+      "owners": [
+        "ncurses"
+      ],
+      "sha256": "708999f95527e1ffa670c6fce288c6c600cb477dd04afcc1171422b3dd4ee226",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/708999f95527e1ffa670c6fce288c6c600cb477dd04afcc1171422b3dd4ee226"
+    },
+    "licenses/release/usr/share/licenses/spdx/GFDL-1.3-or-later.txt": {
+      "executable": false,
+      "kind": "common SPDX text",
+      "owners": [
+        "libgcc",
+        "libgomp",
+        "libstdc++",
+        "libtasn1"
+      ],
+      "sha256": "d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/d024962f1f4966c102b40d9fd9cc834a3f0b3c1397b41444b7cd7925640dc929"
+    },
+    "licenses/release/usr/share/licenses/spdx/GPL-2.0-or-later.txt": {
+      "executable": false,
+      "kind": "common SPDX text",
+      "owners": [
+        "acl",
+        "freetype2",
+        "glibc",
+        "gmp",
+        "gpgme",
+        "jbigkit",
+        "keyutils",
+        "leancrypto",
+        "libassuan",
+        "libgpg-error",
+        "libunistring",
+        "lz4",
+        "nettle",
+        "util-linux-libs"
+      ],
+      "sha256": "aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/aaf135472f81c5b4a0dca9367e5bb5e9750032b5bebe5442b36e4c0a47430df3"
+    },
+    "licenses/release/usr/share/licenses/spdx/GPL-3.0-or-later.txt": {
+      "executable": false,
+      "kind": "common SPDX text",
+      "owners": [
+        "bash",
+        "gdbm",
+        "gnutls",
+        "libgcc",
+        "libgomp",
+        "libstdc++",
+        "libtasn1",
+        "poppler",
+        "readline",
+        "util-linux-libs"
+      ],
+      "sha256": "fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0"
+    },
+    "licenses/release/usr/share/licenses/spdx/LGPL-2.1-or-later.txt": {
+      "executable": false,
+      "kind": "common SPDX text",
+      "owners": [
+        "acl",
+        "glibc",
+        "gnutls",
+        "gpgme",
+        "keyutils",
+        "libassuan",
+        "libgpg-error",
+        "libtasn1",
+        "poppler",
+        "util-linux-libs"
+      ],
+      "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+    },
+    "provenance/codex-pinned-runtime-provenance.json": {
+      "executable": false,
+      "sha256": "c19d4848c84e717ece9bf0213c4565a635bdbac9d0db113195f1d0d1128d83be",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/codex-pinned-runtime-provenance.json"
+    },
+    "provenance/codex/package-BUILDINFO": {
+      "executable": false,
+      "sha256": "e35775948f4e534cbd5450f66f2c138f786cd369d16064a169c29cb8690321b8",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/codex-pinned-runtime/package-BUILDINFO"
+    },
+    "provenance/codex/package-PKGINFO": {
+      "executable": false,
+      "sha256": "ab1f37855e3ce677e54dcd1fe8b89ecea549d45b5a4c9a5419edf37fbe9cdd1b",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/codex-pinned-runtime/package-PKGINFO"
+    },
+    "provenance/codex/package-linux-package-metadata.json": {
+      "executable": false,
+      "sha256": "0809a5eb2ac8300a6ee5764ca0ebc0bf5cef792ddbea28998d8d9771876e9e85",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/codex-pinned-runtime/package-linux-package-metadata.json"
+    },
+    "provenance/context-pristine-provenance.json": {
+      "executable": false,
+      "sha256": "6d14ef293c28166db97149962d191d633e5269869156fb988d1e3ffd20d37347",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/context-pristine-provenance.json"
+    },
+    "provenance/coreutils/desc": {
+      "executable": false,
+      "sha256": "6df802a2ee99c117ca3d4ae82562a3f79fc583e2092a7a1957eaa1f781570f67",
+      "source": "/var/lib/pacman/local/coreutils-9.12-2.1/desc"
+    },
+    "provenance/coreutils/files": {
+      "executable": false,
+      "sha256": "8407d74bba3b1f12fcde018e4227ca6f5d3979023464670c93e308d86e4f0b6b",
+      "source": "/var/lib/pacman/local/coreutils-9.12-2.1/files"
+    },
+    "provenance/coreutils/mtree": {
+      "executable": false,
+      "sha256": "05b3de6e2f475f25845ed4bb337339c78b93612fb619ca45f55f69d4b9a14435",
+      "source": "/var/lib/pacman/local/coreutils-9.12-2.1/mtree"
+    },
+    "provenance/node-manifest.json": {
+      "executable": false,
+      "sha256": "065d91eca8286d6c88c75177943d0f6fcaf30273d3d87eca8dce10ee6d6e0e3e",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/context-stable-runtime/node-manifest.json"
+    },
+    "runtime/codex/codex": {
+      "archive_sha256": "85a1626517420e61f79a794831bddfb727ef3ec816985b442a3a33580b06751a",
+      "executable": true,
+      "kind": "package-archive-member",
+      "license": "LicenseRef-OpenAI-Proprietary",
+      "sha256": "73b73b048546993298234a295de01ef2424e7a8b29def9d0ecb1ca7cb77500d4",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/codex-pinned-runtime/codex"
+    },
+    "runtime/codex/codex-code-mode-host": {
+      "archive_sha256": "85a1626517420e61f79a794831bddfb727ef3ec816985b442a3a33580b06751a",
+      "executable": true,
+      "kind": "package-archive-member",
+      "license": "LicenseRef-OpenAI-Proprietary",
+      "sha256": "086e0abe80a4eb41b1d9e4bbfeeef5e579cf9b7e8c00c58d68563260a96f077d",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/codex-pinned-runtime/codex-code-mode-host"
+    },
+    "runtime/native/bash": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "owner": "bash",
+      "sha256": "917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2",
+      "version": "5.3.20-2"
+    },
+    "runtime/native/env": {
+      "executable": true,
+      "kind": "locked-installed-file",
+      "licenses": [
+        "GPL-3.0-or-later",
+        "GFDL-1.3-or-later"
+      ],
+      "owner": "coreutils",
+      "sha256": "05d817832dbf5272a27e766c674c60da9b9f67df66de28321e2b7ec1c9110455",
+      "signature_verification": "not performed",
+      "source": "/usr/bin/env",
+      "version": "9.12-2.1"
+    },
+    "runtime/native/node": {
+      "executable": true,
+      "kind": "installed-CUA-artifact",
+      "sha256": "7fde7b8afa198da66257f42ee2001d874c7355631e6d1579a5fb5ef1f246df4c",
+      "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/context-stable-runtime/bin/node",
+      "version": "24.21.0"
+    }
+  },
+  "schema_version": 1
+}

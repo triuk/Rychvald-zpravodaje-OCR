@@ -1,7 +1,11 @@
 """Thin native WebUI adapter for the public application request interface."""
 
 import json
+import os
 from pathlib import Path
+import signal
+import threading
+from urllib.parse import urlparse
 
 from .service import Application
 
@@ -25,7 +29,7 @@ class WebUIApplication:
                       'error': {'code': 'invalid_request', 'message': 'Request must be a JSON object with an operation.'}}
         event.return_string(json.dumps(result, ensure_ascii=False))
 
-    def run(self):
+    def run(self, *, serve=False):
         try:
             from webui import webui
         except ImportError:
@@ -42,13 +46,30 @@ class WebUIApplication:
             self.window.set_profile('OCR', str(self.browser_profile))
         if self.browser_parameters:
             self.window.set_custom_parameters(self.browser_parameters)
-        if self.browser:
-            shown = self.window.show_browser('index.html', getattr(webui.Browser, self.browser))
-        else:
-            shown = self.window.show('index.html')
-        if shown is False:
-            raise RuntimeError('WebUI nedokázalo otevřít okno aplikace.')
+        handlers = {}
         try:
-            webui.wait()
+            if serve:
+                stopped = threading.Event()
+                for name in (signal.SIGINT, signal.SIGTERM):
+                    handlers[name] = signal.signal(name, lambda *_: stopped.set())
+                webui.set_timeout(0)
+                url = self.window.start_server('index.html')
+                parsed = urlparse(url)
+                if parsed.scheme != 'http' or parsed.hostname not in ('localhost', '127.0.0.1', '::1') or not parsed.port:
+                    raise RuntimeError('WebUI nevrátilo platnou loopback URL.')
+                print(json.dumps({'operation': 'serve', 'status': 'ready', 'url': url,
+                                  'pid': os.getpid()}), flush=True)
+                stopped.wait()
+            else:
+                if self.browser:
+                    shown = self.window.show_browser('index.html', getattr(webui.Browser, self.browser))
+                else:
+                    shown = self.window.show('index.html')
+                if shown is False:
+                    raise RuntimeError('WebUI nedokázalo otevřít okno aplikace.')
+                webui.wait()
         finally:
             self.api.close()
+            self.window.destroy()
+            for name, handler in handlers.items():
+                signal.signal(name, handler)
