@@ -47,11 +47,29 @@ def bindings(**paths):
             for name, path in paths.items()}
 
 
-def check_bindings(records):
+def check_bindings(records, *, historical=False):
+    """Current-state checks stay strict; archived reads require an explicit opt-in."""
+    if __package__:
+        from .ocr_evidence_archive import resolve_bound
+    else:
+        from ocr_evidence_archive import resolve_bound
     for name, record in records.items():
         path = Path(record['path'])
-        if not path.is_file() or sha(path) != record['sha256']:
-            raise ValueError(f'Stale or missing input: {name} ({path})')
+        try:
+            if historical:
+                resolve_bound(str(path), record['sha256'])
+            elif not path.is_file() or sha(path) != record['sha256']:
+                raise ValueError('Current input changed')
+        except ValueError as error:
+            raise ValueError(f'Stale or missing input: {name} ({path})') from error
+
+
+def load_bound(pointer, *, catalog=None):
+    if __package__:
+        from .ocr_evidence_archive import load_bound as archived_load
+    else:
+        from ocr_evidence_archive import load_bound as archived_load
+    return archived_load(pointer, catalog=catalog)
 
 
 def work_file(work, name):

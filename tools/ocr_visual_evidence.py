@@ -2,6 +2,10 @@
 import json
 from pathlib import Path
 import hashlib
+if __package__:
+    from .ocr_evidence_archive import resolve_bound, verify_relocated_path
+else:
+    from ocr_evidence_archive import resolve_bound, verify_relocated_path
 
 
 def sha(path):
@@ -9,9 +13,7 @@ def sha(path):
 
 
 def verify_visual_turn(proof, work, images, *, archive=None):
-    protocol = Path(proof['protocol']['path'])
-    if sha(protocol) != proof['protocol']['sha256']:
-        raise ValueError('Original visual protocol changed')
+    protocol = resolve_bound(proof['protocol']['path'], proof['protocol']['sha256'])
     messages = [json.loads(line)['message'] for line in protocol.read_text().splitlines()]
     identifier, thread = proof['turn_id'], proof['thread_id']
     requests = [m['params'] for m in messages if m.get('method') == 'turn/start' and
@@ -42,7 +44,12 @@ def verify_visual_turn(proof, work, images, *, archive=None):
             if record['sha256'] != image['sha256']:
                 raise ValueError('Historical image identity differs from original bound pixels')
             actual_images.append(archive / name if record['stored'] else Path(path))
-    if requested_images != expected or any(sha(path) != image['sha256'] for path, image in zip(actual_images, images)):
+    if len(requested_images) != len(expected):
+        raise ValueError('Actual attached original/diagnostic images differ')
+    for requested, current, image in zip(requested_images, expected, images):
+        verify_relocated_path(requested, current, image['sha256'])
+    if any(sha(resolve_bound(str(path), image['sha256'])) != image['sha256']
+           for path, image in zip(actual_images, images)):
         raise ValueError('Actual attached original/diagnostic images differ')
     terminals = [m['params']['turn'] for m in messages if m.get('method') == 'turn/completed' and
         m['params']['turn']['id'] == identifier and m['params'].get('threadId') == thread]
