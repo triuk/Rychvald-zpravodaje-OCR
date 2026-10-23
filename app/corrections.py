@@ -123,7 +123,21 @@ class CorrectionJobs(ContextJobs):
             protocol = directory / 'protocol.jsonl'
             frames = [json.loads(raw) for raw in protocol.read_text().splitlines()] if protocol.exists() else []
             if any(row['direction'] == 'client' and row['message'].get('method') == 'turn/start' for row in frames):
-                raise JobError('original_result_unavailable', 'An original submitted visual phase cannot be replayed.')
+                from .visual_recovery import original_visual
+                answer, proof = original_visual(directory, work, images, prompt, schema, job['directory'] / 'protocol.jsonl')
+                records = [row for row in job['manifest']['turns'] if row['stage'] == stage and
+                    row['thread_id'] == proof['thread_id'] and row['turn_id'] == proof['turn_id']]
+                if len(records) != 1:
+                    raise JobError('original_result_unavailable', 'Original completed visual turn binding is unavailable.')
+                recovered = job['recovery_directory'] / stage
+                recovered.mkdir()
+                proposal = recovered / 'proposal.json'
+                atomic_json(proposal, answer)
+                records[0].update(state='completed', answer=json.dumps(answer, ensure_ascii=False),
+                    proposal=str(proposal.relative_to(job['root'])), reused_original=proof)
+                self._event(job, 'correction_original_visual_reused', stage=stage,
+                    thread_id=proof['thread_id'], turn_id=proof['turn_id'])
+                return answer, proof, proposal
             # Initialization stopped before submission. Keep its original files;
             # the first actual turn gets a separately recorded physical workspace.
             directory = job['recovery_directory'] / stage

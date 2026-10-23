@@ -74,6 +74,8 @@ def verify(registry, run_id, attempt, ledger_sha256):
         if cycle['index'] != index or cycle['parent_cycle_id'] != previous:
             raise ValueError('Correction cycle chain changed')
         previous = cycle['cycle_id']
+        if cycle['state'] == 'reserved':
+            check_bindings(packet['inputs'])
         if cycle.get('previous_snapshot'):
             archive = (work / cycle['previous_snapshot']).resolve()
             verify_archive(work, archive, record)

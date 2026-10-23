@@ -43,6 +43,26 @@ def crash_before_output_link(event, arguments):
     os._exit(91)
 
 
+def crash_before_repair_publication(event, arguments):
+    if event != 'os.rename':
+        return
+    source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
+    if (not destination.name.startswith('publication-') or
+            destination.parent.parent.name != 'correction-attempts' or not source.is_file()):
+        return
+    correction = destination.with_name('attempt.json')
+    saved = json.loads(correction.read_text())
+    publication = json.loads(source.read_text())
+    work = destination.parents[3]
+    cycle = json.loads((work / 'application/corrections/ledger.json').read_text())['cycles'][-1]
+    marker.write_text(json.dumps({'boundary': 'before_original_repair_publication_rename',
+        'parent_attempt_id': saved['parent_binding']['parent_attempt_id'],
+        'correction_attempt_id': saved['attempt_id'], 'cycle_id': cycle['cycle_id'],
+        'original_parent_manifest_sha256': hashlib.sha256(correction.read_bytes()).hexdigest(),
+        'original_visual_turn': publication['visual_turn']}) + '\n')
+    os._exit(91)
+
+
 def crash_native_before_render_binding(event, arguments):
     if event != 'os.rename':
         return
@@ -117,6 +137,8 @@ owner_path.write_text(json.dumps({'pid': os.getpid(), 'start_ticks': Path('/proc
 native_command = [sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py')]
 if fault_mode == 'output-link':
     sys.addaudithook(crash_before_output_link)
+elif fault_mode == 'repair-publication':
+    sys.addaudithook(crash_before_repair_publication)
 else:
     native_command = [sys.executable, '-B', str(Path(__file__)), '--native', str(marker), str(owner_path), fault_mode]
 application = Application(Path(sys.argv[1]), codex_runtime=json.loads(Path(sys.argv[2]).read_text()),

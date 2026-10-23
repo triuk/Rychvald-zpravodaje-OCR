@@ -394,7 +394,7 @@ class AutonomousJobs:
             return path
 
         arguments = ['verify-resume', value['run_id']]
-        if not correction and any(row['stage'] == 'export' and row['state'] == 'completed' for row in value['stages']):
+        if not archives and any(row['stage'] == 'export' and row['state'] == 'completed' for row in value['stages']):
             arguments.append('--output')
         if value['payload'].get('environment'):
             arguments += ['--environment', value['payload']['environment']]
@@ -407,7 +407,7 @@ class AutonomousJobs:
                 if not path.is_relative_to(self.app.root) or not path.is_file() or sha(path) != digest:
                     raise JobError('checkpoint_invalid', 'Completed stage evidence changed: ' + relative)
             operation = row.get('child_status_operation')
-            if correction and row['stage'] in ('reading', 'geometry', 'output_review'):
+            if archives and row['stage'] in ('reading', 'geometry', 'output_review'):
                 namespace = {'reading': 'reading-attempts', 'geometry': 'geometry-attempts',
                     'output_review': 'output-review-attempts'}[row['stage']]
                 attempts = [archive / 'application' / namespace / row['attempt_id'] / 'attempt.json' for archive in archives]
@@ -422,7 +422,7 @@ class AutonomousJobs:
                 status = response['data']
                 if status.get('attempt_id') != row['attempt_id'] or status['state'] != 'completed':
                     raise JobError('checkpoint_invalid', 'Completed child checkpoint failed validation: ' + row['stage'])
-            if row['stage'] == 'export' and not correction:
+            if row['stage'] == 'export' and not archives:
                 # PDF/TXT/source hashes were checked by verify-resume --output.
                 self.app.process.request(self.app.root, 'verify-geometry', value['run_id'])
 

@@ -210,6 +210,10 @@ def verify_completed_reuse(app, work, parent, provider, routes):
             row['message']['params']['turn'].get('status') == 'completed' and
             str(row.get('connection_id', '0')) == record['connection_id']
             for row in (json.loads(raw) for raw in protocol.read_text().splitlines()))
+        if stage == 'corrections' and completed_frame and not saved:
+            from .visual_recovery import original_correction_phase
+            original_correction_phase(work, attempt, record)
+            continue
         if saved and completed_frame:
             if stage == 'corrections':
                 continue  # Phase-aware native verification runs before continuation.
