@@ -47,7 +47,8 @@ def crash_before_repair_publication(event, arguments):
     if event != 'os.rename':
         return
     source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
-    if (not destination.name.startswith('publication-') or
+    prefix = 'checkpoint-' if fault_mode == 'geometry-publication' else 'publication-'
+    if (not destination.name.startswith(prefix) or
             destination.parent.parent.name != 'correction-attempts' or not source.is_file()):
         return
     correction = destination.with_name('attempt.json')
@@ -55,7 +56,7 @@ def crash_before_repair_publication(event, arguments):
     publication = json.loads(source.read_text())
     work = destination.parents[3]
     cycle = json.loads((work / 'application/corrections/ledger.json').read_text())['cycles'][-1]
-    marker.write_text(json.dumps({'boundary': 'before_original_repair_publication_rename',
+    marker.write_text(json.dumps({'boundary': 'before_original_' + fault_mode + '_rename',
         'parent_attempt_id': saved['parent_binding']['parent_attempt_id'],
         'correction_attempt_id': saved['attempt_id'], 'cycle_id': cycle['cycle_id'],
         'original_parent_manifest_sha256': hashlib.sha256(correction.read_bytes()).hexdigest(),
@@ -120,11 +121,39 @@ def crash_native_before_render_binding(event, arguments):
     os._exit(92)
 
 
+def crash_native_before_patch_ledger(event, arguments):
+    if event != 'os.rename':
+        return
+    source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
+    if destination.name != 'ledger.json' or destination.parent.name != 'corrections' or not source.is_file() or not destination.is_file():
+        return
+    old, new = json.loads(destination.read_text()), json.loads(source.read_text())
+    cycle = new['cycles'][-1]
+    if cycle['state'] != 'published' or old['cycles'][-1]['state'] != 'reserved':
+        return
+    work = destination.parents[2]
+    correction = work / cycle['attempt']
+    saved = json.loads(correction.read_text())
+    publication = json.loads((work / cycle['publication']).read_text())
+    owner = json.loads(owner_path.read_text())
+    stat = Path('/proc/' + str(owner['pid']) + '/stat').read_text()
+    if stat.rsplit(')', 1)[1].split()[19] != owner['start_ticks']:
+        raise RuntimeError('Refuse to signal a different application owner')
+    marker.write_text(json.dumps({'boundary': 'before_published_patch_ledger_rename',
+        'parent_attempt_id': saved['parent_binding']['parent_attempt_id'], 'correction_attempt_id': saved['attempt_id'],
+        'cycle_id': cycle['cycle_id'], 'previous_snapshot': cycle['previous_snapshot'],
+        'review_sha256': cycle['review_sha256'], 'original_visual_turn': publication['visual_turn'],
+        'original_parent_manifest_sha256': hashlib.sha256(correction.read_bytes()).hexdigest(),
+        'native_pid': os.getpid(), 'owner': owner}) + '\n')
+    os.kill(owner['pid'], signal.SIGKILL)
+    os._exit(92)
+
+
 if sys.argv[1] == '--native':
     marker, owner_path = Path(sys.argv[2]), Path(sys.argv[3])
     fault_mode = sys.argv[4]
     arguments = sys.argv[5:]
-    sys.addaudithook(crash_native_before_render_binding)
+    sys.addaudithook(crash_native_before_patch_ledger if fault_mode == 'patch-ledger' else crash_native_before_render_binding)
     sys.path.insert(0, str(ROOT / 'tools'))
     sys.argv = [str(ROOT / 'tools/ocr_projects.py'), *arguments]
     runpy.run_path(sys.argv[0], run_name='__main__')
@@ -137,7 +166,7 @@ owner_path.write_text(json.dumps({'pid': os.getpid(), 'start_ticks': Path('/proc
 native_command = [sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py')]
 if fault_mode == 'output-link':
     sys.addaudithook(crash_before_output_link)
-elif fault_mode == 'repair-publication':
+elif fault_mode in ('repair-publication', 'geometry-publication'):
     sys.addaudithook(crash_before_repair_publication)
 else:
     native_command = [sys.executable, '-B', str(Path(__file__)), '--native', str(marker), str(owner_path), fault_mode]

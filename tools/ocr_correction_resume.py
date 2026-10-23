@@ -75,7 +75,14 @@ def verify(registry, run_id, attempt, ledger_sha256):
             raise ValueError('Correction cycle chain changed')
         previous = cycle['cycle_id']
         if cycle['state'] == 'reserved':
-            check_bindings(packet['inputs'])
+            if cycle.get('patch_intent'):
+                from ocr_correction_patch import verify_intent
+                _, pending_archive = verify_intent(registry, record, work, cycle, packet)
+                record['artifacts']['correction_patch_snapshot'] = str(pending_archive.relative_to(registry.root))
+            else:
+                check_bindings(packet['inputs'])
+        elif cycle.get('patch_intent') and source_hash(work / cycle['patch_intent']) != cycle['patch_intent_sha256']:
+            raise ValueError('Original patch transaction changed')
         if cycle.get('previous_snapshot'):
             archive = (work / cycle['previous_snapshot']).resolve()
             verify_archive(work, archive, record)
@@ -175,5 +182,5 @@ def verify(registry, run_id, attempt, ledger_sha256):
             raise ValueError('Original output child has a different frozen profile')
     record.setdefault('counts', {}).update(correction_geometry_prepared=int(geometry_prepared),
         correction_geometry_published=int(geometry_published), correction_export_committed=int(exported),
-        correction_export_rendered=int(rendered))
+        correction_export_rendered=int(rendered), correction_patch_pending=int(cycle['state'] == 'reserved' and bool(cycle.get('patch_intent'))))
     return record

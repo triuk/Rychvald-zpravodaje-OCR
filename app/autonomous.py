@@ -379,10 +379,12 @@ class AutonomousJobs:
         archives = []
         if correction:
             ledger_path = work / 'application/corrections/ledger.json'
-            self.app.process.request(self.app.root, 'verify-correction-resume', value['run_id'],
+            verified = self.app.process.request(self.app.root, 'verify-correction-resume', value['run_id'],
                 '--attempt', correction['attempt_id'], '--ledger-sha256', sha(ledger_path))
             ledger = json.loads(ledger_path.read_text())
             archives = [work / cycle['previous_snapshot'] for cycle in ledger['cycles'] if cycle.get('previous_snapshot')]
+            if verified['artifacts'].get('correction_patch_snapshot'):
+                archives.append(self.app.root / verified['artifacts']['correction_patch_snapshot'])
 
         def original_path(relative, digest):
             path = (self.app.root / relative).resolve()

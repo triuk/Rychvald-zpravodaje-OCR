@@ -62,6 +62,12 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_completed_original_repair_survives_owner_crash_before_publication_without_replay(self):
         self.owner_crash_scenario('repair-publication')
 
+    def test_completed_original_geometry_survives_owner_crash_before_checkpoint_without_replay(self):
+        self.owner_crash_scenario('geometry-publication')
+
+    def test_native_crash_after_patch_before_cycle_commit_adopts_original_patch_without_new_snapshot(self):
+        self.owner_crash_scenario('patch-ledger')
+
     def test_unknown_repair_delivery_keeps_reserved_budget_and_cannot_replay(self):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
@@ -151,7 +157,8 @@ class ReleaseRecoveryTests(unittest.TestCase):
         deadline = time.monotonic() + 120
         while process.poll() is None and time.monotonic() < deadline:
             time.sleep(.03)
-        self.assertEqual(process.poll(), 91 if fault_mode in ('output-link', 'repair-publication') else -9,
+        visual_publication = fault_mode in ('repair-publication', 'geometry-publication')
+        self.assertEqual(process.poll(), 91 if fault_mode == 'output-link' or visual_publication else -9,
             (marker.exists(), (self.directory / 'owner-stderr.log').read_text()[-1000:]))
         crashed = json.loads(marker.read_text())
         self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
@@ -160,7 +167,8 @@ class ReleaseRecoveryTests(unittest.TestCase):
         child_path = work / 'application/correction-attempts' / crashed['correction_attempt_id'] / 'attempt.json'
         old_correction = json.loads(child_path.read_text())
         original_turns = old_correction['turns']
-        original_visual = Path(crashed['original_visual_turn']['protocol']['path']).read_bytes() if fault_mode == 'repair-publication' else None
+        original_visual_reuse = visual_publication or fault_mode == 'patch-ledger'
+        original_visual = Path(crashed['original_visual_turn']['protocol']['path']).read_bytes() if original_visual_reuse else None
         self.assertFalse(old_correction.get('children'))
         self.assertEqual(hashlib.sha256(child_path.read_bytes()).hexdigest(), crashed['original_parent_manifest_sha256'])
         checked = self.app.dispatch('reconcile_autonomous', identity)
@@ -177,18 +185,23 @@ class ReleaseRecoveryTests(unittest.TestCase):
         output = self.app.dispatch('output_review_status', identity)['data']
         if fault_mode == 'output-link':
             self.assertEqual(output['attempt_id'], crashed['output_attempt_id'])
-        elif fault_mode != 'repair-publication':
+        elif not original_visual_reuse:
             manifest = json.loads((work / 'output-manifest.json').read_text())
             self.assertEqual(manifest['iteration_id'], crashed['iteration_id'])
             self.assertEqual(manifest['pdf_sha256'], crashed['rendered_pdf_sha256'])
             self.assertEqual(manifest['txt_sha256'], crashed['rendered_txt_sha256'])
-        if fault_mode == 'repair-publication':
+        if original_visual_reuse:
             self.assertEqual(Path(crashed['original_visual_turn']['protocol']['path']).read_bytes(), original_visual)
             frames = [json.loads(line) for line in original_visual.splitlines()]
             self.assertEqual(sum(row['direction'] == 'client' and row['message'].get('method') == 'turn/start' for row in frames), 1)
-            repaired = [turn for turn in json.loads(child_path.read_text())['turns'] if turn['stage'] == 'repair_1']
+            phase = 'geometry_1' if fault_mode == 'geometry-publication' else 'repair_1'
+            repaired = [turn for turn in json.loads(child_path.read_text())['turns'] if turn['stage'] == phase]
             self.assertEqual(len(repaired), 1)
             self.assertEqual(repaired[0]['turn_id'], crashed['original_visual_turn']['turn_id'])
+            if fault_mode == 'patch-ledger':
+                self.assertEqual(correction['cycles'][0]['previous_snapshot'], crashed['previous_snapshot'])
+                self.assertEqual(hashlib.sha256((work / 'review.json').read_bytes()).hexdigest(), crashed['review_sha256'])
+                self.assertEqual(len(list((work / 'iterations').glob('*/snapshot.json'))), 1)
         else:
             self.assertEqual(json.loads(child_path.read_text())['turns'], original_turns)
         self.assertEqual(len(list((work / 'application/output-review-attempts').glob('*/attempt.json'))), 2)

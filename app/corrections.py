@@ -225,13 +225,16 @@ class CorrectionJobs(ContextJobs):
                 self._boundary(job)
                 if cycle['state'] == 'reserved':
                     value['stage'] = 'targeted_repair'
-                    self._event(job, 'correction_started', cycle_id=cycle_id, cycle_index=cycle['index'])
-                    answer, proof, proposal = self._examine(job, 'repair_' + str(cycle['index']),
-                        REPAIR_PROMPT + json.dumps(packet, ensure_ascii=False), REPAIR_SCHEMA, work, packet['images'])
-                    publication = job['directory'] / ('publication-' + cycle_id + '.json')
-                    atomic_json(publication, self._publication(proof, proposal))
-                    self.process.request(root, 'publish-correction', value['run_id'], '--cycle-id', cycle_id,
-                        '--proposal', publication)
+                    if cycle.get('patch_intent'):
+                        self.process.request(root, 'adopt-correction-patch', value['run_id'], '--cycle-id', cycle_id)
+                    else:
+                        self._event(job, 'correction_started', cycle_id=cycle_id, cycle_index=cycle['index'])
+                        answer, proof, proposal = self._examine(job, 'repair_' + str(cycle['index']),
+                            REPAIR_PROMPT + json.dumps(packet, ensure_ascii=False), REPAIR_SCHEMA, work, packet['images'])
+                        publication = job['directory'] / ('publication-' + cycle_id + '.json')
+                        atomic_json(publication, self._publication(proof, proposal))
+                        self.process.request(root, 'publish-correction', value['run_id'], '--cycle-id', cycle_id,
+                            '--proposal', publication)
                 value['stage'] = 'geometry'
                 self._event(job, 'correction_patch_published', cycle_id=cycle_id)
                 self._boundary(job)
