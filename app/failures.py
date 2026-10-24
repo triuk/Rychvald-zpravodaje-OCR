@@ -4,6 +4,7 @@ import json
 
 from .jobs import JobError, sha
 from .recovery import NAMESPACES
+from tools import ocr_correction_graph
 
 
 def admission_failure(error, item, *, proven_unstarted):
@@ -18,7 +19,41 @@ def admission_failure(error, item, *, proven_unstarted):
         'delivery_state': 'not_submitted' if proven_unstarted else 'unknown'}
 
 
-def run_failure(root, run, parent):
+def _continued_submissions(work, child, submitted):
+    """Only verified durable edges can supersede a definitely stopped request."""
+    reader = getattr(ocr_correction_graph, 'continuation_edges', None)
+    if not child.get('continuations') or not callable(reader):
+        return []  # Older sources retain the original global rejection.
+    try:
+        edges = reader(work, child)
+        linked = []
+        for edge in edges:
+            def matches(record, identity):
+                return (record['visual_stage'] == edge['stage'] and all(record[key] == identity[key]
+                    for key in ('connection_id', 'thread_id', 'turn_id', 'request_id')))
+            originals = [record for record in submitted if matches(record, edge['original'])]
+            successors = [record for record in submitted if matches(record, edge['successor'])]
+            if (len(originals) != 1 or len(successors) != 1 or originals[0] is successors[0] or
+                    originals[0]['delivery_state'] not in ('rejected', 'failed', 'interrupted') or
+                    originals[0]['delivery_state'] != edge['original']['state']):
+                raise ValueError('Continuation does not identify the original stopped request and exact successor.')
+            linked.append((edge, originals[0], successors[0]))
+        # Follow explicit edges, including successive definitely stopped attempts.
+        # A still unknown/accepted successor never resolves its original.
+        for _ in linked:
+            changed = False
+            for edge, original, successor in linked:
+                if not original.get('resolved_by') and (successor['delivery_state'] == 'completed' or successor.get('resolved_by')):
+                    original.update(resolved_by=edge['continuation_id'], continuation_successor=copy.deepcopy(edge['successor']))
+                    changed = True
+            if not changed:
+                break
+        return edges
+    except (ValueError, KeyError, TypeError) as error:
+        raise JobError('attempt_conflict', 'Original continuation evidence is invalid: ' + str(error)) from error
+
+
+def _stage_failure(root, run, parent):
     error = copy.deepcopy(parent.get('error') or {'code': 'stage_incomplete', 'message': 'Run did not complete.'})
     code = error['code']
     stage = parent.get('stages', [])[-1] if parent.get('stages') else {}
@@ -28,47 +63,87 @@ def run_failure(root, run, parent):
         'connection_id': None, 'original_error': None, 'evidence_path': None,
         'evidence_sha256': None, 'delivery_state': 'not_submitted'}
     namespace = NAMESPACES.get(stage.get('stage'), 'correction-attempts' if stage.get('stage') == 'corrections' else None)
-    raw_error = None
+    raw_error, child = None, None
     if namespace and stage.get('attempt_id'):
         work = root / run['artifacts']['workspace']['path']
         path = work / 'application' / namespace / stage['attempt_id'] / 'attempt.json'
         child = json.loads(path.read_text())
-        if child['run_id'] != failure['run_id'] or child['root'] != str(root):
+        if (path.is_symlink() or not path.resolve().is_relative_to(work.resolve()) or
+                path.parent.name != child['attempt_id'] or child['run_id'] != failure['run_id'] or child['root'] != str(root)):
             raise JobError('attempt_conflict', 'Failure evidence belongs to another run.')
+        if stage.get('expected_parent_binding') is not None and child.get('parent_binding') != stage['expected_parent_binding']:
+            raise JobError('attempt_conflict', 'Failure evidence belongs to another parent/cycle/intent.')
+        failure['child_state'] = child['state']
         failure.update(thread_id=child.get('thread_id'), turn_id=child.get('turn_id'))
         protocol = (root / child['artifacts']['protocol']).resolve()
         if not protocol.is_relative_to(work.resolve()):
             raise JobError('attempt_invalid', 'Failure evidence escaped the owned workspace.')
         if protocol.exists():
             failure.update(evidence_path=str(protocol.relative_to(root)), evidence_sha256=sha(protocol))
-            pending = {}
+            pending, submitted, malformed = {}, [], False
             for line in protocol.read_text().splitlines(keepends=True):
                 if not line.endswith('\n'):
-                    failure['delivery_state'] = 'unknown'
+                    malformed = True
                     continue
                 try:
                     row = json.loads(line)
                 except ValueError:
-                    failure['delivery_state'] = 'unknown'
+                    malformed = True
                     continue
                 message, connection = row['message'], str(row.get('connection_id', '0'))
                 key = (connection, message.get('id'))
                 if row['direction'] == 'client' and message.get('method') == 'turn/start':
-                    pending[key] = message['params']['threadId']
-                    failure.update(delivery_state='unknown', thread_id=pending[key], connection_id=connection)
+                    record = {'thread_id': message['params']['threadId'], 'turn_id': None,
+                        'connection_id': connection, 'visual_stage': row.get('stage'),
+                        'request_id': message.get('id'), 'delivery_state': 'unknown', 'original_error': None}
+                    pending[key] = record
+                    submitted.append(record)
                 elif row['direction'] == 'server':
-                    if message.get('error') and 'method' not in message:
-                        raw_error = copy.deepcopy(message['error'])
-                        if key in pending:
-                            failure.update(delivery_state='rejected', thread_id=pending[key], connection_id=connection)
-                    if key in pending and message.get('result', {}).get('turn', {}).get('id'):
-                        failure.update(turn_id=message['result']['turn']['id'], delivery_state='accepted')
-                    if message.get('method') == 'turn/completed':
-                        terminal = message['params']['turn']
-                        failure.update(thread_id=message['params'].get('threadId'), turn_id=terminal['id'],
-                            connection_id=connection, delivery_state=terminal['status'])
-                        if terminal.get('error'):
-                            raw_error = copy.deepcopy(terminal['error'])
+                    if key in pending and 'method' not in message and row.get('stage') == pending[key]['visual_stage']:
+                        record = pending[key]
+                        if message.get('error'):
+                            if record['turn_id'] is not None:
+                                raise JobError('attempt_conflict', 'Original turn has conflicting acceptance/rejection evidence.')
+                            record.update(delivery_state='rejected', original_error=copy.deepcopy(message['error']))
+                        elif message.get('result', {}).get('turn', {}).get('id'):
+                            identifier = message['result']['turn']['id']
+                            if record['delivery_state'] == 'rejected' or record['turn_id'] not in (None, identifier):
+                                raise JobError('attempt_conflict', 'Original request has conflicting turn identities.')
+                            record['turn_id'] = identifier
+                            if record['delivery_state'] == 'unknown':
+                                record['delivery_state'] = 'accepted'
+                    elif message.get('method') in ('turn/started', 'turn/completed'):
+                        params = message['params']
+                        terminal = params['turn']
+                        candidates = [record for record in submitted if record['connection_id'] == connection and
+                            record['thread_id'] == params.get('threadId') and record['visual_stage'] == row.get('stage') and
+                            record['delivery_state'] != 'rejected' and
+                            record['turn_id'] == terminal['id']]
+                        if len(candidates) == 1:
+                            record = candidates[0]
+                            known_terminal = record['delivery_state'] in ('completed', 'failed', 'interrupted')
+                            if message['method'] == 'turn/completed':
+                                if known_terminal and record['delivery_state'] != terminal['status']:
+                                    raise JobError('attempt_conflict', 'Original turn has conflicting terminal states.')
+                                record.update(turn_id=terminal['id'], delivery_state=terminal['status'])
+                                if terminal.get('error') and not known_terminal:
+                                    record['original_error'] = copy.deepcopy(terminal['error'])
+                            elif not known_terminal:
+                                record.update(turn_id=terminal['id'], delivery_state='accepted')
+            if submitted:
+                edges = _continued_submissions(work, child, submitted) if namespace in ('correction-attempts', 'output-review-attempts') else []
+                active = [item for item in submitted if not item.get('resolved_by')] or submitted
+                record = next((item for item in active if item['delivery_state'] in ('unknown', 'accepted')),
+                    next((item for item in active if item['delivery_state'] in ('rejected', 'failed', 'interrupted')), active[-1]))
+                failure.update(record)
+                failure['submissions'] = copy.deepcopy(submitted)
+                if edges:
+                    failure['continuation_edges'] = copy.deepcopy(edges)
+                raw_error = record['original_error']
+            if malformed:
+                failure['delivery_state'] = 'unknown'
+        if failure['delivery_state'] == 'not_submitted' and (child.get('turns') or child.get('turn_id')):
+            failure.update(delivery_state='unknown', evidence_path=str(path.relative_to(root)), evidence_sha256=sha(path))
     failure['original_error'] = raw_error
     categories = {
         'chatgpt_account_required': 'authentication', 'codex_login_failed': 'authentication',
@@ -95,4 +170,82 @@ def run_failure(root, run, parent):
         category = 'ai_unavailable'
     if category is not None:
         failure.update(scope='global', category=category)
+    if failure['delivery_state'] in ('unknown', 'accepted'):
+        failure.update(scope='global', category=category or 'reconciliation')
+    if (stage.get('stage') == 'output_review' and failure['delivery_state'] == 'completed' and
+            (child['state'] != 'completed' or not child.get('output_review_complete'))):
+        failure.update(scope='global', category='reconciliation')
+    if child and child.get('continuations') and not callable(getattr(ocr_correction_graph, 'continuation_edges', None)):
+        failure.update(scope='global', category=category or 'reconciliation', continuation_verification='unavailable')
     return failure
+
+
+def run_failure(root, run, parent):
+    """Classify the original P/C/K/O graph, including an unlinked output child."""
+    stages = parent.get('stages', [])
+    stage = stages[-1] if stages else {}
+    if stage.get('stage') != 'corrections':
+        return _stage_failure(root, run, parent)
+    work = root / run['artifacts']['workspace']['path']
+    stage = dict(stage)
+    if not stage.get('attempt_id') and stage.get('intent_id'):
+        binding = {'parent_attempt_id': parent['attempt_id'], 'intent_id': stage['intent_id'], 'stage': 'corrections'}
+        matches = [json.loads(path.read_text()) for path in (work / 'application/correction-attempts').glob('*/attempt.json')
+            if json.loads(path.read_text()).get('parent_binding') == binding]
+        if len(matches) > 1:
+            raise JobError('attempt_conflict', 'Multiple correction children claim the original parent intent.')
+        if matches:
+            stage.update(attempt_id=matches[0]['attempt_id'], expected_parent_binding=binding)
+    failure = _stage_failure(root, run, {**parent, 'stages': [stage]})
+    if not stage.get('attempt_id'):
+        return failure
+    path = work / 'application/correction-attempts' / stage['attempt_id'] / 'attempt.json'
+    correction = json.loads(path.read_text())
+    binding = correction.get('parent_binding')
+    if binding and (binding.get('parent_attempt_id') != parent['attempt_id'] or binding.get('stage') != 'corrections' or
+            stage.get('intent_id') is not None and binding.get('intent_id') != stage['intent_id']):
+        raise JobError('attempt_conflict', 'Correction belongs to another original parent intent.')
+    failure.update(correction_attempt_id=correction['attempt_id'], cycle_id=correction.get('cycle_id'),
+        cycle_index=correction.get('cycle_index'), intent_id=(binding or {}).get('intent_id'))
+    if any(item['stage'] != 'output_review' for item in correction.get('children', [])):
+        raise JobError('correction_reconciliation_required', 'Original correction descendant identity is unsupported; no new admission.')
+    descendants = []
+    cycle_ids = {item['cycle_id'] for item in correction.get('output_intents', [])}
+    cycle_ids.update(item['cycle_id'] for item in correction.get('children', []) if item['stage'] == 'output_review')
+    if cycle_ids:
+        ledger = json.loads((work / 'application/corrections/ledger.json').read_text())
+        for cycle_id in sorted(cycle_ids):
+            cycles = [item for item in ledger['cycles'] if item['cycle_id'] == cycle_id]
+            if len(cycles) != 1 or cycles[0].get('attempt_id') != correction['attempt_id']:
+                raise JobError('attempt_conflict', 'Output descendant belongs to another correction cycle.')
+            try:
+                intent, child = ocr_correction_graph.output_child(work, correction, cycle_id)
+            except ValueError as error:
+                raise JobError('attempt_conflict', str(error)) from error
+            if intent['cycle_index'] != cycles[0]['index']:
+                raise JobError('attempt_conflict', 'Output descendant correction index changed.')
+            if child is None:
+                evidence = {**failure, 'stage': 'output_review', 'child_attempt_id': None,
+                    'delivery_state': 'unknown', 'scope': 'global', 'category': 'reconciliation',
+                    'thread_id': None, 'turn_id': None, 'connection_id': None,
+                    'evidence_path': str(path.relative_to(root)), 'evidence_sha256': sha(path)}
+            else:
+                evidence = _stage_failure(root, run, {**parent, 'stages': [{'stage': 'output_review',
+                    'attempt_id': child['attempt_id'], 'expected_parent_binding': intent['binding']}]})
+                if child['state'] != 'completed' and evidence['delivery_state'] == 'not_submitted':
+                    child_path = work / 'application/output-review-attempts' / child['attempt_id'] / 'attempt.json'
+                    # RpcProcess.send records before writing to stdin; visual_session
+                    # flushes/fsyncs both traces before record returns. No outgoing
+                    # trace means not_submitted, while this local child is pending.
+                    evidence.update(scope='global', category='reconciliation', pending_descendant=True,
+                        evidence_path=str(child_path.relative_to(root)), evidence_sha256=sha(child_path))
+            evidence.update(correction_attempt_id=correction['attempt_id'], cycle_id=cycle_id,
+                cycle_index=intent['cycle_index'], stage_intent_id=intent['stage_intent_id'],
+                intent_id=intent['binding']['intent_id'], parent_binding=copy.deepcopy(intent['binding']))
+            descendants.append(evidence)
+    if correction.get('stage') == 'output_review' and correction.get('state') != 'completed' and not descendants:
+        failure.update(delivery_state='unknown', scope='global', category='reconciliation',
+            code='correction_reconciliation_required', message='Original correction output intent is incomplete; no new admission.')
+    selected = next((item for item in [*descendants, failure] if item['delivery_state'] in ('unknown', 'accepted')),
+        next((item for item in descendants if item['scope'] == 'global'), failure))
+    return {**selected, 'descendants': descendants}
