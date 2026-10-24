@@ -122,6 +122,7 @@ class OutputReviewJobs(ContextJobs):
             if selected and packet['preparation_sha256'] != selected:
                 raise JobError('output_review_invalid', 'Explicitly disclosed output review preparation changed.')
             directory = job['directory'] / 'output_examination'
+            reused = None
             continuations = [row for row in value.get('continuations', []) if row['stage'] == 'output_examination']
             if continuations:
                 directory = root / continuations[-1]['directory']
@@ -135,14 +136,34 @@ class OutputReviewJobs(ContextJobs):
                     continuation = reserve_continuation(self, job, 'output_examination', directory, frames,
                         OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA, packet['images'])
                     if continuation is None:
-                        raise JobError('original_result_unavailable', 'An original submitted output examination cannot be replayed.')
-                    job['current_continuation'] = continuation
-                    directory = root / continuation['directory']
+                        from .visual_recovery import original_visual
+                        answer, proof = original_visual(directory, work, packet['images'],
+                            OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA,
+                            job['directory'] / 'protocol.jsonl')
+                        proposal = job['recovery_directory'] / 'original-output-proposal.json'
+                        atomic_json(proposal, answer)
+                        connection = str(next(r for r in frames if r['direction'] == 'client' and
+                            r['message'].get('method') == 'turn/start')['connection_id'])
+                        turns = [r for r in value['turns'] if r['stage'] == 'output_examination' and
+                            r['thread_id'] == proof['thread_id'] and r['turn_id'] == proof['turn_id'] and
+                            str(r.get('connection_id')) == connection]
+                        if len(turns) != 1:
+                            raise JobError('original_result_unavailable', 'Completed original output turn binding is unavailable.')
+                        turns[0].update(state='completed', answer=json.dumps(answer, ensure_ascii=False),
+                            proposal=str(proposal.relative_to(root)), reused_original=proof)
+                        reused = answer, proof, proposal
+                        self._event(job, 'output_original_visual_reused', thread_id=proof['thread_id'], turn_id=proof['turn_id'])
+                    else:
+                        job['current_continuation'] = continuation
+                        directory = root / continuation['directory']
                 else:
                     directory = job['recovery_directory'] / 'output_examination'
-            answer, proof, proposal = examine(self, job, 'output_examination',
-                OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA, work, packet['images'],
-                instructions=OUTPUT_INSTRUCTIONS, directory=directory)
+            if reused is None:
+                answer, proof, proposal = examine(self, job, 'output_examination',
+                    OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA, work, packet['images'],
+                    instructions=OUTPUT_INSTRUCTIONS, directory=directory)
+            else:
+                answer, proof, proposal = reused
             publication = {'schema_version': 1, 'preparation_sha256': packet['preparation_sha256'],
                 'preparation': str(work / packet['preparation_artifact']),
                 'runtime': self.runtime, 'context_runtime': self.context_runtime,

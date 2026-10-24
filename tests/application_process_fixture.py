@@ -64,6 +64,31 @@ def crash_before_repair_publication(event, arguments):
     os._exit(91)
 
 
+def crash_before_output_publication(event, arguments):
+    if event != 'os.rename':
+        return
+    source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
+    if (destination.name != 'publication-proposal.json' or
+            destination.parent.parent.name != 'output-review-attempts' or not source.is_file()):
+        return
+    child = json.loads(destination.with_name('attempt.json').read_text())
+    binding = child.get('parent_binding') or {}
+    if not binding.get('correction_attempt_id'):
+        return  # Only the exact correction descendant, not first-pass review.
+    work = destination.parents[3]
+    correction = work / 'application/correction-attempts' / binding['correction_attempt_id'] / 'attempt.json'
+    manifest = json.loads((work / 'output-manifest.json').read_text())
+    marker.write_text(json.dumps({'boundary': 'before_original_output_publication_rename',
+        'parent_attempt_id': binding['parent_attempt_id'], 'correction_attempt_id': binding['correction_attempt_id'],
+        'output_attempt_id': child['attempt_id'], 'cycle_id': binding['cycle_id'],
+        'iteration_id': manifest['iteration_id'], 'rendered_pdf_sha256': manifest['pdf_sha256'],
+        'rendered_txt_sha256': manifest['txt_sha256'],
+        'original_parent_manifest_sha256': hashlib.sha256(correction.read_bytes()).hexdigest(),
+        'original_visual_turn': json.loads(source.read_text())['visual_turn'],
+        'owner': json.loads(owner_path.read_text())}) + '\n')
+    os._exit(91)
+
+
 def crash_native_before_render_binding(event, arguments):
     if event != 'os.rename':
         return
@@ -250,6 +275,8 @@ elif fault_mode in ('repair-publication', 'geometry-publication'):
     sys.addaudithook(crash_before_repair_publication)
 elif fault_mode == 'outcome-event':
     sys.addaudithook(crash_before_outcome_event)
+elif fault_mode == 'output-publication':
+    sys.addaudithook(crash_before_output_publication)
 else:
     native_command = [sys.executable, '-B', str(Path(__file__)), '--native', str(marker), str(owner_path), fault_mode]
 application = Application(Path(sys.argv[1]), codex_runtime=json.loads(Path(sys.argv[2]).read_text()),

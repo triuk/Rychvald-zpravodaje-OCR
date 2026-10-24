@@ -77,6 +77,9 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_owner_crash_after_committed_settlement_before_event_adopts_original_without_revalidation(self):
         self.owner_crash_scenario('outcome-event')
 
+    def test_completed_original_output_survives_owner_crash_before_publication_without_replay(self):
+        self.owner_crash_scenario('output-publication')
+
     def test_cycle_two_survives_two_pauses_and_drift_refusals_without_resetting_three_cycle_budget(self):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
@@ -430,7 +433,7 @@ class ReleaseRecoveryTests(unittest.TestCase):
         while process.poll() is None and time.monotonic() < deadline:
             time.sleep(.03)
         visual_publication = fault_mode in ('repair-publication', 'geometry-publication')
-        self.assertEqual(process.poll(), 91 if fault_mode in ('output-link', 'outcome-event') or visual_publication else -9,
+        self.assertEqual(process.poll(), 91 if fault_mode in ('output-link', 'outcome-event', 'output-publication') or visual_publication else -9,
             (marker.exists(), (self.directory / 'owner-stderr.log').read_text()[-1000:]))
         crashed = json.loads(marker.read_text())
         self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
@@ -440,8 +443,8 @@ class ReleaseRecoveryTests(unittest.TestCase):
         old_correction = json.loads(child_path.read_text())
         original_turns = old_correction['turns']
         original_visual_reuse = visual_publication or fault_mode in ('patch-ledger', 'patch-chain')
-        original_visual = Path(crashed['original_visual_turn']['protocol']['path']).read_bytes() if original_visual_reuse else None
-        if fault_mode in ('outcome-ledger', 'outcome-event'):
+        original_visual = Path(crashed['original_visual_turn']['protocol']['path']).read_bytes() if original_visual_reuse or fault_mode == 'output-publication' else None
+        if fault_mode in ('outcome-ledger', 'outcome-event', 'output-publication'):
             self.assertEqual(len(old_correction['children']), 1)
         else:
             self.assertFalse(old_correction.get('children'))
@@ -458,6 +461,10 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(correction['cycles_used'], 1)
         self.assertEqual(correction['cycles'][0]['cycle_id'], crashed['cycle_id'])
         output = self.app.dispatch('output_review_status', identity)['data']
+        if fault_mode == 'output-publication':
+            self.assertEqual(output['attempt_id'], crashed['output_attempt_id'])
+            self.assertEqual(Path(crashed['original_visual_turn']['protocol']['path']).read_bytes(), original_visual)
+            self.assertEqual(len([r for r in output['turns'] if r['stage'] == 'output_examination']), 1)
         if fault_mode in ('outcome-ledger', 'outcome-event'):
             self.assertEqual(output['attempt_id'], crashed['output_attempt_id'])
             self.assertEqual(hashlib.sha256((work / correction['cycles'][0]['outcome']).read_bytes()).hexdigest(), crashed['outcome_sha256'])

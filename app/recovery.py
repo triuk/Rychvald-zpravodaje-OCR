@@ -214,6 +214,13 @@ def verify_completed_reuse(app, work, parent, provider, routes):
             from .visual_recovery import original_correction_phase
             original_correction_phase(work, attempt, record)
             continue
+        if (stage == 'output_review' and completed_frame and
+                (attempt.get('parent_binding') or {}).get('correction_attempt_id')):
+            binding = attempt['parent_binding']
+            app.process.request(app.root, 'verify-output-preparation', parent['run_id'], '--sha256', binding['preparation_sha256'])
+            from .visual_recovery import original_output_phase
+            original_output_phase(work, attempt, record)
+            continue
         if saved and completed_frame:
             if stage == 'corrections':
                 continue  # Phase-aware native verification runs before continuation.
