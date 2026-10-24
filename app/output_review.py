@@ -62,7 +62,7 @@ class OutputReviewJobs(ContextJobs):
         super().__init__(publish, runtime, context_runtime)
         self.process = process
 
-    def resume_original(self, root, run, identifier, preparation_sha256, environment, binding):
+    def resume_original(self, root, run, identifier, preparation_sha256, environment, binding, *, reconciliation):
         with self._lock:
             if self._active is not None:
                 raise JobError('operation_active', 'An original output examination is still owned.')
@@ -72,10 +72,19 @@ class OutputReviewJobs(ContextJobs):
             if (value['parent_binding'] != binding or value['run_id'] != run['project']['run_id'] or
                     value['root'] != str(root) or value['profile_sha256'] != run['run']['profile_sha256']):
                 raise JobError('attempt_conflict', 'Original output examination belongs to another correction/run.')
+            from .visual_continuation import original_reconciliation
+            proof = original_reconciliation(root, work, value, reconciliation, verify_originals=False)
+            protocol = root / value['artifacts']['protocol']
+            if (sha(directory / 'attempt.json') != proof['provider']['originals'].get(str((directory / 'attempt.json').relative_to(root))) or
+                    (protocol.exists() and sha(protocol) != proof['provider']['originals'].get(str(protocol.relative_to(root))))):
+                raise JobError('reconciliation_required', 'Original inspected output evidence changed before continuation.')
             self.process.request(root, 'verify-output-preparation', value['run_id'], '--sha256', preparation_sha256)
             session = directory / 'recovery-sessions' / uuid.uuid4().hex
             session.mkdir(parents=True)
             atomic_json(session / 'original-attempt.json', value)
+            original_protocol = session / 'original-protocol.jsonl'
+            original_protocol.write_bytes(protocol.read_bytes() if protocol.exists() else b'')
+            atomic_json(session / 'reconciliation-reference.json', reconciliation)
             value.setdefault('recovery_sessions', []).append({'path': str(session.relative_to(work)),
                 'original_sha256': sha(session / 'original-attempt.json'), 'started_at': now()})
             value.update(state='starting', error=None, ended_at=None, owner_pid=os.getpid(),
@@ -84,7 +93,8 @@ class OutputReviewJobs(ContextJobs):
             job = {'manifest': value, 'directory': directory, 'workspace': directory / 'workspace',
                 'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
                 'metadata': {'environment': environment, 'prepared_review_sha256': preparation_sha256},
-                'recovery_directory': session}
+                'recovery_directory': session, 'cycle_id': binding['cycle_id'], 'reconciliation': reconciliation,
+                'reconciliation_protocol': original_protocol}
             self._active = job
             job['thread'] = threading.Thread(target=self._execute, args=(job,), daemon=True)
             job['thread'].start()
@@ -112,12 +122,24 @@ class OutputReviewJobs(ContextJobs):
             if selected and packet['preparation_sha256'] != selected:
                 raise JobError('output_review_invalid', 'Explicitly disclosed output review preparation changed.')
             directory = job['directory'] / 'output_examination'
+            continuations = [row for row in value.get('continuations', []) if row['stage'] == 'output_examination']
+            if continuations:
+                directory = root / continuations[-1]['directory']
+            if not directory.resolve().is_relative_to(job['directory']):
+                raise JobError('attempt_conflict', 'Original output phase escaped its attempt.')
             if job.get('recovery_directory') and directory.exists():
                 protocol = directory / 'protocol.jsonl'
                 frames = [json.loads(raw) for raw in protocol.read_text().splitlines()] if protocol.exists() else []
                 if any(row['direction'] == 'client' and row['message'].get('method') == 'turn/start' for row in frames):
-                    raise JobError('original_result_unavailable', 'An original submitted output examination cannot be replayed.')
-                directory = job['recovery_directory'] / 'output_examination'
+                    from .visual_continuation import reserve_continuation
+                    continuation = reserve_continuation(self, job, 'output_examination', directory, frames,
+                        OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA, packet['images'])
+                    if continuation is None:
+                        raise JobError('original_result_unavailable', 'An original submitted output examination cannot be replayed.')
+                    job['current_continuation'] = continuation
+                    directory = root / continuation['directory']
+                else:
+                    directory = job['recovery_directory'] / 'output_examination'
             answer, proof, proposal = examine(self, job, 'output_examination',
                 OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA, work, packet['images'],
                 instructions=OUTPUT_INSTRUCTIONS, directory=directory)

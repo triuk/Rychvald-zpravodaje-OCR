@@ -75,8 +75,16 @@ def reserve_continuation(manager, job, stage, directory, frames, prompt, schema,
         raise JobError('reconciliation_required', 'Original rejection is not present in its native protocol.')
     ledger = json.loads((work / 'application/corrections/ledger.json').read_text())
     cycle = ledger['cycles'][-1]
-    if cycle['attempt_id'] != value['attempt_id'] or cycle['cycle_id'] != job['cycle_id']:
+    binding = value.get('parent_binding') or {}
+    correction_id = binding.get('correction_attempt_id', value['attempt_id'])
+    if cycle['attempt_id'] != correction_id or cycle['cycle_id'] != job['cycle_id']:
         raise JobError('attempt_conflict', 'Stopped original turn belongs to another reserved correction.')
+    if binding.get('correction_attempt_id'):
+        from tools.ocr_correction_graph import output_child
+        ancestor = json.loads((work / 'application/correction-attempts' / correction_id / 'attempt.json').read_text())
+        intent, child = output_child(work, ancestor, cycle['cycle_id'])
+        if child is None or child['attempt_id'] != value['attempt_id'] or intent['binding'] != binding:
+            raise JobError('attempt_conflict', 'Stopped original output belongs to another correction intent.')
     identifier = uuid.uuid4().hex
     physical = job['recovery_directory'] / ('continuation-' + identifier)
     body = {'schema_version': 1, 'continuation_id': identifier, 'stage': stage,

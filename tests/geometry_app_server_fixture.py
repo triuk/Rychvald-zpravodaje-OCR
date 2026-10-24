@@ -48,6 +48,15 @@ for raw in sys.stdin:
             Path(gate + '.ready').write_text('Controlled descendant turn accepted; acknowledgement lost')
             continue
         correction = 'CORRECTION_PACKET\n' in prompt
+        rejected_output = os.environ.get('RELEASE_OUTPUT_REJECT')
+        if correction and rejected_output:
+            Path(rejected_output + '.armed').touch()
+        if (output and rejected_output and Path(rejected_output + '.armed').exists() and
+                not Path(rejected_output + '.restored').exists()):
+            Path(rejected_output).write_text('Controlled exact correction output request rejected before acceptance')
+            emit({'id': request['id'], 'error': {'code': -32000, 'message': 'Controlled account outage',
+                'data': {'codexErrorInfo': 'unauthorized'}}})
+            continue
         lost_repair_ack = os.environ.get('RELEASE_REPAIR_LOST_ACK')
         if correction and lost_repair_ack:
             Path(lost_repair_ack).write_text('Controlled repair request received; delivery acknowledgement lost')

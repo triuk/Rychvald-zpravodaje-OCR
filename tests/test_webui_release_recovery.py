@@ -184,6 +184,97 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(denied['error']['code'], 'correction_stopped')
         self.assertEqual((work / 'application/corrections/ledger.json').read_bytes(), ledger)
 
+    def test_queue_explicitly_continues_rejected_original_output_child_and_accounts_once_before_next_edition(self):
+        self.app.close()
+        peer = ROOT / 'tests/corrections_app_server_fixture.py'
+        marker = self.directory / 'output-auth-rejection'
+        wrapper = self.directory / 'auth-output-peer.py'
+        wrapper.write_text('import os,runpy,sys\nos.environ["RELEASE_OUTPUT_REJECT"]=' + repr(str(marker)) +
+            '\nsys.argv.insert(1,"repair")\nrunpy.run_path(' + repr(str(peer)) + ',run_name="__main__")\n')
+        self.runtime = {**self.runtime, 'command': [sys.executable, '-B', str(wrapper)],
+            'files': [*self.runtime['files'], *[{'path': str(p), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in (peer, wrapper)]]}
+        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        def preserve():
+            self.app.close()
+            destination = PROOF / (self._testMethodName + '-' + str(time.time_ns()))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(self.directory, destination)
+        self.addCleanup(preserve)
+        def call(operation, payload=None):
+            result = self.app.dispatch(operation, payload)
+            self.assertTrue(result['ok'], result)
+            return result['data']
+        def queue_until(predicate):
+            deadline = time.monotonic() + 180
+            while time.monotonic() < deadline:
+                value = call('queue_status')
+                if predicate(value):
+                    return value
+                time.sleep(.04)
+            self.fail('Combined queue did not settle: ' + repr(value))
+        profile = ROOT / 'profiles/faithful-reading.json'
+        options = {'source_path': str(self.source), 'profile_path': str(profile),
+            'profile_sha256': hashlib.sha256(profile.read_bytes()).hexdigest(), 'environment': os.environ.get('OCR_ENVIRONMENT')}
+        first = call('enqueue_run', {**options, 'name': 'Original output authentication rejection', 'request_id': 'auth-first'})
+        self.source.write_bytes(self.source.read_bytes() + b'\n% Second controlled edition, identical disclosed pixels\n')
+        second = call('enqueue_run', {**options, 'name': 'Next edition after explicit restoration', 'request_id': 'auth-second'})
+        call('resume_queue')
+        blocked = queue_until(lambda q: q['state'] == 'blocked')
+        self.assertEqual(blocked['active_item_id'], first['item_id'])
+        self.assertEqual(blocked['pending'], [second['item_id']])
+        self.assertEqual(blocked['reason']['scope'], 'global')
+        self.assertTrue(marker.exists())
+        item = next(row for row in blocked['items'] if row['item_id'] == first['item_id'])
+        identity = {'run_id': first['run_id'], 'attempt_id': item['parent_attempt_id']}
+        correction = call('correction_status', identity)
+        self.assertEqual(correction['cycles'][0]['state'], 'published', correction)
+        output = call('output_review_status', identity)
+        detail = call('select_run', identity)
+        work = self.root / detail['artifacts']['workspace']['path']
+        original = work / 'application/output-review-attempts' / output['attempt_id'] / 'output_examination/protocol.jsonl'
+        original_bytes = original.read_bytes()
+        self.assertTrue(any(json.loads(line)['message'].get('error') for line in original_bytes.splitlines()))
+        before = call('run_metrics', identity)
+        output_before = next(s for s in before['steps'] if s['attempt_id'] == output['attempt_id'])
+        self.assertIsNone(output_before['tokens']['values'])
+        self.assertEqual(output_before['usage_source_total'], 0)
+        self.app.close()
+        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        checked = call('reconcile_autonomous', identity)
+        self.assertTrue(checked['checkpoint']['valid'], checked)
+        self.assertTrue(checked['provider']['safe_to_continue'], checked)
+        self.assertTrue(any(r['attempt_id'] == output['attempt_id'] and r['state'] == 'rejected' for r in checked['provider']['turns']))
+        inspected = call('run_metrics', identity)
+        same_step = next(s for s in inspected['steps'] if s['attempt_id'] == output['attempt_id'])
+        self.assertEqual(same_step['tokens'], output_before['tokens'])
+        self.assertEqual(same_step['timing'], output_before['timing'])
+        Path(str(marker) + '.restored').write_text('Explicitly restored controlled account; not an automatic retry')
+        call('resume_queue', {'item_id': first['item_id'], **identity, 'reconciliation_id': checked['reconciliation_id']})
+        done = queue_until(lambda q: (not q['pending'] and q['active_item_id'] is None) or q['state'] == 'blocked')
+        self.assertIsNone(done['active_item_id'], done)
+        self.assertEqual(done['pending'], [])
+        final = call('correction_status', identity)
+        self.assertEqual(final['attempt_id'], correction['attempt_id'])
+        self.assertEqual(final['cycles_used'], 1)
+        self.assertEqual(final['cycles'][0]['cycle_id'], correction['cycles'][0]['cycle_id'])
+        self.assertEqual(call('output_review_status', identity)['attempt_id'], output['attempt_id'])
+        self.assertEqual(original.read_bytes(), original_bytes)
+        self.assertEqual(len(list((work / 'application/output-review-attempts').glob('*/attempt.json'))), 2)
+        metrics = call('run_metrics', identity)
+        selected = [s for s in metrics['steps'] if s['attempt_id'] == output['attempt_id']]
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0]['usage_source_total'], 1)
+        self.assertEqual(selected[0]['tokens']['values'], {'noncached_input': 103, 'cached_input': 20, 'output': 17})
+        self.assertIsNone(metrics['cost']['usd'])  # Missing cache-write counters stay unavailable.
+        self.assertGreater(metrics['queue']['waiting_seconds'], 0)
+        self.app.close()
+        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        restored = call('run_metrics', identity)
+        self.assertEqual(restored['tokens'], metrics['tokens'])
+        self.assertEqual(restored['cost'], metrics['cost'])
+        self.assertEqual(next(s for s in restored['steps'] if s['attempt_id'] == output['attempt_id'])['usage_sources'], selected[0]['usage_sources'])
+
     def test_rejected_global_repair_keeps_cycle_blocks_new_parent_and_explicitly_continues_original(self):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'

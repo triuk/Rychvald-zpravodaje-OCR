@@ -213,7 +213,8 @@ class CorrectionJobs(ContextJobs):
                         raise JobError('reconciliation_required', 'Original output child requires explicit reconciliation.')
                     run = self.app.select_run(value['run_id'])
                     child = self.app.output_review.resume_original(root, run, original['attempt_id'],
-                        intent['preparation_sha256'], payload.get('environment'), intent['binding'])
+                        intent['preparation_sha256'], payload.get('environment'), intent['binding'],
+                        reconciliation=job['reconciliation'])
             intent['attempt_id'] = child['attempt_id']
             if not any(row['cycle_id'] == cycle['cycle_id'] and row['stage'] == 'output_review' for row in value.get('children', [])):
                 value.setdefault('children', []).append({'cycle_id': cycle['cycle_id'], 'stage': 'output_review',
