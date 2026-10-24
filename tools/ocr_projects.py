@@ -238,6 +238,13 @@ class ProjectRegistry:
                 manifest = {'schema_version': 1, 'run_id': identifier, 'edition_id': digest,
                             'name': run_name, 'created_at': timestamp,
                             'profile_sha256': profile['sha256'], 'profile_source_path': profile['path']}
+                installed = Path(__file__).resolve().parents[1]
+                if (installed / 'inventory.json').is_file():
+                    from ocr_installed_resources import capture
+                    try:
+                        manifest['installed_resources'] = capture(self, record, installed)
+                    except (OSError, ValueError, KeyError, TypeError) as error:
+                        raise ProjectError('installed_origin_invalid', str(error)) from error
                 atomic_json(self.root / artifacts['run_manifest'], manifest)
                 atomic_json(self.root / artifacts['history'], {
                     'type': 'run_created', 'timestamp': timestamp, 'run_id': identifier,
@@ -370,6 +377,9 @@ def build_parser():
     command = commands.add_parser('list')
     command.add_argument('--offset', type=int, default=0)
     command.add_argument('--limit', type=int, default=10)
+    command = commands.add_parser('capture-installed-origin')
+    command.add_argument('project_id')
+    command.add_argument('--prefix', type=Path, required=True)
     command = commands.add_parser('prepare')
     command.add_argument('project_id')
     command.add_argument('--reuse-from-run-id')
@@ -487,6 +497,15 @@ def main(argv=None):
                                                         source_sha256=args.source_sha256)
                 result = response(args.operation, project=record['project'], artifacts=record['artifacts'],
                                   counts={'created': int(created), 'reused': int(not created)})
+        elif args.operation == 'capture-installed-origin':
+            from ocr_installed_resources import capture
+            with registry.project_lock(args.project_id) as record:
+                try:
+                    capture(registry, record, args.prefix)
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    raise ProjectError('installed_origin_invalid', str(error)) from error
+                atomic_json(registry.root / record['artifacts']['project'], record)
+            result = response(args.operation, **registry.get(args.project_id))
         elif args.operation == 'verify-resume':
             from ocr_environment import verify_environment
             from ocr_project_prepare import saved_preparation, valid_identity
@@ -505,7 +524,10 @@ def main(argv=None):
                 raise ProjectError('checkpoint_identity_changed', 'Saved preparation has different source, profile or native resources.')
             if args.output:
                 from ocr_project_output_review import output_identity
-                output_identity(record, work)
+                try:
+                    output_identity(record, work)
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    raise ProjectError('checkpoint_invalid', str(error)) from error
             result = response(args.operation, **record)
         elif args.operation == 'verify-correction-resume':
             from ocr_correction_resume import verify

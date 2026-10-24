@@ -8,7 +8,7 @@ from pathlib import Path
 import uuid
 
 from ocr_projects import ProjectError, atomic_json, source_hash
-from ocr_quality import load, check_bindings
+from ocr_quality import load, check_bindings, check_installed_bindings
 
 
 def bound(path):
@@ -27,7 +27,7 @@ def output_identity(record, work):
             raise ValueError('Current output/source bytes changed')
     if source_hash(work / 'review.json') != identity['review_sha256']:
         raise ValueError('Current review differs from the exported transcript')
-    check_bindings(manifest['inputs'])
+    check_installed_bindings(work, manifest['inputs'])
     return identity
 
 
@@ -40,8 +40,8 @@ def prepare_output_review(registry, project_id, *, environment=None):
             native = project_environment(work, environment)
             technical = load(work / 'checks/technical.json')
             samples = load(work / 'checks/geometry-samples.json')
-            check_bindings(technical['inputs'])
-            check_bindings(samples['inputs'])
+            check_installed_bindings(work, technical['inputs'])
+            check_installed_bindings(work, samples['inputs'])
             if (technical['source_sha256'] != identity['source_sha256'] or
                     technical['output_sha256'] != identity['pdf_sha256'] or
                     samples['inputs']['pdf']['sha256'] != identity['pdf_sha256']):
@@ -155,7 +155,7 @@ def verify_preparation(record, work, digest, preparation=None, *, publishing=Tru
     packet = load(path)
     if packet['identity'] != output_identity(record, work):
         raise ValueError('Output review belongs to another export')
-    check_bindings(packet['inputs'])
+    check_installed_bindings(work, packet['inputs'])
     if publishing:
         check_bindings(packet['compare_and_swap'])
     for image in packet['images']:
@@ -244,7 +244,7 @@ def publish_output_review(registry, project_id, proposal):
             if 'geometry-checkpoint.json' in packet['inputs']:
                 from ocr_project_geometry import verify_geometry
                 verify_geometry(registry, record)
-            check_bindings(value['evidence'])
+            check_installed_bindings(work, value['evidence'])
             from ocr_visual_evidence import verify_visual_turn
             answer = verify_visual_turn(value['visual_turn'], work, packet['images'])
             if answer != load(value['evidence']['proposal']['path']) or answer['preparation_sha256'] != value['preparation_sha256']:
@@ -284,7 +284,7 @@ def verify_output_review(registry, project_id):
         if 'geometry-checkpoint.json' in packet['inputs']:
             from ocr_project_geometry import verify_geometry
             verify_geometry(registry, record)
-        check_bindings(value['evidence'])
+        check_installed_bindings(work, value['evidence'])
         from ocr_visual_evidence import verify_visual_turn
         answer = verify_visual_turn(value['visual_turn'], work, packet['images'])
         if answer != load(value['evidence']['proposal']['path']) or answer['preparation_sha256'] != value['preparation_sha256']:
