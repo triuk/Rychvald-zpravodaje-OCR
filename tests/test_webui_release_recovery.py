@@ -188,24 +188,50 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual((work / 'application/corrections/ledger.json').read_bytes(), ledger)
 
     def test_queue_explicitly_continues_rejected_original_output_child_and_accounts_once_before_next_edition(self):
+        self.queue_continuation_scenario()
+
+    def test_composite_queue_reconciles_both_global_rejections_and_completed_successor_without_replay(self):
+        self.queue_continuation_scenario(composite=True)
+
+    def queue_continuation_scenario(self, *, composite=False):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
         marker = self.directory / 'output-auth-rejection'
         wrapper = self.directory / 'auth-output-peer.py'
         wrapper.write_text('import os,runpy,sys\nos.environ["RELEASE_OUTPUT_REJECT"]=' + repr(str(marker)) +
+            ('\nos.environ["RELEASE_REPAIR_REJECT"]=' + repr(str(self.directory / 'repair-quota')) if composite else '') +
             '\nsys.argv.insert(1,"repair")\nrunpy.run_path(' + repr(str(peer)) + ',run_name="__main__")\n')
         self.runtime = {**self.runtime, 'command': [sys.executable, '-B', str(wrapper)],
             'files': [*self.runtime['files'], *[{'path': str(p), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
                 for p in (peer, wrapper)]]}
         self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        process = None
+        crash = self.directory / 'composite-output-crash.json'
+        if composite:
+            runtime_path, context_path = self.directory / 'runtime.json', self.directory / 'context.json'
+            runtime_path.write_text(json.dumps(self.runtime)); context_path.write_text(json.dumps(self.context))
+            stderr = (self.directory / 'composite-owner.stderr').open('wb')
+            self.addCleanup(stderr.close)
+            process = subprocess.Popen([sys.executable, '-B', str(ROOT / 'tests/application_process_fixture.py'),
+                str(self.root), str(runtime_path), str(context_path), str(crash), 'output-publication'],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr)
         def preserve():
             self.app.close()
+            if process is not None:
+                if process.poll() is None:
+                    process.terminate(); process.wait(timeout=10)
+                process.stdin.close(); process.stdout.close()
             destination = PROOF / (self._testMethodName + '-' + str(time.time_ns()))
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(self.directory, destination)
         self.addCleanup(preserve)
         def call(operation, payload=None):
-            result = self.app.dispatch(operation, payload)
+            if process is not None and process.poll() is None:
+                process.stdin.write((json.dumps({'operation': operation, 'payload': payload}) + '\n').encode())
+                process.stdin.flush()
+                result = json.loads(process.stdout.readline())
+            else:
+                result = self.app.dispatch(operation, payload)
             self.assertTrue(result['ok'], result)
             return result['data']
         def queue_until(predicate):
@@ -224,6 +250,27 @@ class ReleaseRecoveryTests(unittest.TestCase):
         second = call('enqueue_run', {**options, 'name': 'Next edition after explicit restoration', 'request_id': 'auth-second'})
         call('resume_queue')
         blocked = queue_until(lambda q: q['state'] == 'blocked')
+        repair_original = None
+        if composite:
+            self.assertEqual(blocked['reason']['category'], 'quota', blocked)
+            self.assertEqual(blocked['reason']['delivery_state'], 'rejected', blocked)
+            item = next(row for row in blocked['items'] if row['item_id'] == first['item_id'])
+            first_identity = {'run_id': first['run_id'], 'attempt_id': item['parent_attempt_id']}
+            first_correction = call('correction_status', first_identity)
+            self.assertEqual(first_correction['cycles'][0]['state'], 'reserved')
+            first_detail = call('select_run', first_identity)
+            first_work = self.root / first_detail['artifacts']['workspace']['path']
+            repair_path = first_work / 'application/correction-attempts' / first_correction['attempt_id'] / 'repair_1/protocol.jsonl'
+            repair_original = repair_path, repair_path.read_bytes()
+            quota_proof = call('reconcile_autonomous', first_identity)
+            self.assertTrue(quota_proof['checkpoint']['valid'], quota_proof)
+            self.assertTrue(quota_proof['provider']['safe_to_continue'], quota_proof)
+            Path(str(self.directory / 'repair-quota') + '.restored').touch()
+            call('resume_queue', {'item_id': first['item_id'], **first_identity,
+                'reconciliation_id': quota_proof['reconciliation_id']})
+            blocked = queue_until(lambda q: q['state'] == 'blocked')
+            self.assertEqual(blocked['reason']['category'], 'authentication', blocked)
+            self.assertEqual(blocked['reason']['delivery_state'], 'rejected', blocked)
         self.assertEqual(blocked['active_item_id'], first['item_id'])
         self.assertEqual(blocked['pending'], [second['item_id']])
         self.assertEqual(blocked['reason']['scope'], 'global')
@@ -242,8 +289,9 @@ class ReleaseRecoveryTests(unittest.TestCase):
         output_before = next(s for s in before['steps'] if s['attempt_id'] == output['attempt_id'])
         self.assertIsNone(output_before['tokens']['values'])
         self.assertEqual(output_before['usage_source_total'], 0)
-        self.app.close()
-        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        if not composite:
+            self.app.close()
+            self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
         checked = call('reconcile_autonomous', identity)
         self.assertTrue(checked['checkpoint']['valid'], checked)
         self.assertTrue(checked['provider']['safe_to_continue'], checked)
@@ -254,6 +302,42 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(same_step['timing'], output_before['timing'])
         Path(str(marker) + '.restored').write_text('Explicitly restored controlled account; not an automatic retry')
         call('resume_queue', {'item_id': first['item_id'], **identity, 'reconciliation_id': checked['reconciliation_id']})
+        if composite:
+            deadline = time.monotonic() + 90
+            while process.poll() is None and time.monotonic() < deadline:
+                time.sleep(.03)
+            self.assertEqual(process.poll(), 91)
+            self.assertTrue(crash.exists())
+            self.app.close()
+            self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+            stopped = call('queue_status')
+            selected = next(row for row in stopped['items'] if row['item_id'] == first['item_id'])['reason']
+            self.assertEqual(selected['child_attempt_id'], output['attempt_id'])
+            self.assertEqual(selected['delivery_state'], 'completed', selected)
+            self.assertEqual(len(selected['continuation_edges']), 1)
+            rejected = next(row for row in selected['submissions'] if row['delivery_state'] == 'rejected')
+            self.assertTrue(rejected['resolved_by'])
+            self.assertEqual(rejected['original_error']['data']['codexErrorInfo'], 'unauthorized')
+            output_manifest = work / 'application/output-review-attempts' / output['attempt_id'] / 'attempt.json'
+            stopped_output = json.loads(output_manifest.read_text())
+            successor = stopped_output['continuations'][0]['successor']
+            successor_protocol = Path(successor['protocol']['path'])
+            successor_bytes = successor_protocol.read_bytes()
+            # A historical alias can never hide changed active continuation proof.
+            intent = Path(stopped_output['continuations'][0]['intent']['path'])
+            frozen_intent = intent.read_bytes()
+            intent.write_bytes(frozen_intent + b'\n')
+            try:
+                denied = self.app.dispatch('queue_status')
+                self.assertFalse(denied['ok'], denied)
+                self.assertEqual(denied['error']['code'], 'attempt_conflict', denied)
+            finally:
+                intent.write_bytes(frozen_intent)
+            inspected_original = call('reconcile_autonomous', identity)
+            self.assertTrue(inspected_original['checkpoint']['valid'], inspected_original)
+            self.assertTrue(inspected_original['provider']['safe_to_continue'], inspected_original)
+            call('resume_queue', {'item_id': first['item_id'], **identity,
+                'reconciliation_id': inspected_original['reconciliation_id']})
         done = queue_until(lambda q: (not q['pending'] and q['active_item_id'] is None) or q['state'] == 'blocked')
         self.assertIsNone(done['active_item_id'], done)
         self.assertEqual(done['pending'], [])
@@ -263,12 +347,18 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(final['cycles'][0]['cycle_id'], correction['cycles'][0]['cycle_id'])
         self.assertEqual(call('output_review_status', identity)['attempt_id'], output['attempt_id'])
         self.assertEqual(original.read_bytes(), original_bytes)
+        if composite:
+            self.assertEqual(repair_original[0].read_bytes(), repair_original[1])
+            self.assertEqual(successor_protocol.read_bytes(), successor_bytes)
         self.assertEqual(len(list((work / 'application/output-review-attempts').glob('*/attempt.json'))), 2)
         metrics = call('run_metrics', identity)
         selected = [s for s in metrics['steps'] if s['attempt_id'] == output['attempt_id']]
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0]['usage_source_total'], 1)
         self.assertEqual(selected[0]['tokens']['values'], {'noncached_input': 103, 'cached_input': 20, 'output': 17})
+        if composite:
+            correction_step = next(s for s in metrics['steps'] if s['attempt_id'] == correction['attempt_id'])
+            self.assertEqual(correction_step['usage_source_total'], 2)
         self.assertIsNone(metrics['cost']['usd'])  # Missing cache-write counters stay unavailable.
         self.assertGreater(metrics['queue']['waiting_seconds'], 0)
         self.app.close()

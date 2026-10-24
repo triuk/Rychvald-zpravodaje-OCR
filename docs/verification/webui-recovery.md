@@ -76,6 +76,36 @@ before allocating any replacement child or submitting a turn. Supported complete
 partial source/context results remain reusable; completion alone never authorizes
 replaying their original work.
 
+## Correction descendants and native commit recovery
+
+Ticket #23 continues the same parent, correction attempt, reserved cycle and
+exact output child. `verify-correction-resume` independently verifies immutable
+ancestor snapshots and the current phase. Patch write intents, reserved export
+UUIDs, rendered output and immutable outcomes allow completion of the same local
+transaction after a process dies between filesystem, ledger and registry commits.
+A saved outcome is adopted without another validation or model examination.
+
+An original completed repair, geometry or correction-output native trace is
+reconstructed only after exact request/schema/model/hooks/pixels and current CAS
+verification. Recovery writes a separate local proposal and preserves the original
+physical protocol. Unknown delivery and known remote completion without usable
+native result remain blocked. A definitively stopped original can continue only
+after explicit pinned reconciliation; immutable continuation and submission
+intents precede the successor's outgoing request. The read-only
+`tools.ocr_correction_graph.continuation_edges(work, attempt)` validates exact
+original/successor identities for C or its bound O. Failure classification retains
+the original rejection and only follows a verified completed successor.
+
+`tests/test_webui_release_recovery.py` uses public dispatch/native CLI and owned
+process audit boundaries. Its controlled peers are fictional protocol fixtures,
+not actual model acceptance. Canonical ticket-23 proof retains each RED, failed
+GREEN attempt and successful variant separately, with frozen source inventories
+and explicit case origins. It covers native commit windows, same-intent adoption,
+lost acknowledgements, known global rejection, two pauses inside cycle two,
+strict source/sample drift refusal, the durable three-cycle cap, queue continuation
+and usage preservation. Final installed GUI/model acceptance is separately pinned
+to the reviewed release archive; these controlled cases do not replace it.
+
 ## Verification
 
 Canonical local evidence is in repository `.scratch/ticket-19-proof`, outside the

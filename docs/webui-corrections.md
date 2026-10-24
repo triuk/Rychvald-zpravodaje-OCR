@@ -85,7 +85,22 @@ Neplatný návrh nebo limit nemění `ready_with_open_items` na úspěch. Povinn
 technická chyba zůstává neúspěchem kontrol; automatika nemění implementaci.
 Nový export obnovuje `acceptance: not_recorded`.
 
-Neuzavřená rezervace po přerušení se pouze zobrazí a odmítne nový start. Ukládají
-se přesné přijaté tahy a podřízené výstupní kontroly; nedochází k automatickému
-opakování nejistého požadavku. Řízení pause/reconcile/resume a společné ověření
-této větve s frontou patří do #19/#23.
+Neuzavřená rezervace odmítá nový start. Výslovné `reconcile_autonomous` a
+`resume_autonomous` pokračují se stejným rodičem, opravným pokusem a cyklem.
+Ověřují původní archivované předky, současné vstupy a přesnou podřízenou kontrolu
+výsledku. Restart ani další pozastavení nepřiděluje nový rozpočet.
+
+Nativní zápisy mají před změnou trvalý záměr: patch se seznamem původních a
+nových hashů, export s předem rezervovaným UUID a neměnný výsledek cyklu.
+Po přerušení se dokončí jen doložené chybějící zápisy téhož záměru. Již vytvořené
+PDF/TXT, výsledky validace a rozhodnutí o zastavení se převezmou beze změny.
+Dokončený původní modelový protokol lze místně znovu ověřit a zveřejnit bez nového
+tahu; chybějící nebo neověřitelný výsledek zůstává zablokovaný.
+
+Nejisté doručení se neopakuje. Prokazatelně odmítnutý, neúspěšný nebo přerušený
+původní tah smí po výslovné obnově pokračovat pouze se samostatným neměnným
+záznamem původního požadavku, ověření a navazujícího požadavku. Původní fyzický
+protokol se nepřepisuje. Globální výpadek AI i místně nedokončený potomek drží
+rezervovaný cyklus a přijetí další práce; pravdivý stav doručení zůstává oddělený
+od tohoto zákazu. Historické čtení podle cesty a SHA nikdy nenahrazuje kontrolu
+aktuálních vstupů před publikací.
