@@ -52,6 +52,12 @@ for raw in sys.stdin:
         if correction and lost_repair_ack:
             Path(lost_repair_ack).write_text('Controlled repair request received; delivery acknowledgement lost')
             raise SystemExit(0)
+        rejected_repair = os.environ.get('RELEASE_REPAIR_REJECT')
+        if correction and rejected_repair and not Path(rejected_repair + '.restored').exists():
+            Path(rejected_repair).write_text('Controlled exact repair request rejected by quota before acceptance')
+            emit({'id': request['id'], 'error': {'code': -32000, 'message': 'Controlled quota outage',
+                'data': {'codexErrorInfo': 'usageLimitExceeded'}}})
+            continue
         packet = json.loads(prompt.split('CORRECTION_PACKET\n' if correction else 'OUTPUT_PACKET\n' if output else 'SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
         if correction:
             line = dict(packet['lines'][0], text='ABC', decision_basis='Controlled targeted source ABC crop reading')

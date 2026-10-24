@@ -36,7 +36,7 @@ class AutonomousJobs:
                 if not inspection and saved['attempt_id'] != allow_attempt and saved['state'] in ('paused', 'failed', 'interrupted'):
                     from .failures import run_failure
                     original = run_failure(self.app.root, self.app.select_run(saved['run_id'], notify=False), saved)
-                    if original['delivery_state'] in ('unknown', 'accepted'):
+                    if original['scope'] == 'global' or original['delivery_state'] in ('unknown', 'accepted'):
                         raise JobError('reconciliation_required', 'An original provider submission remains unresolved; no other run may be admitted.')
             manual = self.app.root / 'application/manual-execution.json'
             if manual.exists() and json.loads(manual.read_text())['state'] != 'settled':
@@ -238,7 +238,8 @@ class AutonomousJobs:
                     if saved['state'] == 'completed' and all(cycle['state'] == 'settled' for cycle in saved['cycles']):
                         return saved
                     if job.get('correction_resume') == saved.get('attempt_id'):
-                        self.app.corrections.resume_original(root, run, saved['attempt_id'], payload)
+                        self.app.corrections.resume_original(root, run, saved['attempt_id'], payload,
+                            reconciliation=job['reconciliation'])
                         return self._wait(job, 'correction_status')
                     raise JobError('correction_reconciliation_required', 'Original correction cycle and descendants require explicit recovery before continuation.')
                 value['state'] = 'running'
@@ -360,6 +361,7 @@ class AutonomousJobs:
         value.update(state='starting', control='run', ended_at=None, error=None,
             owner_pid=os.getpid(), owner_start_ticks=process_identity(os.getpid()))
         job = {'manifest': value, 'path': path, 'cancel': False, 'payload': value['payload'], 'lease': lease}
+        job['reconciliation'] = {'path': str(proof_path), 'sha256': sha(proof_path), 'reconciliation_id': identifier}
         pending_correction = next((row for row in reversed(value['stages']) if row['stage'] == 'corrections' and
             row['state'] != 'completed'), None)
         if pending_correction:

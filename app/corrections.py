@@ -90,7 +90,7 @@ class CorrectionJobs(ContextJobs):
                 value['evidence']['runtime_' + str(index)] = {'path': item['path'], 'sha256': item['sha256']}
         return value
 
-    def resume_original(self, root, run, identifier, payload):
+    def resume_original(self, root, run, identifier, payload, *, reconciliation):
         """Continue an independently reconciled child without allocating a cycle."""
         with self._lock:
             if self._active is not None:
@@ -98,12 +98,18 @@ class CorrectionJobs(ContextJobs):
             work = root / run['artifacts']['workspace']['path']
             directory = work / 'application/correction-attempts' / identifier
             value = json.loads((directory / 'attempt.json').read_text())
+            from .visual_continuation import original_reconciliation
+            proof = original_reconciliation(root, work, value, reconciliation)
             ledger = work / 'application/corrections/ledger.json'
             self.process.request(root, 'verify-correction-resume', value['run_id'], '--attempt', identifier,
                 '--ledger-sha256', sha(ledger))
             session = directory / 'recovery-sessions' / uuid.uuid4().hex
             session.mkdir(parents=True)
             atomic_json(session / 'original-attempt.json', value)
+            original_protocol = session / 'original-protocol.jsonl'
+            source_protocol = root / value['artifacts']['protocol']
+            original_protocol.write_bytes(source_protocol.read_bytes() if source_protocol.exists() else b'')
+            atomic_json(session / 'reconciliation-reference.json', reconciliation)
             value.setdefault('recovery_sessions', []).append({'path': str(session.relative_to(work)),
                 'original_sha256': sha(session / 'original-attempt.json'), 'started_at': now()})
             value.update(state='starting', error=None, ended_at=None, owner_pid=os.getpid(),
@@ -111,7 +117,9 @@ class CorrectionJobs(ContextJobs):
             atomic_json(directory / 'attempt.json', value)
             job = {'manifest': value, 'directory': directory, 'workspace': directory / 'workspace',
                 'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
-                'metadata': {'payload': payload}, 'resume_original': True, 'recovery_directory': session}
+                'metadata': {'payload': payload}, 'resume_original': True, 'recovery_directory': session,
+                'reconciliation': reconciliation, 'reconciliation_provider': proof['provider'],
+                'reconciliation_protocol': original_protocol}
             self._active = job
             job['thread'] = threading.Thread(target=self._execute, args=(job,), daemon=True)
             job['thread'].start()
@@ -119,10 +127,28 @@ class CorrectionJobs(ContextJobs):
 
     def _examine(self, job, stage, prompt, schema, work, images):
         directory = job['directory'] / stage
+        if job.get('resume_original'):
+            continuations = [row for row in job['manifest'].get('continuations', []) if row['stage'] == stage]
+            previous = [row for row in job['manifest']['turns'] if row['stage'] == stage]
+            if continuations:
+                directory = job['root'] / continuations[-1]['directory']
+            elif previous:
+                directory = (job['root'] / previous[-1]['protocol']).parent
+            if not directory.resolve().is_relative_to(job['directory']):
+                raise JobError('attempt_conflict', 'Original visual phase escaped its correction attempt.')
         if job.get('resume_original') and directory.exists():
             protocol = directory / 'protocol.jsonl'
             frames = [json.loads(raw) for raw in protocol.read_text().splitlines()] if protocol.exists() else []
             if any(row['direction'] == 'client' and row['message'].get('method') == 'turn/start' for row in frames):
+                from .visual_continuation import reserve_continuation
+                continuation = reserve_continuation(self, job, stage, directory, frames, prompt, schema, images)
+                if continuation is not None:
+                    job['current_continuation'] = continuation
+                    try:
+                        return examine(self, job, stage, prompt, schema, work, images,
+                            directory=job['root'] / continuation['directory'])
+                    finally:
+                        job.pop('current_continuation', None)
                 from .visual_recovery import original_visual
                 answer, proof = original_visual(directory, work, images, prompt, schema, job['directory'] / 'protocol.jsonl')
                 records = [row for row in job['manifest']['turns'] if row['stage'] == stage and
@@ -322,9 +348,9 @@ class CorrectionJobs(ContextJobs):
                 try:
                     from .failures import run_failure
                     failure = run_failure(root, self.app.select_run(value['run_id'], notify=False), {
-                        'attempt_id': value.get('parent_binding', {}).get('parent_attempt_id', value['attempt_id']),
+                        'attempt_id': (value.get('parent_binding') or {}).get('parent_attempt_id', value['attempt_id']),
                         'error': value['error'], 'stages': [{'stage': 'corrections', 'attempt_id': value['attempt_id']}]})
-                    if failure['delivery_state'] in ('unknown', 'accepted'):
+                    if failure['scope'] == 'global' or failure['delivery_state'] in ('unknown', 'accepted'):
                         value['settlement_pending'] = failure
                     else:
                         reason = ('no_valid_change' if getattr(error, 'code', None) == 'correction_no_valid_change' else

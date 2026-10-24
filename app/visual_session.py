@@ -113,17 +113,25 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
         value.setdefault('application_requests', []).append({'stage': stage, 'params': params})
         atomic_json(job['directory']/'request.json', {'requests': value['application_requests']})
         atomic_json(directory / 'request.json', params)
+        continuation = job.get('current_continuation')
+        if continuation is not None:
+            from .visual_continuation import bind_submission
+            bind_submission(manager, job, continuation, params, connection_id, directory, protocol)
         result = rpc.request('turn/start', params, notify)
         identifier = result['turn']['id']
         value['turn_id'] = identifier
         record = {'stage': stage, 'thread_id': value['thread_id'], 'turn_id': identifier, 'state': 'running',
             'prompt': prompt, 'protocol': str(protocol.relative_to(job['root'])), 'connection_id': connection_id}
         value['turns'].append(record)
+        if continuation is not None:
+            continuation['successor'].update(turn_id=identifier, state='accepted')
         manager._event(job, 'geometry_turn_submitted', stage=stage, thread_id=value['thread_id'], turn_id=identifier)
         deadline = time.monotonic()+600
         while identifier not in terminals:
             notify(rpc.receive(deadline))
         record['state'] = terminals[identifier]['status']
+        if continuation is not None:
+            continuation['successor']['state'] = record['state']
         if record['state'] != 'completed':
             raise JobError('codex_turn_'+record['state'], str(terminals[identifier].get('error')))
         if reroutes:
@@ -133,6 +141,8 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
     # Verify the original trace after closing the provider connection, before publication.
     proof = {'protocol': {'path': str(protocol), 'sha256': sha(protocol)},
         'thread_id': value['thread_id'], 'turn_id': identifier}
+    if continuation is not None:
+        continuation['successor']['protocol']['sha256'] = proof['protocol']['sha256']
     from tools.ocr_visual_evidence import verify_visual_turn
     answer = verify_visual_turn(proof, work, images)
     path = directory / 'proposal.json'

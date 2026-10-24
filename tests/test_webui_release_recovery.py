@@ -74,6 +74,71 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_native_crash_after_outcome_before_ledger_adopts_original_result_without_revalidation(self):
         self.owner_crash_scenario('outcome-ledger')
 
+    def test_rejected_global_repair_keeps_cycle_blocks_new_parent_and_explicitly_continues_original(self):
+        self.app.close()
+        peer = ROOT / 'tests/corrections_app_server_fixture.py'
+        marker = self.directory / 'repair-quota-rejection'
+        wrapper = self.directory / 'quota-repair-peer.py'
+        wrapper.write_text('import os,runpy,sys\nos.environ["RELEASE_REPAIR_REJECT"]=' + repr(str(marker)) +
+            '\nsys.argv.insert(1,"repair")\nrunpy.run_path(' + repr(str(peer)) + ',run_name="__main__")\n')
+        self.runtime = {**self.runtime, 'command': [sys.executable, '-B', str(wrapper)],
+            'files': [*self.runtime['files'], *[{'path': str(p), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in (peer, wrapper)]]}
+        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        def preserve():
+            self.app.close()
+            destination = PROOF / (self._testMethodName + '-' + str(time.time_ns()))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(self.directory, destination)
+        self.addCleanup(preserve)
+        profile = ROOT / 'profiles/faithful-reading.json'
+        payload = {'source_path': str(self.source), 'name': 'Original quota rejected repair',
+            'profile_path': str(profile), 'profile_sha256': hashlib.sha256(profile.read_bytes()).hexdigest(),
+            'environment': os.environ.get('OCR_ENVIRONMENT')}
+        started = self.app.dispatch('start_autonomous', payload)
+        self.assertTrue(started['ok'], started)
+        identity = {key: started['data'][key] for key in ('run_id', 'attempt_id')}
+        self.assertEqual(self.wait(identity['run_id'])['state'], 'failed')
+        self.assertTrue(marker.is_file())
+        before = self.app.dispatch('correction_status', identity)['data']
+        self.assertEqual(before['cycles_used'], 1)
+        self.assertEqual(before['cycles'][0]['state'], 'reserved', before)
+        self.assertIsNone(before['stop_reason'], before)
+        detail = self.app.dispatch('select_run', identity)['data']
+        work = self.root / detail['artifacts']['workspace']['path']
+        protocol = work / 'application/correction-attempts' / before['attempt_id'] / 'repair_1/protocol.jsonl'
+        original = protocol.read_bytes()
+        self.app.close()
+        self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+        denied = self.app.dispatch('start_autonomous', {**payload, 'name': 'Do not replace the globally rejected parent'})
+        self.assertFalse(denied['ok'], denied)
+        self.assertEqual(denied['error']['code'], 'reconciliation_required')
+        self.assertEqual(len(list((self.root / 'work').glob('*/application/autonomous-attempts/*/attempt.json'))), 1)
+        checked = self.app.dispatch('reconcile_autonomous', identity)
+        self.assertTrue(checked['ok'], checked)
+        self.assertTrue(checked['data']['checkpoint']['valid'], checked)
+        self.assertTrue(checked['data']['provider']['safe_to_continue'], checked)
+        self.assertEqual(checked['data']['provider']['turns'][-1]['state'], 'rejected')
+        Path(str(marker) + '.restored').write_text('Explicitly restored controlled provider; no automatic retry')
+        resumed = self.app.dispatch('resume_autonomous', {**identity, 'reconciliation_id': checked['data']['reconciliation_id']})
+        self.assertTrue(resumed['ok'], resumed)
+        self.assertEqual(self.wait(identity['run_id'])['state'], 'completed')
+        self.assertEqual(protocol.read_bytes(), original)
+        after = self.app.dispatch('correction_status', identity)['data']
+        self.assertEqual(after['attempt_id'], before['attempt_id'])
+        self.assertEqual(after['cycles_used'], 1)
+        self.assertEqual(after['cycles'][0]['cycle_id'], before['cycles'][0]['cycle_id'])
+        frames = [json.loads(line) for line in protocol.parent.parent.joinpath('protocol.jsonl').read_text().splitlines()]
+        repair_starts = [row for row in frames if row['stage'] == 'repair_1' and row['direction'] == 'client' and row['message'].get('method') == 'turn/start']
+        self.assertEqual(len(repair_starts), 2)
+        self.assertNotEqual(repair_starts[0]['connection_id'], repair_starts[1]['connection_id'])
+        self.assertEqual(repair_starts[0]['message']['params']['input'], repair_starts[1]['message']['params']['input'])
+        history = self.app.dispatch('select_run', identity)['data']['history']
+        continuation = [row for row in history if row['type'] == 'correction_continuation_reserved']
+        self.assertEqual(len(continuation), 1)
+        self.assertEqual(continuation[0]['cycle_id'], before['cycles'][0]['cycle_id'])
+        self.assertEqual(continuation[0]['original_delivery'], 'rejected')
+
     def test_unknown_repair_delivery_keeps_reserved_budget_and_cannot_replay(self):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
