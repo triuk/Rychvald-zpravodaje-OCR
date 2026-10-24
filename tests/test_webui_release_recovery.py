@@ -74,6 +74,116 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_native_crash_after_outcome_before_ledger_adopts_original_result_without_revalidation(self):
         self.owner_crash_scenario('outcome-ledger')
 
+    def test_owner_crash_after_committed_settlement_before_event_adopts_original_without_revalidation(self):
+        self.owner_crash_scenario('outcome-event')
+
+    def test_cycle_two_survives_two_pauses_and_drift_refusals_without_resetting_three_cycle_budget(self):
+        self.app.close()
+        peer = ROOT / 'tests/corrections_app_server_fixture.py'
+        wrapper = self.directory / 'limit-peer.py'
+        wrapper.write_text('import runpy,sys\nsys.argv.insert(1,"limit")\nrunpy.run_path(' + repr(str(peer)) + ',run_name="__main__")\n')
+        self.runtime = {**self.runtime, 'command': [sys.executable, '-B', str(wrapper)],
+            'files': [*self.runtime['files'], *[{'path': str(p), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
+                for p in (peer, wrapper)]]}
+        native = self.directory / 'cycle-two-gates.py'
+        native.write_text('import json,pathlib,subprocess,sys,time\n'
+            'r=subprocess.run([sys.executable,"-B",' + repr(str(ROOT / 'tools/ocr_projects.py')) + ',*sys.argv[1:]],capture_output=True)\n'
+            'i=sys.argv.index("--json")+1\noperation=sys.argv[i]\n'
+            'work=pathlib.Path(sys.argv[sys.argv.index("--root")+1])/"work"/sys.argv[i+1]\n'
+            'ledger=work/"application/corrections/ledger.json"\n'
+            'if operation in ("publish-correction","export") and r.returncode==0 and ledger.is_file():\n'
+            ' cycle=json.loads(ledger.read_text())["cycles"][-1]\n'
+            ' if cycle["index"]==2 and cycle["state"]=="published":\n'
+            '  ready=pathlib.Path(' + repr(str(self.directory)) + ')/(operation+".ready")\n'
+            '  release=ready.with_suffix(".release")\n'
+            '  if not ready.exists():\n'
+            '   ready.touch()\n'
+            '   while not release.exists():time.sleep(.01)\n'
+            'sys.stdout.buffer.write(r.stdout)\nsys.stderr.buffer.write(r.stderr)\nraise SystemExit(r.returncode)\n')
+        def reopen():
+            self.app = Application(self.root, process_command=[sys.executable, '-B', str(native)],
+                codex_runtime=self.runtime, context_runtime=self.context)
+        reopen()
+        def preserve():
+            self.app.close()
+            destination = PROOF / (self._testMethodName + '-' + str(time.time_ns()))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(self.directory, destination)
+        self.addCleanup(preserve)
+        profile = ROOT / 'profiles/faithful-reading.json'
+        start = self.app.dispatch('start_autonomous', {'source_path': str(self.source), 'name': 'Two pauses in original cycle two',
+            'profile_path': str(profile), 'profile_sha256': hashlib.sha256(profile.read_bytes()).hexdigest(),
+            'environment': os.environ.get('OCR_ENVIRONMENT')})
+        self.assertTrue(start['ok'], start)
+        identity = {k: start['data'][k] for k in ('run_id', 'attempt_id')}
+        original_cycle, original_attempt = None, None
+        for gate in ('publish-correction', 'export'):
+            ready = self.directory / (gate + '.ready')
+            deadline = time.monotonic() + 150
+            while not ready.exists() and time.monotonic() < deadline:
+                status = self.app.dispatch('autonomous_status', identity)
+                self.assertTrue(status['ok'], status)
+                self.assertIn(status['data']['state'], ('starting', 'running'), status)
+                time.sleep(.04)
+            self.assertTrue(ready.exists())
+            paused = self.app.dispatch('pause_autonomous', identity)
+            ready.with_suffix('.release').touch()
+            self.assertTrue(paused['ok'], paused)
+            self.assertEqual(self.wait(identity['run_id'])['state'], 'paused')
+            before = self.app.dispatch('correction_status', identity)['data']
+            self.assertEqual(before['cycles_used'], 2, before)
+            self.assertEqual(before['cycles'][0]['state'], 'settled')
+            self.assertEqual(before['cycles'][1]['state'], 'published')
+            if original_cycle is None:
+                original_cycle, original_attempt = before['cycles'][1]['cycle_id'], before['attempt_id']
+            self.assertEqual(before['cycles'][1]['cycle_id'], original_cycle)
+            self.assertEqual(before['attempt_id'], original_attempt)
+            detail = self.app.dispatch('select_run', identity)['data']
+            work = self.root / detail['artifacts']['workspace']['path']
+            protocols = {str(p): p.read_bytes() for p in (work / 'application').glob('*-attempts/*/protocol.jsonl')}
+            self.app.close(); reopen()
+            if gate == 'publish-correction':
+                for source in (work / 'samples.json', self.root / detail['artifacts']['source']['path']):
+                    original = source.read_bytes()
+                    source.write_bytes(original + b'\n')
+                    try:
+                        rejected = self.app.dispatch('reconcile_autonomous', identity)
+                        if rejected['ok']:
+                            self.assertFalse(rejected['data']['checkpoint']['valid'], rejected)
+                            denied = self.app.dispatch('resume_autonomous', {**identity,
+                                'reconciliation_id': rejected['data']['reconciliation_id']})
+                            self.assertFalse(denied['ok'], denied)
+                        else:
+                            self.assertEqual(rejected['error']['code'], 'source_corrupt', rejected)
+                    finally:
+                        source.write_bytes(original)
+            checked = self.app.dispatch('reconcile_autonomous', identity)
+            self.assertTrue(checked['ok'], checked)
+            self.assertTrue(checked['data']['checkpoint']['valid'], checked)
+            self.assertTrue(checked['data']['provider']['safe_to_continue'], checked)
+            for path, content in protocols.items():
+                self.assertEqual(Path(path).read_bytes(), content)
+            resumed = self.app.dispatch('resume_autonomous', {**identity, 'reconciliation_id': checked['data']['reconciliation_id']})
+            self.assertTrue(resumed['ok'], resumed)
+        self.assertEqual(self.wait(identity['run_id'])['state'], 'completed')
+        final = self.app.dispatch('correction_status', identity)['data']
+        self.assertEqual(final['attempt_id'], original_attempt)
+        self.assertEqual(final['cycles_used'], 3)
+        self.assertEqual(final['cycles_remaining'], 0)
+        self.assertEqual(final['stop_reason'], 'limit_reached')
+        self.assertEqual([c['index'] for c in final['cycles']], [1, 2, 3])
+        self.assertEqual(final['cycles'][1]['cycle_id'], original_cycle)
+        self.assertEqual(final['acceptance'], 'not_recorded')
+        self.assertEqual(len(list((work / 'application/correction-attempts').rglob('repair_*/request.json'))), 3)
+        ledger = (work / 'application/corrections/ledger.json').read_bytes()
+        manifest = json.loads((work / 'output-manifest.json').read_text())
+        denied = self.app.dispatch('start_corrections', {'run_id': identity['run_id'],
+            'expected_iteration_id': manifest['iteration_id'],
+            'expected_validation_sha256': hashlib.sha256((work / 'checks/run-validation.json').read_bytes()).hexdigest()})
+        self.assertFalse(denied['ok'], denied)
+        self.assertEqual(denied['error']['code'], 'correction_stopped')
+        self.assertEqual((work / 'application/corrections/ledger.json').read_bytes(), ledger)
+
     def test_rejected_global_repair_keeps_cycle_blocks_new_parent_and_explicitly_continues_original(self):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
@@ -229,7 +339,7 @@ class ReleaseRecoveryTests(unittest.TestCase):
         while process.poll() is None and time.monotonic() < deadline:
             time.sleep(.03)
         visual_publication = fault_mode in ('repair-publication', 'geometry-publication')
-        self.assertEqual(process.poll(), 91 if fault_mode == 'output-link' or visual_publication else -9,
+        self.assertEqual(process.poll(), 91 if fault_mode in ('output-link', 'outcome-event') or visual_publication else -9,
             (marker.exists(), (self.directory / 'owner-stderr.log').read_text()[-1000:]))
         crashed = json.loads(marker.read_text())
         self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
@@ -240,7 +350,7 @@ class ReleaseRecoveryTests(unittest.TestCase):
         original_turns = old_correction['turns']
         original_visual_reuse = visual_publication or fault_mode in ('patch-ledger', 'patch-chain')
         original_visual = Path(crashed['original_visual_turn']['protocol']['path']).read_bytes() if original_visual_reuse else None
-        if fault_mode == 'outcome-ledger':
+        if fault_mode in ('outcome-ledger', 'outcome-event'):
             self.assertEqual(len(old_correction['children']), 1)
         else:
             self.assertFalse(old_correction.get('children'))
@@ -257,7 +367,7 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(correction['cycles_used'], 1)
         self.assertEqual(correction['cycles'][0]['cycle_id'], crashed['cycle_id'])
         output = self.app.dispatch('output_review_status', identity)['data']
-        if fault_mode == 'outcome-ledger':
+        if fault_mode in ('outcome-ledger', 'outcome-event'):
             self.assertEqual(output['attempt_id'], crashed['output_attempt_id'])
             self.assertEqual(hashlib.sha256((work / correction['cycles'][0]['outcome']).read_bytes()).hexdigest(), crashed['outcome_sha256'])
             self.assertEqual(hashlib.sha256((work / 'checks/run-validation.json').read_bytes()).hexdigest(), crashed['validation_sha256'])

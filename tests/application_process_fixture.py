@@ -201,6 +201,33 @@ def crash_native_before_outcome_ledger(event, arguments):
     os._exit(92)
 
 
+def crash_before_outcome_event(event, arguments):
+    if event != 'os.rename':
+        return
+    source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
+    if (destination.name != 'attempt.json' or destination.parent.parent.name != 'correction-attempts' or
+            not source.is_file() or not destination.is_file()):
+        return
+    saved, new = json.loads(destination.read_text()), json.loads(source.read_text())
+    if not new.get('events') or new['events'][-1]['type'] != 'correction_settled':
+        return
+    work = destination.parents[3]
+    cycle = json.loads((work / 'application/corrections/ledger.json').read_text())['cycles'][-1]
+    if cycle['state'] != 'settled':
+        raise RuntimeError('Expected committed native settlement before the application event')
+    manifest = json.loads((work / 'output-manifest.json').read_text())
+    marker.write_text(json.dumps({'boundary': 'before_original_settlement_event_rename',
+        'parent_attempt_id': saved['parent_binding']['parent_attempt_id'], 'correction_attempt_id': saved['attempt_id'],
+        'cycle_id': cycle['cycle_id'], 'iteration_id': manifest['iteration_id'],
+        'rendered_pdf_sha256': manifest['pdf_sha256'], 'rendered_txt_sha256': manifest['txt_sha256'],
+        'output_attempt_id': saved['children'][-1]['attempt_id'],
+        'outcome_sha256': hashlib.sha256((work / cycle['outcome']).read_bytes()).hexdigest(),
+        'validation_sha256': hashlib.sha256((work / 'checks/run-validation.json').read_bytes()).hexdigest(),
+        'original_parent_manifest_sha256': hashlib.sha256(destination.read_bytes()).hexdigest(),
+        'owner': json.loads(owner_path.read_text())}) + '\n')
+    os._exit(91)
+
+
 if sys.argv[1] == '--native':
     marker, owner_path = Path(sys.argv[2]), Path(sys.argv[3])
     fault_mode = sys.argv[4]
@@ -221,6 +248,8 @@ if fault_mode == 'output-link':
     sys.addaudithook(crash_before_output_link)
 elif fault_mode in ('repair-publication', 'geometry-publication'):
     sys.addaudithook(crash_before_repair_publication)
+elif fault_mode == 'outcome-event':
+    sys.addaudithook(crash_before_outcome_event)
 else:
     native_command = [sys.executable, '-B', str(Path(__file__)), '--native', str(marker), str(owner_path), fault_mode]
 application = Application(Path(sys.argv[1]), codex_runtime=json.loads(Path(sys.argv[2]).read_text()),
