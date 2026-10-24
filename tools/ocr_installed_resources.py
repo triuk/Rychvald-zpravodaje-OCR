@@ -1,18 +1,62 @@
 """Exact installed-origin evidence, never an executable or mutable CAS fallback."""
 import hashlib
+import errno
 import json
 import os
 from pathlib import Path
+import stat
 
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def missing_entry(path, *, strict_ancestors=False):
+    """Only ENOENT through ordinary directories proves an absent identity."""
+    path = Path(path)
+    try:
+        entry = path.lstat()
+    except OSError as error:
+        if error.errno != errno.ENOENT:
+            raise ValueError('Resource absence is not proven: ' + str(path)) from error
+        absent = True
+    else:
+        absent = False
+        if strict_ancestors and stat.S_ISLNK(entry.st_mode):
+            raise ValueError('Present linked installed entry: ' + str(path))
+    if absent or strict_ancestors:
+        for parent in path.parents:
+            try:
+                entry = parent.lstat()
+            except OSError as error:
+                if error.errno == errno.ENOENT:
+                    continue
+                raise ValueError('Resource ancestor is not verifiable: ' + str(parent)) from error
+            if not stat.S_ISDIR(entry.st_mode):
+                raise ValueError('Resource ancestor is linked or not a directory: ' + str(parent))
+    return absent
+
+
+def captured_prefix(work):
+    path = Path(work) / 'application/installed-resource-origin.json'
+    if missing_entry(path, strict_ancestors=True):
+        return None
+    record = json.loads((Path(work) / 'project.json').read_text())
+    pointer = record.get('installed_resources')
+    if (not pointer or pointer['path'] != 'application/installed-resource-origin.json' or
+            digest(path) != pointer['sha256']):
+        raise ValueError('Installed origin prefix has no exact frozen binding')
+    return Path(json.loads(path.read_text())['original_prefix'])
+
+
 def capture(registry, record, prefix):
     """Freeze one explicitly selected installation before its prefix is retired."""
-    from ocr_projects import atomic_json
-    from ocr_evidence_archive import capture as capture_archive
+    if __package__:
+        from .ocr_projects import atomic_json
+        from .ocr_evidence_archive import capture as capture_archive
+    else:
+        from ocr_projects import atomic_json
+        from ocr_evidence_archive import capture as capture_archive
     prefix = Path(prefix).resolve()
     work = registry.root / record['artifacts']['workspace']
     inventory_path = prefix / 'inventory.json'
@@ -75,13 +119,18 @@ def capture(registry, record, prefix):
 
 def check_bindings(work, records):
     """Allow only missing immutable installed evidence with exact frozen origins."""
-    from ocr_quality import check_bindings as strict
-    from ocr_evidence_archive import load_bound, resolve_bound
+    if __package__:
+        from .ocr_quality import check_bindings as strict
+        from .ocr_evidence_archive import load_bound, resolve_bound
+    else:
+        from ocr_quality import check_bindings as strict
+        from ocr_evidence_archive import load_bound, resolve_bound
     work = Path(work).resolve()
+    prefix = captured_prefix(work)
     missing = {}
     for name, pin in records.items():
         path = Path(pin['path'])
-        if path.exists():
+        if not missing_entry(path, strict_ancestors=prefix is not None and path.is_relative_to(prefix)):
             strict({name: pin})  # Existing changed files never reach an archive.
         else:
             missing[name] = pin
@@ -123,7 +172,8 @@ def check_bindings(work, records):
 def selected_environment(work, original):
     """Select current executable resources only for byte-identical env manifests."""
     original = Path(original)
-    if original.exists():
+    prefix = captured_prefix(work)
+    if not missing_entry(original, strict_ancestors=prefix is not None and original.is_relative_to(prefix)):
         return original
     anchor = json.loads((Path(work) / 'preparation-identity.json').read_text())
     if anchor['environment_manifest'] != str(original):

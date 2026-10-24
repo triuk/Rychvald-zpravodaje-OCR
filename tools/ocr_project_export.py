@@ -19,7 +19,7 @@ WORKFLOW = Path(__file__).with_name('ocr_workflow.py')
 def project_environment(work, path=None):
     try:
         manifest = load(work / 'input-manifest.json')
-        if path is not None and not Path(path).exists():
+        if path is not None:
             from ocr_installed_resources import selected_environment
             path = selected_environment(work, path)
         native = verify_environment(path, manifest['ocr']['language'])
