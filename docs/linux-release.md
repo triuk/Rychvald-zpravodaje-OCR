@@ -93,6 +93,16 @@ only when its manifest bytes are identical to the frozen original SHA256.
 Different normalized JSON is not treated as byte equality or automatically
 authorized execution compatibility.
 
+Completed results and history remain readable from the new verified prefix.
+An interrupted autonomous pass also freezes its AI command/resource paths.
+If moving the program changes that runtime fingerprint, explicit reconciliation
+returns `checkpoint_identity_changed` and keeps the original parent, children,
+reserved budget and protocols. It admits no replacement work. Restore the
+original verified installation and AI/native configuration at their recorded
+paths, reconcile the same attempt, then explicitly resume when its original
+provider state permits continuation. Relocation never silently normalizes or
+redefines an active run's runtime.
+
 The geometry policy retains the exact original `27c12d6d… → 046c6af6…` pair and
 adds only explicitly pinned validator-only installed-evidence pairs. Original
 adapter bytes must still exist in their run snapshot; copied-adapter drift is
