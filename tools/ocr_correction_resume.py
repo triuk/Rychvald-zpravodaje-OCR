@@ -5,7 +5,7 @@ from ocr_projects import ProjectError, source_hash
 from ocr_quality import load, load_bound, check_bindings, patched_review
 from ocr_project_corrections import checked, cycle_record, ledger_path
 from ocr_visual_evidence import verify_visual_turn
-from ocr_correction_graph import output_child
+from ocr_correction_graph import output_child, continuation_edges
 
 
 def archived_bindings(work, archive, records):
@@ -105,6 +105,7 @@ def verify(registry, run_id, attempt, ledger_sha256):
     child = load(work / cycle['attempt'])
     if cycle['attempt_id'] != attempt or child['attempt_id'] != attempt or child['run_id'] != run_id:
         raise ValueError('Reserved correction child cannot be replaced')
+    continuation_edges(work, child)
     parent_binding = child.get('parent_binding')
     if parent_binding:
         parent_id = parent_binding['parent_attempt_id']
@@ -182,6 +183,8 @@ def verify(registry, run_id, attempt, ledger_sha256):
         verify_preparation(record, work, intent['preparation_sha256'], publishing=False)
         if output and output['profile_sha256'] != child['profile_sha256']:
             raise ValueError('Original output child has a different frozen profile')
+        if output:
+            continuation_edges(work, output)
     record.setdefault('counts', {}).update(correction_geometry_prepared=int(geometry_prepared),
         correction_geometry_published=int(geometry_published), correction_export_committed=int(exported),
         correction_export_rendered=int(rendered), correction_patch_pending=int(cycle['state'] == 'reserved' and bool(cycle.get('patch_intent'))),

@@ -328,9 +328,11 @@ class ReleaseRecoveryTests(unittest.TestCase):
             frozen_intent = intent.read_bytes()
             intent.write_bytes(frozen_intent + b'\n')
             try:
-                denied = self.app.dispatch('queue_status')
+                changed = call('reconcile_autonomous', identity)
+                self.assertFalse(changed['checkpoint']['valid'], changed)
+                denied = self.app.dispatch('resume_queue', {'item_id': first['item_id'], **identity,
+                    'reconciliation_id': changed['reconciliation_id']})
                 self.assertFalse(denied['ok'], denied)
-                self.assertEqual(denied['error']['code'], 'attempt_conflict', denied)
             finally:
                 intent.write_bytes(frozen_intent)
             inspected_original = call('reconcile_autonomous', identity)
