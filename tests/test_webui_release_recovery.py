@@ -74,6 +74,9 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_native_crash_after_patch_intent_before_ledger_adopts_exact_orphan_without_replay(self):
         self.owner_crash_scenario('patch-orphan')
 
+    def test_missing_patch_intent_with_partial_binding_or_reserved_phase_cannot_replay(self):
+        self.owner_crash_scenario('patch-orphan', malformed_bindings=True)
+
     def test_native_crash_after_outcome_before_ledger_adopts_original_result_without_revalidation(self):
         self.owner_crash_scenario('outcome-ledger')
 
@@ -491,7 +494,7 @@ class ReleaseRecoveryTests(unittest.TestCase):
         self.assertEqual(retained['cycles'][0]['state'], 'reserved', retained)
         self.assertIsNone(retained['stop_reason'], retained)
 
-    def owner_crash_scenario(self, fault_mode):
+    def owner_crash_scenario(self, fault_mode, *, malformed_bindings=False):
         self.app.close()
         peer = ROOT / 'tests/corrections_app_server_fixture.py'
         wrapper = self.directory / 'repair-peer.py'
@@ -555,6 +558,40 @@ class ReleaseRecoveryTests(unittest.TestCase):
             patch = Path(saved_intent['inputs']['patch']['path'])
             original_patch = patch.read_bytes()
             ledger_before, review_before = ledger_path.read_bytes(), (work / 'review.json').read_bytes()
+            if malformed_bindings:
+                intent.unlink()
+                for name, fields in (('sha-only', {'patch_intent_sha256': crashed['intent_sha256']}),
+                        ('null-path', {'patch_intent': None}), ('empty-path', {'patch_intent': ''}),
+                        ('reserved-phase', {'phase': 'patch_reserved'})):
+                    malformed = json.loads(ledger_before)
+                    malformed['cycles'][-1].update(fields)
+                    ledger_path.write_text(json.dumps(malformed) + '\n')
+                    malformed_bytes = ledger_path.read_bytes()
+                    before_attempts = sorted(str(p) for p in (work / 'application').glob('*-attempts/*/attempt.json'))
+                    result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py'),
+                        '--root', str(self.root), '--json', 'verify-correction-resume', identity['run_id'],
+                        '--attempt', crashed['correction_attempt_id'], '--ledger-sha256',
+                        hashlib.sha256(malformed_bytes).hexdigest()], capture_output=True)
+                    (self.directory / ('missing-intent-' + name + '-ledger.json')).write_bytes(malformed_bytes)
+                    (self.directory / ('missing-intent-' + name + '.stdout')).write_bytes(result.stdout)
+                    (self.directory / ('missing-intent-' + name + '.stderr')).write_bytes(result.stderr)
+                    self.assertNotEqual(result.returncode, 0, result.stdout.decode())
+                    self.assertEqual(json.loads(result.stdout)['error']['code'], 'correction_invalid')
+                    duplicate = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py'),
+                        '--root', str(self.root), '--json', 'publish-correction', identity['run_id'],
+                        '--cycle-id', cycle['cycle_id'], '--proposal', saved_intent['inputs']['publication']['path']], capture_output=True)
+                    (self.directory / ('missing-intent-' + name + '-publish.stdout')).write_bytes(duplicate.stdout)
+                    (self.directory / ('missing-intent-' + name + '-publish.stderr')).write_bytes(duplicate.stderr)
+                    self.assertNotEqual(duplicate.returncode, 0)
+                    self.assertEqual(json.loads(duplicate.stdout)['error']['code'], 'correction_reconciliation_required')
+                    denied = self.app.dispatch('reconcile_autonomous', identity)
+                    self.assertTrue(denied['ok'], denied)
+                    self.assertFalse(denied['data']['checkpoint']['valid'], denied)
+                    self.assertEqual(ledger_path.read_bytes(), malformed_bytes)
+                    self.assertEqual((work / 'review.json').read_bytes(), review_before)
+                    self.assertEqual(Path(crashed['original_visual_turn']['protocol']['path']).read_bytes(), original_visual)
+                    self.assertEqual(sorted(str(p) for p in (work / 'application').glob('*-attempts/*/attempt.json')), before_attempts)
+                ledger_path.write_bytes(ledger_before); intent.write_bytes(original_intent)
             # Matching P/C/K IDs and a self-consistent new hash cannot authorize
             # a patch different from the original completed native assistant.
             patch.write_text('{}\n')

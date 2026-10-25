@@ -98,6 +98,8 @@ Záměr patche uložený těsně před jeho propojením do knihy cyklů se vyhle
 v původním rezervovaném cyklu. Před doplněním propojení se znovu ověří původní
 návrh modelu, archiv vstupů a úplný nativní výsledek transakce; samotná shoda
 identifikátorů ani hash uvedený tímto nepřipojeným záměrem nestačí.
+Částečně zapsaná vazba nebo již uložená fáze rezervace patche vyžaduje ověření
+i při chybějícím souboru záměru; prázdná hodnota nesmí povolit nové publikování.
 Dokončený původní modelový protokol lze místně znovu ověřit a zveřejnit bez nového
 tahu; chybějící nebo neověřitelný výsledek zůstává zablokovaný.
 

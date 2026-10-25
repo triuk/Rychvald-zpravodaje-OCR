@@ -15,14 +15,9 @@ def intent_path(work, cycle):
     return work / 'application/corrections' / cycle['cycle_id'] / 'patch-intent.json'
 
 
-def has_intent(work, cycle):
-    path = intent_path(work, cycle)
-    return path.exists() or path.is_symlink()
-
-
 def reserve_intent(registry, record, work, ledger, cycle, packet, publication, previous, patch, transaction):
     path = intent_path(work, cycle)
-    if path.exists():
+    if path.exists() or path.is_symlink():
         raise ValueError('Original patch transaction requires explicit recovery')
     writes = {}
     for name, content in transaction['writes'].items():

@@ -5,7 +5,7 @@ from ocr_projects import ProjectError, source_hash
 from ocr_quality import load, load_bound, check_bindings, patched_review
 from ocr_project_corrections import checked, cycle_record, ledger_path
 from ocr_visual_evidence import verify_visual_turn
-from ocr_correction_graph import output_child, continuation_edges
+from ocr_correction_graph import output_child, continuation_edges, patch_intent_required
 
 
 def archived_bindings(work, archive, records):
@@ -75,14 +75,18 @@ def verify(registry, run_id, attempt, ledger_sha256):
             raise ValueError('Correction cycle chain changed')
         previous = cycle['cycle_id']
         if cycle['state'] == 'reserved':
-            from ocr_correction_patch import verify_intent, has_intent
-            if cycle.get('patch_intent') or has_intent(work, cycle):
+            from ocr_correction_patch import verify_intent
+            if patch_intent_required(work, cycle):
                 _, pending_archive = verify_intent(registry, record, work, cycle, packet)
                 record['artifacts']['correction_patch_snapshot'] = str(pending_archive.relative_to(registry.root))
             else:
                 check_bindings(packet['inputs'])
-        elif cycle.get('patch_intent') and source_hash(work / cycle['patch_intent']) != cycle['patch_intent_sha256']:
-            raise ValueError('Original patch transaction changed')
+        elif 'patch_intent' in cycle or 'patch_intent_sha256' in cycle:
+            from ocr_correction_patch import intent_path
+            path = intent_path(work, cycle)
+            if (cycle.get('patch_intent') != str(path.relative_to(work)) or path.is_symlink() or
+                    source_hash(path) != cycle.get('patch_intent_sha256')):
+                raise ValueError('Original patch transaction changed')
         if cycle.get('previous_snapshot'):
             archive = (work / cycle['previous_snapshot']).resolve()
             verify_archive(work, archive, record)
@@ -188,6 +192,6 @@ def verify(registry, run_id, attempt, ledger_sha256):
     record.setdefault('counts', {}).update(correction_geometry_prepared=int(geometry_prepared),
         correction_geometry_published=int(geometry_published), correction_export_committed=int(exported),
         correction_export_rendered=int(rendered), correction_patch_pending=int(cycle['state'] == 'reserved' and
-            (bool(cycle.get('patch_intent')) or has_intent(work, cycle))),
+            patch_intent_required(work, cycle)),
         correction_outcome_pending=int(outcome_pending))
     return record

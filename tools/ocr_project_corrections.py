@@ -301,7 +301,8 @@ def publish(registry, project_id, cycle_id, proposal, *, check_only=False):
             ledger, cycle, packet = cycle_record(work, cycle_id)
             if cycle['state'] != 'reserved':
                 raise ValueError('Cycle already published or settled')
-            if (work / 'application/corrections' / cycle_id / 'patch-intent.json').exists():
+            from ocr_correction_graph import patch_intent_required
+            if patch_intent_required(work, cycle):
                 raise ProjectError('correction_reconciliation_required', 'Adopt the original patch transaction; do not publish another patch or snapshot.')
             current(registry, record, packet['expected_iteration_id'], packet['inputs']['checks/run-validation.json']['sha256'])
             publication = load(proposal)

@@ -4,6 +4,17 @@ import hashlib
 from pathlib import Path
 
 
+def patch_intent_required(work, cycle):
+    """A reserved cycle cannot forget a declared or physically saved patch.
+
+    Callers must verify the original intent even for null/partial declarations
+    or a post-reservation phase whose intent bytes are now missing.
+    """
+    path = Path(work) / 'application/corrections' / cycle['cycle_id'] / 'patch-intent.json'
+    return ('patch_intent' in cycle or 'patch_intent_sha256' in cycle or
+        cycle.get('phase') != 'reserved' or path.exists() or path.is_symlink())
+
+
 def continuation_edges(work, correction):
     """Return only immutable, exact stopped-original → submitted-successor edges.
 

@@ -13,7 +13,7 @@ from .jobs import JobError, atomic_json, sha
 from .visual_session import examine
 from .geometry_contract import GEOMETRY_PROMPT, GEOMETRY_SCHEMA
 from .reading_contract import obj, array, LINE, UNIT, UNRESOLVED, PUBLISHER, RISK, STRING
-from tools.ocr_correction_graph import output_binding, output_child
+from tools.ocr_correction_graph import output_binding, output_child, patch_intent_required
 
 
 REPAIR_PROMPT = '''Read the attached targeted ORIGINAL source crops and bound findings. Use the frozen
@@ -268,7 +268,7 @@ class CorrectionJobs(ContextJobs):
                     continue
                 if cycle['state'] == 'reserved':
                     value['stage'] = 'targeted_repair'
-                    if cycle.get('patch_intent') or (work / 'application/corrections' / cycle_id / 'patch-intent.json').exists():
+                    if patch_intent_required(work, cycle):
                         self.process.request(root, 'adopt-correction-patch', value['run_id'], '--cycle-id', cycle_id)
                     else:
                         self._event(job, 'correction_started', cycle_id=cycle_id, cycle_index=cycle['index'])
