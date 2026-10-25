@@ -67,6 +67,48 @@ destroys its native window. `--serve` and `--browser` are mutually exclusive.
 An external browser can use this loopback URL without joining the program's
 filesystem namespace. Network sharing for this loopback seam is explicit.
 
+## Original installed resources after relocation
+
+A named installed run records its exact original prefix and inventory before
+work starts. The registry keeps a deduplicated, immutable byte archive under
+`application/installed-resource-archives/`, outside model workspaces. Original
+packets and paths remain unchanged. History validation explicitly opts into
+this archive only for a missing installed resource whose original absolute
+path, relative inventory entry and SHA256 all match the frozen run origin.
+Existing changed files and run-local source/review/pixel/publication CAS stay
+strict. Archive files are evidence and are never executable runtime selections.
+
+Before retiring an older installation whose runs lack that origin record, use
+the current native CLI with the still available original prefix:
+
+```sh
+/program/current/bin/rychvald-ocr --root /data/edition-projects --json capture-installed-origin RUN --prefix /program/original
+```
+
+This verifies and captures the complete original inventory and exact environment
+JSON, then adds separate origin metadata. It does not rewrite old model packets.
+Repeated captures reuse the registry archive. If an old environment path is
+missing, native work can select the current installation's verified environment
+only when its manifest bytes are identical to the frozen original SHA256.
+Different normalized JSON is not treated as byte equality or automatically
+authorized execution compatibility.
+
+Completed results and history remain readable from the new verified prefix.
+An interrupted autonomous pass also freezes its AI command/resource paths.
+If moving the program changes that runtime fingerprint, explicit reconciliation
+returns `checkpoint_identity_changed` and keeps the original parent, children,
+reserved budget and protocols. It admits no replacement work. Restore the
+original verified installation and AI/native configuration at their recorded
+paths, reconcile the same attempt, then explicitly resume when its original
+provider state permits continuation. Relocation never silently normalizes or
+redefines an active run's runtime.
+
+The geometry policy retains the exact original `27c12d6d… → 046c6af6…` pair and
+adds only explicitly pinned validator-only installed-evidence pairs. Original
+adapter bytes must still exist in their run snapshot; copied-adapter drift is
+rejected. Generating code, font selection, sample expectations and quality
+criteria are unchanged.
+
 The exact selected native WebUI has an additional host-dependent behavior:
 `Window.__init__` calls `webui_new_window`, then `webui_new_window_id`, which calls
 `webui_set_center`, `_webui_load_gtk_and_webkit`, and the discovered `gtk_init`.

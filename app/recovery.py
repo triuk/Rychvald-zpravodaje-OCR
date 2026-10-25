@@ -9,16 +9,48 @@ from pathlib import Path
 
 from .codex import RpcProcess, now, scrub
 from .jobs import JobError, atomic_json, sha
+from tools.ocr_correction_graph import output_child
 
 
 NAMESPACES = {'model_diagnostic': 'codex-attempts', 'context_diagnostic': 'context-attempts',
-    'reading': 'reading-attempts', 'geometry': 'geometry-attempts', 'output_review': 'output-review-attempts'}
+    'reading': 'reading-attempts', 'geometry': 'geometry-attempts', 'output_review': 'output-review-attempts',
+    'corrections': 'correction-attempts'}
+
+
+def original_stages(work, parent):
+    """Traverse the exact P/I/C/K/O graph, never a latest-child namespace walk."""
+    stages = list(parent['stages'])
+    for row in parent['stages']:
+        if row['stage'] != 'corrections' or row['state'] == 'completed':
+            continue
+        if not row.get('attempt_id'):
+            binding = {'parent_attempt_id': parent['attempt_id'], 'intent_id': row['intent_id'], 'stage': 'corrections'}
+            matches = [json.loads(path.read_text()) for path in (work / 'application/correction-attempts').glob('*/attempt.json')
+                if json.loads(path.read_text()).get('parent_binding') == binding]
+            if len(matches) > 1:
+                raise JobError('attempt_conflict', 'Multiple correction children claim the original parent intent.')
+            if not matches:
+                continue
+            row['attempt_id'] = matches[0]['attempt_id']
+        correction = json.loads((work / 'application/correction-attempts' / row['attempt_id'] / 'attempt.json').read_text())
+        ledger = json.loads((work / 'application/corrections/ledger.json').read_text())
+        cycle = ledger['cycles'][-1]
+        try:
+            intent, child = output_child(work, correction, cycle['cycle_id'])
+        except ValueError as error:
+            raise JobError('attempt_conflict', str(error)) from error
+        if child is not None and not any(item.get('attempt_id') == child['attempt_id'] and item['stage'] == 'output_review' for item in stages):
+            stages.append({'stage': 'output_review', 'attempt_id': child['attempt_id'],
+                'state': 'completed' if child['state'] == 'completed' and child.get('output_review_complete') else 'interrupted',
+                'child_status_operation': 'output_review_status', 'expected_parent_binding': intent['binding']})
+    return stages
 
 
 def inspect_original(app, work, parent, destination):
     destination.mkdir(parents=True, exist_ok=True)
     observations, originals = [], {}
-    for stage in parent['stages']:
+    scoped = {**parent, 'stages': original_stages(work, parent)}
+    for stage in scoped['stages']:
         namespace = NAMESPACES.get(stage['stage'])
         if namespace is None or stage['state'] == 'completed':
             continue
@@ -40,6 +72,9 @@ def inspect_original(app, work, parent, destination):
         attempt = json.loads(path.read_text())
         if attempt['run_id'] != parent['run_id'] or attempt['root'] != str(app.root):
             raise JobError('attempt_invalid', 'Original AI attempt belongs to another run.')
+        expected_binding = stage.get('expected_parent_binding')
+        if expected_binding is not None and attempt.get('parent_binding') != expected_binding:
+            raise JobError('attempt_conflict', 'Original descendant belongs to another parent/cycle/intent.')
         original = app.root / attempt['artifacts']['protocol']
         if not original.resolve().is_relative_to(work.resolve()):
             raise JobError('attempt_invalid', 'Original AI protocol escaped the run workspace.')
@@ -60,7 +95,7 @@ def inspect_original(app, work, parent, destination):
             if row['direction'] == 'client' and message.get('method') == 'turn/start':
                 record = {'attempt_id': attempt['attempt_id'], 'stage': stage['stage'],
                     'connection_id': connection, 'thread_id': message['params']['threadId'],
-                    'turn_id': None, 'state': 'unknown'}
+                    'turn_id': None, 'state': 'unknown', 'visual_stage': row.get('stage')}
                 pending[key] = record
                 submitted.append(record)
             elif row['direction'] == 'server' and key in pending and 'method' not in message:
@@ -77,6 +112,17 @@ def inspect_original(app, work, parent, destination):
                     candidates[0]['turn_id'] = params['turn']['id']
         for index, record in enumerate(submitted):
             if record['state'] == 'rejected' or record['turn_id'] is None:
+                observations.append(record)
+                continue
+            # An original completed native frame is already authoritative about
+            # termination. Reuse still requires the exact saved local result.
+            if stage['stage'] in ('corrections', 'output_review') and any(row['direction'] == 'server' and
+                    row['message'].get('method') == 'turn/completed' and
+                    row['message']['params'].get('threadId') == record['thread_id'] and
+                    row['message']['params']['turn'].get('id') == record['turn_id'] and
+                    row['message']['params']['turn'].get('status') == 'completed' and
+                    str(row.get('connection_id', '0')) == record['connection_id'] for row in frames):
+                record.update(state='completed', inspection='original_native_terminal')
                 observations.append(record)
                 continue
             directory = destination / (attempt['attempt_id'] + '-' + str(index))
@@ -121,7 +167,7 @@ def inspect_original(app, work, parent, destination):
         'turns': observations, 'originals': originals, 'safe_to_continue': not unresolved}
     if not unresolved:
         try:
-            verify_completed_reuse(app, work, parent, proof, local_recovery_routes(work, parent))
+            verify_completed_reuse(app, work, scoped, proof, local_recovery_routes(work, scoped))
         except JobError as error:
             proof.update(safe_to_continue=False, continuation_error={'code': error.code, 'message': str(error)})
     return proof
@@ -133,6 +179,7 @@ def unchanged_originals(root, proof):
 
 def verify_completed_reuse(app, work, parent, provider, routes):
     """A known provider completion permits reuse, never a replacement submission."""
+    parent = {**parent, 'stages': original_stages(work, parent)}
     recoverable = {route['attempt_id'] for route in routes}
     flags = {'model_diagnostic': 'combination_verified', 'context_diagnostic': 'context_verified',
         'reading': 'reading_complete', 'geometry': 'geometry_complete', 'output_review': 'output_review_complete'}
@@ -144,7 +191,7 @@ def verify_completed_reuse(app, work, parent, provider, routes):
             continue  # recover_local validates the original result before any worker starts.
         entry = next(row for row in parent['stages'] if row.get('attempt_id') == identifier)
         operation = entry.get('child_status_operation')
-        if operation:
+        if operation and stage in flags:
             status = app.dispatch(operation, {'run_id': parent['run_id']})
             if (status['ok'] and status['data'].get('attempt_id') == identifier and
                     status['data']['state'] == 'completed' and status['data'].get(flags[stage])):
@@ -153,14 +200,30 @@ def verify_completed_reuse(app, work, parent, provider, routes):
         attempt = json.loads(path.read_text())
         turns = attempt.get('turns', [])
         saved = next((turn for turn in turns if turn.get('thread_id') == record['thread_id'] and
-            turn.get('turn_id') == record['turn_id'] and turn.get('state') == 'completed' and turn.get('answer')), None)
+            turn.get('turn_id') == record['turn_id'] and turn.get('state') == 'completed' and turn.get('answer') and
+            (not record.get('visual_stage') or turn.get('stage') == record['visual_stage']) and
+            (turn.get('connection_id') is None or turn['connection_id'] == record['connection_id'])), None)
         protocol = app.root / attempt['artifacts']['protocol']
         completed_frame = any(row['direction'] == 'server' and row['message'].get('method') == 'turn/completed' and
             row['message']['params'].get('threadId') == record['thread_id'] and
             row['message']['params']['turn'].get('id') == record['turn_id'] and
-            row['message']['params']['turn'].get('status') == 'completed'
+            row['message']['params']['turn'].get('status') == 'completed' and
+            str(row.get('connection_id', '0')) == record['connection_id']
             for row in (json.loads(raw) for raw in protocol.read_text().splitlines()))
+        if stage == 'corrections' and completed_frame and not saved:
+            from .visual_recovery import original_correction_phase
+            original_correction_phase(work, attempt, record)
+            continue
+        if (stage == 'output_review' and completed_frame and
+                (attempt.get('parent_binding') or {}).get('correction_attempt_id')):
+            binding = attempt['parent_binding']
+            app.process.request(app.root, 'verify-output-preparation', parent['run_id'], '--sha256', binding['preparation_sha256'])
+            from .visual_recovery import original_output_phase
+            original_output_phase(work, attempt, record)
+            continue
         if saved and completed_frame:
+            if stage == 'corrections':
+                continue  # Phase-aware native verification runs before continuation.
             if stage == 'reading' and saved is turns[0] and saved['stage'] == 'source':
                 continue  # Reading resumes the original thread with only the accounting turn.
             if stage == 'context_diagnostic' and any(turn['stage'] == 'routing' and
@@ -175,7 +238,7 @@ def verify_completed_reuse(app, work, parent, provider, routes):
 
 def local_recovery_routes(work, parent):
     routes = []
-    for stage in parent['stages']:
+    for stage in original_stages(work, parent):
         namespace = NAMESPACES.get(stage['stage'])
         if not namespace or not stage.get('attempt_id') or stage['state'] == 'completed':
             continue

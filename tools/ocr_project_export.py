@@ -19,6 +19,9 @@ WORKFLOW = Path(__file__).with_name('ocr_workflow.py')
 def project_environment(work, path=None):
     try:
         manifest = load(work / 'input-manifest.json')
+        if path is not None:
+            from ocr_installed_resources import selected_environment
+            path = selected_environment(work, path)
         native = verify_environment(path, manifest['ocr']['language'])
         if native.identity != manifest['environment']:
             raise ValueError('Prepared environment differs from the selected environment')
@@ -38,7 +41,7 @@ def workflow_command(work, native, command, *arguments, allowed=(0,)):
     return result.returncode
 
 
-def export_project(registry, project_id, *, environment=None, reviewer_root=None, geometry_checkpoint=None, previous_snapshot=None):
+def export_project(registry, project_id, *, environment=None, reviewer_root=None, geometry_checkpoint=None, previous_snapshot=None, _render_only=False):
     current = registry.get(project_id)
     work = registry.root / current['artifacts']['workspace']
     native = project_environment(work, environment)
@@ -75,7 +78,8 @@ def export_project(registry, project_id, *, environment=None, reviewer_root=None
         record['project'].update(phase='exporting', operation_state='running', validation='not_run')
         atomic_json(registry.root / record['artifacts']['project'], record)
         try:
-            export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined, previous_snapshot)
+            export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined, previous_snapshot,
+                render_only=_render_only)
         except (ProjectError, OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
             failure = error if isinstance(error, ProjectError) else ProjectError('export_failed', 'Export failed; inspect export-error.json.')
             atomic_json(work / 'export-error.json', {'code': failure.code, 'diagnostic': str(error)})
@@ -86,18 +90,27 @@ def export_project(registry, project_id, *, environment=None, reviewer_root=None
     return registry.get(project_id)
 
 
-def export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined=None, previous_snapshot=None):
+def export_iteration(registry, record, work, source, native, reviewer_root, previous_record, examined=None, previous_snapshot=None, *, render_only=False):
     project_id = record['project']['project_id']
-    iteration = uuid.uuid4().hex
+    scope = load(work / 'geometry-preparation.json').get('correction_scope') if examined else None
+    if scope:
+        from ocr_correction_export import reserve_locked
+        intent = reserve_locked(registry, record, work, scope['cycle_id'])
+        iteration = intent['iteration_id']
+    else:
+        iteration = uuid.uuid4().hex
     pdf = registry.root / 'outputs' / f'{project_id}-{iteration}-ocr.pdf'
     txt = pdf.with_suffix('.txt')
-    if pdf.exists() or txt.exists():
+    if not scope and (pdf.exists() or txt.exists()):
         raise ProjectError('output_collision', 'New iteration output already exists; preserve it and retry with a fresh iteration.')
     previous = snapshot(work) if previous_snapshot is None and (work / 'output-manifest.json').exists() else previous_snapshot
     if previous_snapshot is not None:
         previous = Path(previous_snapshot).resolve()
-        if not previous.is_relative_to((work / 'iterations').resolve()) or (previous / 'output-manifest.json').read_bytes() != (work / 'output-manifest.json').read_bytes():
+        if (not previous.is_relative_to((work / 'iterations').resolve()) or
+                (not scope and (previous / 'output-manifest.json').read_bytes() != (work / 'output-manifest.json').read_bytes())):
             raise ProjectError('snapshot_invalid', 'Select the unchanged snapshot of the previous export.')
+        if scope and previous != (work / scope['previous_snapshot']).resolve():
+            raise ProjectError('snapshot_invalid', 'Select the exact reserved correction ancestor.')
         for name, item in load(previous / 'snapshot.json')['artifacts'].items():
             if item['stored'] and source_hash(previous / name) != item['sha256']:
                 raise ProjectError('snapshot_invalid', 'Previous iteration snapshot changed.')
@@ -113,8 +126,16 @@ def export_iteration(registry, record, work, source, native, reviewer_root, prev
     export_args = ['--source', source, '--pages', work / 'pages.json', '--pdf', pdf, '--txt', txt]
     if previous:
         export_args.extend(['--previous-snapshot', previous])
-    workflow_command(work, native, 'export', *export_args)
-    manifest = load(work / 'output-manifest.json')
+    if scope:
+        from ocr_correction_export import render_locked, commit_artifacts
+        manifest = render_locked(registry, record, work, intent, native, examined, previous)
+        if render_only:
+            record['project'].update(phase='correction_export_rendered', operation_state='completed', validation='not_run')
+            return
+        manifest = commit_artifacts(work, intent, manifest)
+    else:
+        workflow_command(work, native, 'export', *export_args)
+        manifest = load(work / 'output-manifest.json')
     manifest.update(project_id=project_id, run_id=record['project']['run_id'], iteration_id=iteration,
                     review_sha256=source_hash(work / 'review.json'))
     if examined is not None:
@@ -138,6 +159,14 @@ def export_iteration(registry, record, work, source, native, reviewer_root, prev
                             export_iterations=len(list((work / 'iterations').glob('*/snapshot.json'))) + 1)
     if previous:
         record['artifacts']['previous_iteration'] = str(previous.relative_to(registry.root))
+    if scope:
+        from ocr_project_corrections import cycle_record, ledger_path
+        ledger, cycle, _ = cycle_record(work, scope['cycle_id'])
+        if cycle['review_sha256'] != manifest['review_sha256'] or scope['previous_snapshot'] != cycle['previous_snapshot']:
+            raise ProjectError('correction_invalid', 'Export differs from the reserved correction input.')
+        cycle.update(phase='exported', exported_iteration_id=iteration,
+            exported_manifest_sha256=source_hash(work / 'output-manifest.json'))
+        atomic_json(ledger_path(work), ledger)
 
 
 def validate_project(registry, project_id, *, environment=None):

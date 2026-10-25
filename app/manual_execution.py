@@ -47,20 +47,10 @@ def settle(app, root, value):
     run = app.select_run(value['run_id'], notify=False)
     failure = run_failure(root, run, inspected)
     failure.update(parent_attempt_id=None, manual_id=value['manual_id'])
-    descendants = []
-    for descendant in child.get('children', []):
-        if descendant.get('stage') not in NAMESPACES:
-            raise JobError('correction_reconciliation_required', 'Original correction descendant identity is unsupported; no new admission.')
-        evidence = run_failure(root, run, {'attempt_id': child['attempt_id'], 'error': child.get('error'),
-            'stages': [descendant]})
-        evidence['manual_id'] = value['manual_id']
-        descendants.append(evidence)
-        if evidence['delivery_state'] in ('unknown', 'accepted'):
-            failure = evidence
-    if stage == 'corrections' and child['state'] != 'completed' and child.get('stage') == 'output_review' and not descendants:
-        failure.update(delivery_state='unknown', code='correction_reconciliation_required',
-            message='Original correction output-review child binding is incomplete; no replay or new admission.')
+    descendants = failure.get('descendants', [])
+    for evidence in descendants:
+        evidence.update(parent_attempt_id=None, manual_id=value['manual_id'])
     value['descendants'] = descendants
     value.update(failure=failure, delivery_state=failure['delivery_state'],
-        state='reconciliation_required' if failure['delivery_state'] in ('unknown', 'accepted') else 'settled')
+        state='reconciliation_required' if failure['delivery_state'] in ('unknown', 'accepted') or failure['scope'] == 'global' else 'settled')
     return value

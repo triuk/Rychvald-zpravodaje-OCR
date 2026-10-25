@@ -9,7 +9,7 @@ import uuid
 from functools import wraps
 
 from ocr_projects import ProjectError, atomic_json, source_hash
-from ocr_quality import load, bindings, check_bindings, patched_review, validate_review, snapshot
+from ocr_quality import load, load_bound, bindings, check_bindings, patched_review, validate_review, snapshot
 from ocr_project_output_review import output_identity, verify_output_review
 from ocr_project_geometry import verify_committed_samples, identity, adapter_snapshot
 from ocr_project_export import project_environment, workflow_command, WORKFLOW
@@ -239,18 +239,22 @@ def bind_attempt(registry, project_id, cycle_id, attempt):
     return registry.get(project_id)
 
 
-def validate_patch(work, packet, publication):
+def validate_patch(work, packet, publication, *, archive=None):
     from ocr_visual_evidence import verify_visual_turn
-    check_bindings(packet['inputs'])
+    if archive is None:
+        check_bindings(packet['inputs'])
+    else:
+        from ocr_correction_resume import archived_bindings
+        archived_bindings(work, archive, packet['inputs'])
     check_bindings(publication['evidence'])
-    previous_geometry = load(work / 'geometry-checkpoint.json')
+    previous_geometry = load((archive or work) / 'geometry-checkpoint.json')
     if any(publication[key] != previous_geometry[key] for key in ('runtime', 'context_runtime')):
         raise ValueError('Correction runtime differs from the original verified source/geometry runtime')
     for index, item in enumerate([*publication['runtime']['files'], *publication['context_runtime'].get('files', []),
             *publication['context_runtime'].get('interpreters', [])]):
         if 'sha256' in item and publication['evidence'].get('runtime_' + str(index)) != {'path': item['path'], 'sha256': item['sha256']}:
             raise ValueError('Exact original runtime resource evidence is required')
-    answer = verify_visual_turn(publication['visual_turn'], work, packet['images'])
+    answer = verify_visual_turn(publication['visual_turn'], work, packet['images'], archive=archive)
     if answer != load(publication['evidence']['proposal']['path']):
         raise ValueError('Proposal differs from original completed native assistant JSON')
     if any(answer[key] != packet[key] for key in ('expected_review_sha256', 'expected_iteration_id', 'target_finding_ids')):
@@ -268,7 +272,7 @@ def validate_patch(work, packet, publication):
     patch = answer['patch']
     if not isinstance(patch, dict) or set(patch) - {'lines', 'units', 'drop_lines', 'dropped_candidates'}:
         raise ValueError('Correction can change only native review data')
-    original = load(work / 'review.json')
+    original = load((archive or work) / 'review.json')
     changed = patched_review(original, patch)
     validate_review(work, changed)
     scope = set(packet['allowed_line_ids'])
@@ -297,6 +301,9 @@ def publish(registry, project_id, cycle_id, proposal, *, check_only=False):
             ledger, cycle, packet = cycle_record(work, cycle_id)
             if cycle['state'] != 'reserved':
                 raise ValueError('Cycle already published or settled')
+            from ocr_correction_graph import patch_intent_required
+            if patch_intent_required(work, cycle):
+                raise ProjectError('correction_reconciliation_required', 'Adopt the original patch transaction; do not publish another patch or snapshot.')
             current(registry, record, packet['expected_iteration_id'], packet['inputs']['checks/run-validation.json']['sha256'])
             publication = load(proposal)
             proposal_path = Path(proposal).resolve()
@@ -312,11 +319,12 @@ def publish(registry, project_id, cycle_id, proposal, *, check_only=False):
                 raise ProjectError('correction_no_valid_change', 'Original model proposal contains no valid change.')
             # Freeze ORIGINAL derived diagnostics and provider evidence before any data change.
             previous = snapshot(work)
-            for name in ('review.json', 'samples.json', 'geometry-source-samples.json', 'geometry-sample-origin.json',
+            from ocr_project_review import DERIVED_ARTIFACTS
+            for name in (*DERIVED_ARTIFACTS, 'review.json', 'samples.json', 'geometry-source-samples.json', 'geometry-sample-origin.json',
                     'geometry-preparation.json', 'geometry-checkpoint.json', 'review-patch-chain.json',
                     'output-review-preparation.json', 'output-review-publication.json',
                     'reviewed-lines.json', 'geometry.json', 'pages.json', 'segmented-review.json', 'segment-manifest.json',
-                    'reading-publication.json', 'reading-first-publication-review.json'):
+                    'reading-publication.json', 'reading-first-publication-review.json', 'review-invalidation.json'):
                 if (work / name).is_file():
                     shutil.copy2(work / name, previous / name)
             for key in ('profile_snapshot', 'run_manifest'):
@@ -352,7 +360,10 @@ def publish(registry, project_id, cycle_id, proposal, *, check_only=False):
             patch = work / 'application/corrections' / cycle_id / 'native-patch.json'
             atomic_json(patch, answer['patch'])
             from ocr_project_review import patch_project
-            patch_project(registry, project_id, patch, expected_review_sha256=packet['expected_review_sha256'], _record=record)
+            from ocr_correction_patch import reserve_intent
+            patch_project(registry, project_id, patch, expected_review_sha256=packet['expected_review_sha256'], _record=record,
+                _before_write=lambda transaction: reserve_intent(registry, record, work, ledger, cycle, packet,
+                    Path(proposal).resolve(), previous, patch, transaction))
             cycle.update(state='published', phase='patch_published', previous_snapshot=str(previous.relative_to(work)),
                 proposal=str(Path(publication['evidence']['proposal']['path']).relative_to(work)),
                 publication=str(Path(proposal).relative_to(work)), review_sha256=source_hash(work / 'review.json'),
@@ -536,7 +547,7 @@ def historical_geometry_observations(work, packet, *, preparing=False):
             raise ValueError('Historical geometry was bound to another preparation')
         from ocr_visual_evidence import verify_visual_turn
         answer = verify_visual_turn(checkpoint['visual_turn'], work, old_packet['images'], archive=previous)
-        if answer != load(checkpoint['evidence']['proposal']['path']):
+        if answer != load_bound(checkpoint['evidence']['proposal']):
             raise ValueError('Historical observations differ from original native assistant JSON')
         if answer['preparation_sha256'] != scope['previous_preparation_sha256']:
             raise ValueError('Original historical model examined another packet')

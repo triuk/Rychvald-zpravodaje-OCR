@@ -238,6 +238,13 @@ class ProjectRegistry:
                 manifest = {'schema_version': 1, 'run_id': identifier, 'edition_id': digest,
                             'name': run_name, 'created_at': timestamp,
                             'profile_sha256': profile['sha256'], 'profile_source_path': profile['path']}
+                installed = Path(__file__).resolve().parents[1]
+                if (installed / 'inventory.json').is_file():
+                    from ocr_installed_resources import capture
+                    try:
+                        manifest['installed_resources'] = capture(self, record, installed)
+                    except (OSError, ValueError, KeyError, TypeError) as error:
+                        raise ProjectError('installed_origin_invalid', str(error)) from error
                 atomic_json(self.root / artifacts['run_manifest'], manifest)
                 atomic_json(self.root / artifacts['history'], {
                     'type': 'run_created', 'timestamp': timestamp, 'run_id': identifier,
@@ -350,9 +357,29 @@ def build_parser():
     command.add_argument('project_id')
     command.add_argument('--environment', type=Path)
     command.add_argument('--output', action='store_true')
+    command = commands.add_parser('verify-correction-resume')
+    command.add_argument('project_id')
+    command.add_argument('--attempt', required=True)
+    command.add_argument('--ledger-sha256', required=True)
+    command = commands.add_parser('adopt-correction-patch')
+    command.add_argument('project_id')
+    command.add_argument('--cycle-id', required=True)
+    command = commands.add_parser('adopt-correction-outcome')
+    command.add_argument('project_id')
+    command.add_argument('--cycle-id', required=True)
+    command = commands.add_parser('prepare-correction-export')
+    command.add_argument('project_id')
+    command.add_argument('--cycle-id', required=True)
+    command = commands.add_parser('render-correction-export')
+    command.add_argument('project_id')
+    command.add_argument('--cycle-id', required=True)
+    command.add_argument('--environment', type=Path)
     command = commands.add_parser('list')
     command.add_argument('--offset', type=int, default=0)
     command.add_argument('--limit', type=int, default=10)
+    command = commands.add_parser('capture-installed-origin')
+    command.add_argument('project_id')
+    command.add_argument('--prefix', type=Path, required=True)
     command = commands.add_parser('prepare')
     command.add_argument('project_id')
     command.add_argument('--reuse-from-run-id')
@@ -470,6 +497,15 @@ def main(argv=None):
                                                         source_sha256=args.source_sha256)
                 result = response(args.operation, project=record['project'], artifacts=record['artifacts'],
                                   counts={'created': int(created), 'reused': int(not created)})
+        elif args.operation == 'capture-installed-origin':
+            from ocr_installed_resources import capture
+            with registry.project_lock(args.project_id) as record:
+                try:
+                    capture(registry, record, args.prefix)
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    raise ProjectError('installed_origin_invalid', str(error)) from error
+                atomic_json(registry.root / record['artifacts']['project'], record)
+            result = response(args.operation, **registry.get(args.project_id))
         elif args.operation == 'verify-resume':
             from ocr_environment import verify_environment
             from ocr_project_prepare import saved_preparation, valid_identity
@@ -488,8 +524,26 @@ def main(argv=None):
                 raise ProjectError('checkpoint_identity_changed', 'Saved preparation has different source, profile or native resources.')
             if args.output:
                 from ocr_project_output_review import output_identity
-                output_identity(record, work)
+                try:
+                    output_identity(record, work)
+                except (OSError, ValueError, KeyError, TypeError) as error:
+                    raise ProjectError('checkpoint_invalid', str(error)) from error
             result = response(args.operation, **record)
+        elif args.operation == 'verify-correction-resume':
+            from ocr_correction_resume import verify
+            result = response(args.operation, **verify(registry, args.project_id, args.attempt, args.ledger_sha256))
+        elif args.operation == 'prepare-correction-export':
+            from ocr_correction_export import prepare
+            result = response(args.operation, **prepare(registry, args.project_id, args.cycle_id))
+        elif args.operation == 'adopt-correction-patch':
+            from ocr_correction_patch import adopt
+            result = response(args.operation, **adopt(registry, args.project_id, args.cycle_id))
+        elif args.operation == 'adopt-correction-outcome':
+            from ocr_correction_outcome import adopt
+            result = response(args.operation, **adopt(registry, args.project_id, args.cycle_id))
+        elif args.operation == 'render-correction-export':
+            from ocr_correction_export import render
+            result = response(args.operation, **render(registry, args.project_id, args.cycle_id, environment=args.environment))
         elif args.operation == 'validate':
             from ocr_project_export import validate_project
             record, exit_code = validate_project(registry, args.project_id, environment=args.environment)

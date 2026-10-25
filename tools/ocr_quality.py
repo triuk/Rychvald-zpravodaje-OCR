@@ -64,6 +64,15 @@ def check_bindings(records, *, historical=False):
             raise ValueError(f'Stale or missing input: {name} ({path})') from error
 
 
+def check_installed_bindings(work, records):
+    """Read immutable installed provenance; current run inputs remain strict."""
+    if __package__:
+        from .ocr_installed_resources import check_bindings as checked
+    else:
+        from ocr_installed_resources import check_bindings as checked
+    checked(work, records)
+
+
 def load_bound(pointer, *, catalog=None):
     if __package__:
         from .ocr_evidence_archive import load_bound as archived_load
@@ -400,9 +409,9 @@ def report_templates(a):
     identity = {key: manifest[key] for key in ('source_sha256', 'pdf_sha256')}
     technical = load(work / 'checks/technical.json')
     samples = load(work / 'checks/geometry-samples.json')
-    check_bindings(manifest['inputs'])
-    check_bindings(technical['inputs'])
-    check_bindings(samples['inputs'])
+    check_installed_bindings(work, manifest['inputs'])
+    check_installed_bindings(work, technical['inputs'])
+    check_installed_bindings(work, samples['inputs'])
     if technical['source_sha256'] != identity['source_sha256'] or technical['output_sha256'] != identity['pdf_sha256'] or samples['inputs']['pdf']['sha256'] != identity['pdf_sha256']:
         raise ValueError('Run checks and samples on the current PDF before preparing reports')
     targets = {}
@@ -619,12 +628,12 @@ def validate_run(a):
         for name in ('source', 'pdf', 'txt'):
             if sha(manifest[name]) != manifest[name + '_sha256']:
                 raise ValueError(f'Modified {name}')
-        check_bindings(manifest['inputs'])
+        check_installed_bindings(work, manifest['inputs'])
         review_path = Path(manifest['inputs']['review']['path'])
         review = load(review_path)
         validate_review(work, review)
         technical = load(work / 'checks/technical.json')
-        check_bindings(technical['inputs'])
+        check_installed_bindings(work, technical['inputs'])
         if technical['output_sha256'] != manifest['pdf_sha256'] or technical['source_sha256'] != manifest['source_sha256']:
             raise ValueError('Technical report belongs to another export')
         for name in ('source', 'pdf', 'txt'):
@@ -650,7 +659,7 @@ def validate_run(a):
             if row['units'] != unit_counts.get(row['page']):
                 errors.append(f"page/{row['page']}/unit_coverage")
         sample_report = load(work / 'checks/geometry-samples.json')
-        check_bindings(sample_report['inputs'])
+        check_installed_bindings(work, sample_report['inputs'])
         if sample_report['inputs']['pdf']['sha256'] != manifest['pdf_sha256']:
             raise ValueError('Sample report belongs to another export')
         if sample_report['inputs']['samples']['sha256'] != manifest['inputs']['samples']['sha256']:

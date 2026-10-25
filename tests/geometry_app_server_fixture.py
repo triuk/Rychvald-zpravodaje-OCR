@@ -48,6 +48,25 @@ for raw in sys.stdin:
             Path(gate + '.ready').write_text('Controlled descendant turn accepted; acknowledgement lost')
             continue
         correction = 'CORRECTION_PACKET\n' in prompt
+        rejected_output = os.environ.get('RELEASE_OUTPUT_REJECT')
+        if correction and rejected_output:
+            Path(rejected_output + '.armed').touch()
+        if (output and rejected_output and Path(rejected_output + '.armed').exists() and
+                not Path(rejected_output + '.restored').exists()):
+            Path(rejected_output).write_text('Controlled exact correction output request rejected before acceptance')
+            emit({'id': request['id'], 'error': {'code': -32000, 'message': 'Controlled account outage',
+                'data': {'codexErrorInfo': 'unauthorized'}}})
+            continue
+        lost_repair_ack = os.environ.get('RELEASE_REPAIR_LOST_ACK')
+        if correction and lost_repair_ack:
+            Path(lost_repair_ack).write_text('Controlled repair request received; delivery acknowledgement lost')
+            raise SystemExit(0)
+        rejected_repair = os.environ.get('RELEASE_REPAIR_REJECT')
+        if correction and rejected_repair and not Path(rejected_repair + '.restored').exists():
+            Path(rejected_repair).write_text('Controlled exact repair request rejected by quota before acceptance')
+            emit({'id': request['id'], 'error': {'code': -32000, 'message': 'Controlled quota outage',
+                'data': {'codexErrorInfo': 'usageLimitExceeded'}}})
+            continue
         packet = json.loads(prompt.split('CORRECTION_PACKET\n' if correction else 'OUTPUT_PACKET\n' if output else 'SOURCE_GEOMETRY_PACKET\n' if source else 'GEOMETRY_PACKET\n', 1)[1])
         if correction:
             line = dict(packet['lines'][0], text='ABC', decision_basis='Controlled targeted source ABC crop reading')

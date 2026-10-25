@@ -2,6 +2,8 @@
 import contextlib
 import copy
 import io
+import hashlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -199,7 +201,7 @@ EXPORT_ARTIFACTS = (
 DERIVED_ARTIFACTS = SEGMENTATION_ARTIFACTS + EXPORT_ARTIFACTS + ('geometry-preparation.json', 'geometry-checkpoint.json')
 
 
-def patch_project(registry, project_id, patch, *, line_id=None, expected_review_sha256=None, _record=None):
+def patch_project(registry, project_id, patch, *, line_id=None, expected_review_sha256=None, _record=None, _before_write=None):
     with (registry.project_lock(project_id) if _record is None else contextlib.nullcontext(_record)) as record:
         work = registry.root / record['artifacts']['workspace']
         path = work / 'review.json'
@@ -246,6 +248,29 @@ def patch_project(registry, project_id, patch, *, line_id=None, expected_review_
         pages = sorted({line['page'] for key in affected for line in [old_lines.get(key), new_lines.get(key)] if line})
         artifacts = [{'path': name, 'sha256': source_hash(work / name)}
                      for name in DERIVED_ARTIFACTS if (work / name).is_file()]
+        if _before_write is not None:
+            # A correction binds this exact local transaction before any review
+            # byte changes. Normal manual patch behavior keeps its public API.
+            encode = lambda value, indent=None: json.dumps(value, ensure_ascii=False, indent=indent) + '\n'
+            review_text, patch_text = encode(changed, 2), encode(edits)
+            next_hash = hashlib.sha256(review_text.encode()).hexdigest()
+            patch_name = 'review-history/' + next_hash + '-patch.json'
+            next_chain = [*chain, {'previous': previous_hash, 'current': next_hash,
+                'patch': patch_name, 'patch_sha256': hashlib.sha256(patch_text.encode()).hexdigest(), 'line_id': line_id}]
+            invalidation = {'schema_version': 1, 'status': 'stale_for_current_review',
+                'previous_review_sha256': previous_hash, 'review_sha256': next_hash,
+                'affected_lines': affected, 'affected_pages': pages, 'unit_order_changed': reordered, 'artifacts': artifacts}
+            desired = copy.deepcopy(record)
+            desired['project'].update(phase='review_updated', operation_state='completed', validation='not_run', review_sha256=next_hash)
+            desired['counts'].update(summary, changed_lines=len(changed_lines), affected_lines=len(affected),
+                affected_pages=len(pages), invalidated_artifacts=len(artifacts))
+            desired['artifacts'].update(review=str(path.relative_to(registry.root)),
+                previous_review=str((work / 'review-history' / (previous_hash + '.json')).relative_to(registry.root)),
+                review_invalidation=str((work / 'review-invalidation.json').relative_to(registry.root)))
+            _before_write({'record': desired, 'writes': {
+                'review-history/' + previous_hash + '.json': path.read_text(), 'review.json': review_text,
+                patch_name: patch_text, 'review-patch-chain.json': encode(next_chain),
+                'review-invalidation.json': encode(invalidation)}})
         with contextlib.redirect_stdout(io.StringIO()):
             save_review(SimpleNamespace(work=work, review=path), original, changed)
         current_hash = source_hash(path)

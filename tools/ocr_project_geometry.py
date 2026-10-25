@@ -6,7 +6,7 @@ import re
 import shutil
 
 from ocr_projects import ProjectError, atomic_json, source_hash
-from ocr_quality import load, validate_review, bbox, unique, bindings, check_bindings
+from ocr_quality import load, validate_review, bbox, unique, bindings, check_bindings, check_installed_bindings
 from ocr_project_export import project_environment, workflow_command, WORKFLOW
 
 
@@ -38,13 +38,14 @@ def check_geometry_bindings(work, records):
     if adapter and source_hash(Path(__file__)) != adapter['sha256']:
         policy_path = Path(__file__).resolve().parents[1]/'native/geometry-adapter-compatibility.json'
         policy = load(policy_path)
-        if (policy['policy'] != 'workspace-confined-image-path-alias-v1' or
-            adapter['sha256'] != policy['previous_adapter_sha256'] or
-            source_hash(Path(__file__)) != policy['validator_sha256']):
+        pair = {'previous_adapter_sha256': adapter['sha256'], 'validator_sha256': source_hash(Path(__file__))}
+        allowed = [{'previous_adapter_sha256': policy['previous_adapter_sha256'],
+            'validator_sha256': policy['validator_sha256']}, *policy.get('installed_resource_pairs', [])]
+        if policy['policy'] != 'workspace-confined-image-path-alias-v1' or pair not in allowed:
             raise ValueError('Unreviewed geometry adapter migration')
         original = work/'geometry-code-snapshots'/(adapter['sha256']+'.py')
         selected['geometry_tool'] = {'path': str(original), 'sha256': adapter['sha256']}
-    check_bindings(selected)
+    check_installed_bindings(work, selected)
 
 
 def prepare_geometry(registry, project_id, samples, *, environment=None, provenance=None):
@@ -93,7 +94,7 @@ def prepare_geometry(registry, project_id, samples, *, environment=None, provena
             workflow_command(work, native, 'sheets', '--lines', work / 'reviewed-lines.json')
             workflow_command(work, native, 'sample-sheets', '--samples', work / 'samples.json')
             segmented = load(work / 'segment-manifest.json')
-            check_bindings(segmented['inputs'])
+            check_installed_bindings(work, segmented['inputs'])
             lines = load(work / 'reviewed-lines.json')
             sample_manifest = load(work / 'checks/sample-source.json')
             sample_dir = Path(sample_manifest['samples'][0]['source_preview']).parent
@@ -152,8 +153,8 @@ def verify_geometry(registry, record, *, examined=True):
                 raise ValueError('Examined source/run/sample identity differs')
             if proof['preparation_sha256'] != source_hash(work / 'geometry-preparation.json'):
                 raise ValueError('Examined geometry differs from current preparation')
-            check_bindings(proof['evidence'])
-            check_bindings(proof['historical_reading']['evidence'])
+            check_installed_bindings(work, proof['evidence'])
+            check_installed_bindings(work, proof['historical_reading']['evidence'])
             verify_sample_origin(work, packet)
             from ocr_visual_evidence import verify_visual_turn
             observations = verify_visual_turn(proof['visual_turn'], work, packet['images'])
@@ -263,8 +264,8 @@ def _publish_geometry(registry, project_id, checkpoint):
         packet['preparation_sha256'] = source_hash(work / 'geometry-preparation.json')
         if value['identity'] != packet['identity'] or value['source_samples_sha256'] != source_hash(work/'geometry-source-samples.json'):
             raise ProjectError('geometry_invalid', 'Checkpoint belongs to different source/run/samples')
-        check_bindings(value['evidence'])
-        check_bindings(value['historical_reading']['evidence'])
+        check_installed_bindings(work, value['evidence'])
+        check_installed_bindings(work, value['historical_reading']['evidence'])
         verify_sample_origin(work, packet)
         from ocr_visual_evidence import verify_visual_turn
         proposal = verify_visual_turn(value['visual_turn'], work, packet['images'])
