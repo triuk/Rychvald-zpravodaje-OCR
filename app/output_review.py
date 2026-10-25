@@ -128,6 +128,8 @@ class OutputReviewJobs(ContextJobs):
                 directory = root / continuations[-1]['directory']
             if not directory.resolve().is_relative_to(job['directory']):
                 raise JobError('attempt_conflict', 'Original output phase escaped its attempt.')
+            if job.get('recovery_directory') and continuations:
+                job['current_continuation'] = continuations[-1]
             if job.get('recovery_directory') and directory.exists():
                 protocol = directory / 'protocol.jsonl'
                 frames = [json.loads(raw) for raw in protocol.read_text().splitlines()] if protocol.exists() else []
@@ -157,7 +159,8 @@ class OutputReviewJobs(ContextJobs):
                         job['current_continuation'] = continuation
                         directory = root / continuation['directory']
                 else:
-                    directory = job['recovery_directory'] / 'output_examination'
+                    if not continuations:
+                        directory = job['recovery_directory'] / 'output_examination'
             if reused is None:
                 answer, proof, proposal = examine(self, job, 'output_examination',
                     OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA, work, packet['images'],
@@ -186,6 +189,7 @@ class OutputReviewJobs(ContextJobs):
                 error={'code': getattr(error, 'code', 'output_review_failed'), 'message': str(error)})
             self._event(job, 'output_review_failed')
         finally:
+            job.pop('current_continuation', None)
             if job.get('rpc'):
                 job['rpc'].close()
             value.update(ended_at=now(), elapsed_seconds=time.monotonic() - started)
