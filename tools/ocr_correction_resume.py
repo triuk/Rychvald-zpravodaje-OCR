@@ -75,8 +75,8 @@ def verify(registry, run_id, attempt, ledger_sha256):
             raise ValueError('Correction cycle chain changed')
         previous = cycle['cycle_id']
         if cycle['state'] == 'reserved':
-            if cycle.get('patch_intent'):
-                from ocr_correction_patch import verify_intent
+            from ocr_correction_patch import verify_intent, has_intent
+            if cycle.get('patch_intent') or has_intent(work, cycle):
                 _, pending_archive = verify_intent(registry, record, work, cycle, packet)
                 record['artifacts']['correction_patch_snapshot'] = str(pending_archive.relative_to(registry.root))
             else:
@@ -187,6 +187,7 @@ def verify(registry, run_id, attempt, ledger_sha256):
             continuation_edges(work, output)
     record.setdefault('counts', {}).update(correction_geometry_prepared=int(geometry_prepared),
         correction_geometry_published=int(geometry_published), correction_export_committed=int(exported),
-        correction_export_rendered=int(rendered), correction_patch_pending=int(cycle['state'] == 'reserved' and bool(cycle.get('patch_intent'))),
+        correction_export_rendered=int(rendered), correction_patch_pending=int(cycle['state'] == 'reserved' and
+            (bool(cycle.get('patch_intent')) or has_intent(work, cycle))),
         correction_outcome_pending=int(outcome_pending))
     return record

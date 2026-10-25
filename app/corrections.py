@@ -268,7 +268,7 @@ class CorrectionJobs(ContextJobs):
                     continue
                 if cycle['state'] == 'reserved':
                     value['stage'] = 'targeted_repair'
-                    if cycle.get('patch_intent'):
+                    if cycle.get('patch_intent') or (work / 'application/corrections' / cycle_id / 'patch-intent.json').exists():
                         self.process.request(root, 'adopt-correction-patch', value['run_id'], '--cycle-id', cycle_id)
                     else:
                         self._event(job, 'correction_started', cycle_id=cycle_id, cycle_index=cycle['index'])

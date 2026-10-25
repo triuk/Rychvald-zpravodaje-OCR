@@ -71,6 +71,9 @@ class ReleaseRecoveryTests(unittest.TestCase):
     def test_native_crash_during_patch_metadata_commit_finishes_only_missing_transaction_writes(self):
         self.owner_crash_scenario('patch-chain')
 
+    def test_native_crash_after_patch_intent_before_ledger_adopts_exact_orphan_without_replay(self):
+        self.owner_crash_scenario('patch-orphan')
+
     def test_native_crash_after_outcome_before_ledger_adopts_original_result_without_revalidation(self):
         self.owner_crash_scenario('outcome-ledger')
 
@@ -534,13 +537,59 @@ class ReleaseRecoveryTests(unittest.TestCase):
         child_path = work / 'application/correction-attempts' / crashed['correction_attempt_id'] / 'attempt.json'
         old_correction = json.loads(child_path.read_text())
         original_turns = old_correction['turns']
-        original_visual_reuse = visual_publication or fault_mode in ('patch-ledger', 'patch-chain')
+        original_visual_reuse = visual_publication or fault_mode in ('patch-ledger', 'patch-chain', 'patch-orphan')
         original_visual = Path(crashed['original_visual_turn']['protocol']['path']).read_bytes() if original_visual_reuse or fault_mode == 'output-publication' else None
         if fault_mode in ('outcome-ledger', 'outcome-event', 'output-publication'):
             self.assertEqual(len(old_correction['children']), 1)
         else:
             self.assertFalse(old_correction.get('children'))
         self.assertEqual(hashlib.sha256(child_path.read_bytes()).hexdigest(), crashed['original_parent_manifest_sha256'])
+        if fault_mode == 'patch-orphan':
+            ledger_path = work / 'application/corrections/ledger.json'
+            cycle = json.loads(ledger_path.read_text())['cycles'][-1]
+            self.assertNotIn('patch_intent', cycle)
+            intent = work / 'application/corrections' / cycle['cycle_id'] / 'patch-intent.json'
+            self.assertEqual(hashlib.sha256(intent.read_bytes()).hexdigest(), crashed['intent_sha256'])
+            original_intent = intent.read_bytes()
+            saved_intent = json.loads(original_intent)
+            patch = Path(saved_intent['inputs']['patch']['path'])
+            original_patch = patch.read_bytes()
+            ledger_before, review_before = ledger_path.read_bytes(), (work / 'review.json').read_bytes()
+            # Matching P/C/K IDs and a self-consistent new hash cannot authorize
+            # a patch different from the original completed native assistant.
+            patch.write_text('{}\n')
+            forged = json.loads(original_intent)
+            forged['inputs']['patch']['sha256'] = hashlib.sha256(patch.read_bytes()).hexdigest()
+            intent.write_text(json.dumps(forged))
+            result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py'),
+                '--root', str(self.root), '--json', 'adopt-correction-patch', identity['run_id'],
+                '--cycle-id', cycle['cycle_id']], capture_output=True)
+            (self.directory / 'forged-orphan-intent.json').write_bytes(intent.read_bytes())
+            (self.directory / 'forged-orphan-adopt.stdout').write_bytes(result.stdout)
+            (self.directory / 'forged-orphan-adopt.stderr').write_bytes(result.stderr)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(json.loads(result.stdout)['error']['code'], 'correction_invalid')
+            self.assertEqual(ledger_path.read_bytes(), ledger_before)
+            self.assertEqual((work / 'review.json').read_bytes(), review_before)
+            patch.write_bytes(original_patch); intent.write_bytes(original_intent)
+            for name in ('record', 'precondition'):
+                forged = json.loads(original_intent)
+                if name == 'record':
+                    forged['record']['counts']['changed_lines'] = 999999
+                else:
+                    forged['project_before_sha256'] = '0' * 64
+                intent.write_text(json.dumps(forged))
+                result = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/ocr_projects.py'),
+                    '--root', str(self.root), '--json', 'adopt-correction-patch', identity['run_id'],
+                    '--cycle-id', cycle['cycle_id']], capture_output=True)
+                (self.directory / ('forged-orphan-' + name + '.json')).write_bytes(intent.read_bytes())
+                (self.directory / ('forged-orphan-' + name + '.stdout')).write_bytes(result.stdout)
+                (self.directory / ('forged-orphan-' + name + '.stderr')).write_bytes(result.stderr)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(json.loads(result.stdout)['error']['code'], 'correction_invalid')
+                self.assertEqual(ledger_path.read_bytes(), ledger_before)
+                self.assertEqual((work / 'review.json').read_bytes(), review_before)
+                intent.write_bytes(original_intent)
         checked = self.app.dispatch('reconcile_autonomous', identity)
         self.assertTrue(checked['ok'], checked)
         self.assertTrue(checked['data']['checkpoint']['valid'], checked)
@@ -578,10 +627,12 @@ class ReleaseRecoveryTests(unittest.TestCase):
             repaired = [turn for turn in json.loads(child_path.read_text())['turns'] if turn['stage'] == phase]
             self.assertEqual(len(repaired), 1)
             self.assertEqual(repaired[0]['turn_id'], crashed['original_visual_turn']['turn_id'])
-            if fault_mode in ('patch-ledger', 'patch-chain'):
+            if fault_mode in ('patch-ledger', 'patch-chain', 'patch-orphan'):
                 self.assertEqual(correction['cycles'][0]['previous_snapshot'], crashed['previous_snapshot'])
                 self.assertEqual(hashlib.sha256((work / 'review.json').read_bytes()).hexdigest(), crashed['review_sha256'])
                 self.assertEqual(len(list((work / 'iterations').glob('*/snapshot.json'))), 1)
+                if fault_mode == 'patch-orphan':
+                    self.assertEqual(hashlib.sha256(intent.read_bytes()).hexdigest(), crashed['intent_sha256'])
                 if fault_mode == 'patch-chain':
                     self.assertTrue(crashed['metadata_not_committed'])
         else:

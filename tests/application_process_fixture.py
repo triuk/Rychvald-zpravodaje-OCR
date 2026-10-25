@@ -152,7 +152,19 @@ def crash_native_before_patch_ledger(event, arguments):
     source, destination = (Path(os.fsdecode(value)) for value in arguments[:2])
     if not source.is_file():
         return
-    if fault_mode == 'patch-chain':
+    if fault_mode == 'patch-orphan':
+        if destination.name != 'ledger.json' or destination.parent.name != 'corrections' or not destination.is_file():
+            return
+        old, new = json.loads(destination.read_text()), json.loads(source.read_text())
+        cycle = new['cycles'][-1]
+        if cycle.get('phase') != 'patch_reserved' or old['cycles'][-1].get('patch_intent'):
+            return
+        work = destination.parents[2]
+        intent = json.loads((work / cycle['patch_intent']).read_text())
+        cycle = {**cycle, 'previous_snapshot': intent['previous_snapshot'],
+            'publication': str(Path(intent['inputs']['publication']['path']).relative_to(work)),
+            'review_sha256': intent['record']['project']['review_sha256']}
+    elif fault_mode == 'patch-chain':
         if destination.name != 'review-patch-chain.json':
             return
         work = destination.parent
@@ -187,6 +199,7 @@ def crash_native_before_patch_ledger(event, arguments):
         'parent_attempt_id': saved['parent_binding']['parent_attempt_id'], 'correction_attempt_id': saved['attempt_id'],
         'cycle_id': cycle['cycle_id'], 'previous_snapshot': cycle['previous_snapshot'],
         'review_sha256': cycle['review_sha256'], 'original_visual_turn': publication['visual_turn'],
+        'intent_sha256': hashlib.sha256((work / 'application/corrections' / cycle['cycle_id'] / 'patch-intent.json').read_bytes()).hexdigest(),
         'metadata_not_committed': fault_mode == 'patch-chain' and (not destination.exists() or
             hashlib.sha256(destination.read_bytes()).hexdigest() != hashlib.sha256(source.read_bytes()).hexdigest()),
         'original_parent_manifest_sha256': hashlib.sha256(correction.read_bytes()).hexdigest(),
@@ -258,7 +271,7 @@ if sys.argv[1] == '--native':
     fault_mode = sys.argv[4]
     arguments = sys.argv[5:]
     sys.addaudithook(crash_native_before_outcome_ledger if fault_mode == 'outcome-ledger' else
-        crash_native_before_patch_ledger if fault_mode in ('patch-ledger', 'patch-chain') else crash_native_before_render_binding)
+        crash_native_before_patch_ledger if fault_mode in ('patch-ledger', 'patch-chain', 'patch-orphan') else crash_native_before_render_binding)
     sys.path.insert(0, str(ROOT / 'tools'))
     sys.argv = [str(ROOT / 'tools/ocr_projects.py'), *arguments]
     runpy.run_path(sys.argv[0], run_name='__main__')

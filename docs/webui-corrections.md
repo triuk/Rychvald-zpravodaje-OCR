@@ -94,6 +94,10 @@ Nativní zápisy mají před změnou trvalý záměr: patch se seznamem původn�
 nových hashů, export s předem rezervovaným UUID a neměnný výsledek cyklu.
 Po přerušení se dokončí jen doložené chybějící zápisy téhož záměru. Již vytvořené
 PDF/TXT, výsledky validace a rozhodnutí o zastavení se převezmou beze změny.
+Záměr patche uložený těsně před jeho propojením do knihy cyklů se vyhledá pouze
+v původním rezervovaném cyklu. Před doplněním propojení se znovu ověří původní
+návrh modelu, archiv vstupů a úplný nativní výsledek transakce; samotná shoda
+identifikátorů ani hash uvedený tímto nepřipojeným záměrem nestačí.
 Dokončený původní modelový protokol lze místně znovu ověřit a zveřejnit bez nového
 tahu; chybějící nebo neověřitelný výsledek zůstává zablokovaný.
 
