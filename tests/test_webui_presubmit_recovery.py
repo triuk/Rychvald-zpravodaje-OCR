@@ -1,5 +1,6 @@
 """Public crash recovery of an explicitly allowed, never submitted successor."""
 import hashlib
+import copy
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import time
 import unittest
+import uuid
 
 from app.service import Application
 import test_webui_export as export_tests
@@ -47,7 +49,13 @@ class PresubmitRecoveryTests(unittest.TestCase):
     def test_accepted_output_successor_cannot_replay_its_reserved_request(self):
         self.scenario('output', 'intent', delivery='accepted')
 
-    def scenario(self, stage, boundary, *, delivery=None):
+    def test_ambiguous_pending_repair_reservations_cannot_choose_a_provider_authority(self):
+        self.scenario('repair', 'directory', ambiguity=True)
+
+    def test_ambiguous_pending_output_reservations_cannot_choose_a_provider_authority(self):
+        self.scenario('output', 'directory', ambiguity=True)
+
+    def scenario(self, stage, boundary, *, delivery=None, ambiguity=False):
         self.app.close()
         source_bytes = self.source.read_bytes()
         marker = self.directory / 'provider-rejection'
@@ -121,6 +129,30 @@ class PresubmitRecoveryTests(unittest.TestCase):
         self.assertEqual(str(physical.relative_to(self.root)), reservation['directory'])
         intent_bytes = {str(p): p.read_bytes() for p in (Path(reservation['intent']['path']), physical / 'submission-intent.json', physical / 'request.json') if p.exists()}
         self.assertEqual((physical / 'submission-intent.json').exists(), boundary == 'intent')
+        if ambiguity:
+            # Deliberate durable-artifact ambiguity after a real owner crash.
+            # Each immutable reservation is otherwise valid for the same exact
+            # stopped original. Recovery itself uses only public dispatch.
+            duplicate = copy.deepcopy(reservation)
+            duplicate['continuation_id'] = uuid.uuid4().hex
+            sibling = physical.with_name('continuation-' + duplicate['continuation_id'])
+            duplicate['directory'] = str(sibling.relative_to(self.root))
+            pointer = sibling.with_suffix('.json')
+            pointer.write_text(json.dumps({k: v for k, v in duplicate.items() if k not in ('intent', 'successor')}, indent=2))
+            duplicate['intent'] = {'path': str(pointer), 'sha256': hashlib.sha256(pointer.read_bytes()).hexdigest()}
+            sibling.mkdir()
+            # Exercise opposite array priorities in the C and O callers.
+            if stage == 'output':
+                stopped['continuations'].insert(0, duplicate)
+            else:
+                stopped['continuations'].append(duplicate)
+            attempt_path.write_text(json.dumps(stopped, indent=2))
+            from tools.ocr_correction_graph import continuation_edges
+            self.assertEqual(continuation_edges(work, stopped), [])
+            authority = {p: p.read_bytes() for p in (original_protocol, attempt_path.parent / 'protocol.jsonl',
+                Path(reservation['intent']['path']), pointer, work / 'application/corrections/ledger.json')}
+            (self.directory / 'ambiguity-fixture.json').write_text(json.dumps({'kind': 'two otherwise valid pending reservations',
+                'original': reservation, 'duplicate': duplicate}, indent=2))
         if delivery:
             Path(str(marker) + '.delivery').write_text(delivery)
         self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
@@ -129,8 +161,25 @@ class PresubmitRecoveryTests(unittest.TestCase):
         self.assertTrue(checked['data']['provider']['safe_to_continue'], checked)
         resumed = self.app.dispatch('resume_autonomous', {**identity, 'reconciliation_id': checked['data']['reconciliation_id']})
         self.assertTrue(resumed['ok'], resumed)
-        self.assertEqual(self.wait(self.app.dispatch, identity)['state'], 'failed' if delivery else 'completed')
+        self.assertEqual(self.wait(self.app.dispatch, identity)['state'], 'failed' if delivery or ambiguity else 'completed')
         after = json.loads(attempt_path.read_text())
+        if ambiguity:
+            self.assertEqual(after['error']['code'], 'checkpoint_invalid')
+            self.assertIn('unique', after['error']['message'].lower())
+            self.assertEqual(after['continuations'], stopped['continuations'])
+            self.assertEqual(after['connections'], stopped['connections'])
+            for p, data in authority.items():
+                self.assertEqual(p.read_bytes(), data)
+            self.assertEqual(list(physical.iterdir()), [])
+            self.assertEqual(list(sibling.iterdir()), [])
+            self.assertEqual(self.source.read_bytes(), source_bytes)
+            for path, digest in pixels.items():
+                self.assertEqual(hashlib.sha256(Path(path).read_bytes()).hexdigest(), digest)
+            retained = self.app.dispatch('correction_status', identity)['data']
+            self.assertEqual(retained['attempt_id'], before['attempt_id'])
+            self.assertEqual(retained['cycles_used'], 1)
+            self.assertEqual(retained['cycles'][0]['cycle_id'], before['cycles'][0]['cycle_id'])
+            return
         self.assertEqual(after['attempt_id'], original_attempt['attempt_id'])
         self.assertEqual(after['parent_binding'], original_attempt['parent_binding'])
         self.assertEqual(len(after['continuations']), 1)

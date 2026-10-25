@@ -10,7 +10,18 @@ def restore_preparation(job, stage, prompt, schema, work, images, directory):
     continuation = job['current_continuation']
     try:
         from tools.ocr_correction_graph import continuation_edges
-        continuation_edges(work, job['manifest'])
+        edges = continuation_edges(work, job['manifest'])
+        reservations = job['manifest']['continuations']
+        identifiers = [row['continuation_id'] for row in reservations]
+        claims = [(row['stage'], str(row['original']['connection_id']), row['original']['thread_id'],
+            row['original']['turn_id'], row['original']['request_id']) for row in reservations]
+        if len(set(identifiers)) != len(identifiers) or len(set(claims)) != len(claims):
+            raise ValueError('Continuation authority has no unique stopped-original reservation.')
+        submitted = {edge['continuation_id'] for edge in edges}
+        frontier = [row for row in reservations if row['stage'] == stage and
+            row['cycle_id'] == continuation['cycle_id'] and row['continuation_id'] not in submitted]
+        if len(frontier) != 1 or frontier[0] != continuation:
+            raise ValueError('Continuation preparation has no unique active reservation.')
         expected = {'model': 'gpt-6.1-sol', 'effort': 'high', 'outputSchema': schema,
             'input': [{'type': 'text', 'text': prompt}] + [
                 {'type': 'localImage', 'path': str((work / image['path']).resolve())} for image in images]}
