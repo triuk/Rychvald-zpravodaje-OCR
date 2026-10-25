@@ -147,6 +147,7 @@ class Application:
                 if not isinstance(payload, (dict, type(None))):
                     raise ApplicationError('invalid_request', 'Request payload must be an object.')
                 payload = payload or {}
+                self._settle_finished_manual()
                 if self._closing and (operation.startswith('start_') or operation in ('resume_autonomous', 'resume_queue', 'enqueue_run')):
                     raise ApplicationError('application_closing', 'Application is closing; no new work can start.')
                 if operation in ('start_preparation', 'start_model_diagnostic', 'start_context_diagnostic',
@@ -304,6 +305,9 @@ class Application:
                             'reset': bool(self._events and after < self._events[0]['sequence'] - 1)}
                 else:
                     raise ApplicationError('unknown_operation', 'Unknown application operation.')
+                # A public terminal result must not leave this application's
+                # already-idle manual lease waiting for its polling thread.
+                self._settle_finished_manual()
                 return {'ok': True, 'data': data, 'error': None, 'event_cursor': self._sequence}
             except ApplicationError as error:
                 return {'ok': False, 'data': None,
@@ -330,11 +334,19 @@ class Application:
                     else:
                         self._release_manual(manual_lease, self.root)
 
+    def _settle_finished_manual(self):
+        if self._manual_lease is not None and not any(manager.busy() for manager in self.autonomous._managers()):
+            self._release_manual(self._manual_lease, self.root)
+
     def _release_manual(self, lease, root):
         managers = self.autonomous._managers()
-        while any(manager.busy() for manager in managers):
+        while self._manual_lease is lease and any(manager.busy() for manager in managers):
             time.sleep(.02)
         with self._lock:
+            # A synchronous terminal read may already have settled this lease
+            # and admitted a new job before the old watcher obtains the lock.
+            if self._manual_lease is not lease:
+                return
             path = root / 'application/manual-execution.json'
             value = json.loads(path.read_text())
             from .manual_execution import settle

@@ -168,6 +168,26 @@ class AutonomousExportTests(unittest.TestCase):
         # JSON or change an attached image; none may overwrite valid reports.
         for mode in ('waive_output', 'drop_output', 'template_output', 'outside_evidence', 'tamper_output', 'tamper_geometry'):
             with self.subTest(mode=mode):
+                # An invalid original publication leaves an explicit recovery
+                # hold. Each hostile input belongs to a new independent run;
+                # never overwrite that hold to submit the next test's turn.
+                self.app.close()
+                self.root = self.directory / ('registry-' + mode)
+                self.app = Application(self.root, codex_runtime=self.runtime, context_runtime=self.context)
+                seeded = self.app.dispatch('start_autonomous', {'source_path': str(self.source), 'name': mode,
+                    'profile_path': profile['path'], 'profile_sha256': profile['sha256'],
+                    'defer_corrections': True, 'environment': os.environ.get('OCR_ENVIRONMENT')})
+                self.assertTrue(seeded['ok'], seeded)
+                identifier = seeded['data']['run_id']
+                deadline = time.monotonic() + 150
+                while time.monotonic() < deadline:
+                    complete = self.app.dispatch('autonomous_status', {'run_id': identifier})['data']
+                    if complete['state'] not in ('starting', 'running'):
+                        break
+                    time.sleep(.05)
+                self.assertEqual(complete['state'], 'completed', complete)
+                detail = self.app.dispatch('select_run', {'run_id': identifier})['data']
+                work = self.root / detail['artifacts']['workspace']['path']
                 before = {name: (work / name).read_bytes() for name in
                     ('checks/visual-review.json', 'checks/findings.json', 'output-review-publication.json')}
                 self.peer(mode)
@@ -177,6 +197,9 @@ class AutonomousExportTests(unittest.TestCase):
                 rejected = self.wait_output(identifier)
                 self.assertEqual(rejected['state'], 'failed', rejected)
                 self.assertFalse(rejected.get('output_review_complete'))
+                denied = self.app.dispatch('start_output_review', {'run_id': identifier})
+                self.assertFalse(denied['ok'], denied)
+                self.assertEqual(denied['error']['code'], 'reconciliation_required')
                 for name, data in before.items():
                     self.assertEqual((work / name).read_bytes(), data)
 
