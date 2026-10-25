@@ -164,10 +164,14 @@ class CorrectionJobs(ContextJobs):
                 self._event(job, 'correction_original_visual_reused', stage=stage,
                     thread_id=proof['thread_id'], turn_id=proof['turn_id'])
                 return answer, proof, proposal
-            # Initialization stopped before submission. Keep its original files;
-            # the first actual turn gets a separately recorded physical workspace.
-            directory = job['recovery_directory'] / stage
-        return examine(self, job, stage, prompt, schema, work, images, directory=directory)
+            if not continuations:
+                directory = job['recovery_directory'] / stage
+        if job.get('resume_original') and continuations:
+            job['current_continuation'] = continuations[-1]
+        try:
+            return examine(self, job, stage, prompt, schema, work, images, directory=directory)
+        finally:
+            job.pop('current_continuation', None)
 
     def _boundary(self, job):
         if job['cancel']:

@@ -14,11 +14,16 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
     """No automatic retries; every accepted turn remains durable even on local failure."""
     value = job['manifest']
     directory = directory or job['directory'] / stage
-    directory.mkdir()
+    continuation = job.get('current_continuation')
+    preparation = {}
+    if continuation is not None:
+        from .visual_preparation import restore_preparation
+        preparation = restore_preparation(job, stage, prompt, schema, work, images, directory)
+    directory.mkdir(exist_ok=continuation is not None)
     workspace = directory / 'workspace'
     storage = directory / 'context'
-    workspace.mkdir()
-    storage.mkdir()
+    workspace.mkdir(exist_ok=continuation is not None)
+    storage.mkdir(exist_ok=continuation is not None)
     protocol = directory / 'protocol.jsonl'
     started = time.monotonic()
     lock = threading.Lock()
@@ -62,13 +67,14 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
 
     def connect(settings, trust=None):
         nonlocal rpc, connection_id
-        connection_id = str(len(value['connections']))
+        connection_id = preparation['connection_id'] if trust and preparation else str(len(value['connections']))
         stderr = (directory / 'stderr.log').open('a')
         rpc = RpcProcess(command(manager.runtime, settings, trust), workspace, stderr, trace,
                          lambda: job['cancel'], env=settings['process_environment'], paused=lambda: job.get('pause', False))
         job['rpc'] = rpc
-        value['connections'].append({'stage': stage, 'connection_id': str(len(value['connections'])),
-            'pid': rpc.process.pid, 'process_start_ticks': process_identity(rpc.process.pid)})
+        value['connections'].append({'stage': stage, 'connection_id': connection_id,
+            'pid': rpc.process.pid, 'process_start_ticks': process_identity(rpc.process.pid),
+            **({'resumed_preparation': True} if trust and preparation else {})})
         rpc.request('initialize', {'clientInfo': {'name': 'rychvald-geometry', 'version': '1.0'},
             'capabilities': {'experimentalApi': True}}, notify)
         rpc.send({'method': 'initialized'})
@@ -100,9 +106,14 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
         account = rpc.request('account/read', {'refreshToken': False}, notify)
         if account.get('account', {}).get('type') != 'chatgpt':
             raise JobError('chatgpt_account_required', 'A managed ChatGPT account is required.')
-        thread = rpc.request('thread/start', {'model': MODEL, 'cwd': str(workspace),
+        thread_params = {'model': MODEL, 'cwd': str(workspace),
             'config': {'model_reasoning_effort': EFFORT}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
-            'runtimeWorkspaceRoots': [str(workspace), str(storage)], 'developerInstructions': instructions}, notify)
+            'runtimeWorkspaceRoots': [str(workspace), str(storage)], 'developerInstructions': instructions}
+        if preparation:
+            thread_params['threadId'] = preparation['params']['threadId']
+        thread = rpc.request('thread/resume' if preparation else 'thread/start', thread_params, notify)
+        if preparation and thread['thread']['id'] != preparation['params']['threadId']:
+            raise JobError('codex_identity_mismatch', 'Native provider did not resume the exact unsubmitted thread.')
         value['thread_id'] = thread['thread']['id']
         value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort')}
         if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
@@ -112,11 +123,21 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
         params = {'threadId': value['thread_id'], 'model': MODEL, 'effort': EFFORT, 'input': inputs, 'outputSchema': schema}
         value.setdefault('application_requests', []).append({'stage': stage, 'params': params})
         atomic_json(job['directory']/'request.json', {'requests': value['application_requests']})
-        atomic_json(directory / 'request.json', params)
+        if preparation:
+            if params != preparation['params']:
+                raise JobError('checkpoint_invalid', 'Resumed request differs from its immutable preparation.')
+        else:
+            atomic_json(directory / 'request.json', params)
         continuation = job.get('current_continuation')
         if continuation is not None:
-            from .visual_continuation import bind_submission
-            bind_submission(manager, job, continuation, params, connection_id, directory, protocol)
+            if preparation.get('successor') is not None:
+                continuation['successor'] = preparation['successor']
+                manager._event(job, 'correction_continuation_submitting', stage=stage,
+                    cycle_id=continuation['cycle_id'], continuation_id=continuation['continuation_id'],
+                    successor=continuation['successor'], resumed_preparation=True)
+            else:
+                from .visual_continuation import bind_submission
+                bind_submission(manager, job, continuation, params, connection_id, directory, protocol)
         result = rpc.request('turn/start', params, notify)
         identifier = result['turn']['id']
         value['turn_id'] = identifier
