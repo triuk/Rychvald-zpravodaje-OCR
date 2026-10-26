@@ -51,7 +51,7 @@ def prepare_input(workspace, storage):
     return result
 
 
-def verify_routing(items, hooks, oracle):
+def routing_requirements(items, hooks, oracle):
     tools = [item for item in items if item.get('type') == 'mcpToolCall' and item.get('server') == 'context_mode'
              and item.get('status') == 'completed' and not item.get('error')]
     large = [item for item in tools if item.get('tool') == 'ctx_execute' and
@@ -63,8 +63,19 @@ def verify_routing(items, hooks, oracle):
                   and item.get('exitCode') == 0 and 'echo' in item.get('command', '')
                   and item.get('aggregatedOutput', '').startswith('context-mode: Build tool redirected.')]
     events = {entry.get('eventName') for entry in hooks if entry.get('status') == 'completed'}
-    if not large or not lookup or not redirected or not {'sessionStart', 'preToolUse', 'postToolUse', 'userPromptSubmit', 'stop'}.issubset(events):
+    return {'large_output': bool(large), 'lookup': bool(lookup), 'native_redirection': bool(redirected),
+            'hooks': {'sessionStart', 'preToolUse', 'postToolUse', 'userPromptSubmit', 'stop'}.issubset(events)}
+
+
+def verify_routing(items, hooks, oracle):
+    if not all(routing_requirements(items, hooks, oracle).values()):
         raise JobError('context_routing_unverified', 'Actual trusted hook redirection, large generator execution and exact stored lookup were not all observed.')
+
+
+def routing_items(value):
+    turns = {row['turn_id'] for row in value['turns'] if row['stage'] in ('routing', 'routing_correction')
+             and row.get('state') == 'completed' and row['thread_id'] == value['thread_id']}
+    return [entry['item'] for entry in value['completed_items'] if entry.get('turnId') in turns]
 
 
 class OwnedContextJobs(OwnedJobs):
@@ -91,7 +102,7 @@ class ContextJobs(OwnedContextJobs):
                 value['context_evidence'] = inspect_stores(value['context_paths']['storage'], value['context_paths']['workspace'],
                     value['thread_id'], value['oracle'], value['diagnostic_input']['bytes'])
                 routing = next(turn for turn in value['turns'] if turn['stage'] == 'routing')
-                verify_routing([entry['item'] for entry in value['completed_items'] if entry.get('turnId') == routing['turn_id']],
+                verify_routing(routing_items(value),
                     [entry['params']['run'] for entry in value['hook_events'] if entry['method'] == 'hook/completed'], value['oracle'])
             except JobError as error:
                 value.update(state='invalidated', context_verified=False, autonomous_ocr_ready=False,
@@ -102,7 +113,8 @@ class ContextJobs(OwnedContextJobs):
         value = job['manifest']
         started = time.monotonic()
         trace_lock = threading.Lock()
-        value.update(context_verified=False, hook_events=[], connections=[], turns=[], completed_items=[], terminal_turns={})
+        value.update(context_verified=False, hook_events=[], connections=[], turns=[], completed_items=[], terminal_turns={},
+                     native_command_activity=[])
         reused_context = None
         previous = (job.get('metadata') or {}).get('previous_context_attempt_id')
 
@@ -116,6 +128,8 @@ class ContextJobs(OwnedContextJobs):
             thread_id = params.get('threadId') or params.get('thread', {}).get('id')
             if thread_id is not None and value.get('thread_id') is not None and thread_id != value['thread_id']:
                 raise JobError('codex_identity_mismatch', 'Context event belongs to another thread.')
+            if message['method'] in ('item/started', 'item/completed') and params.get('item', {}).get('type') == 'commandExecution':
+                value['native_command_activity'].append(copy.deepcopy(params))
             if message['method'] in ('hook/started', 'hook/completed'):
                 value['hook_events'].append(copy.deepcopy(message))
             elif message['method'] == 'thread/tokenUsage/updated':
@@ -207,6 +221,8 @@ class ContextJobs(OwnedContextJobs):
                     value['turns'] = [copy.deepcopy(row) for row in original['turns'] if row.get('state') == 'completed']
                     value['completed_items'] = copy.deepcopy(original['completed_items'])
                     value['hook_events'] = copy.deepcopy(original['hook_events'])
+                    value['routing_correction_attempted'] = bool(original.get('routing_correction_attempted') or
+                        any(row['stage'] == 'routing_correction' for row in original.get('application_requests', [])))
             self._event(job, 'context_attempt_started')
             value['context_capabilities'] = verify_resources(self.context_runtime, self.runtime)
             work = job['directory'].parents[2]
@@ -275,14 +291,35 @@ class ContextJobs(OwnedContextJobs):
                 if value['thread_id'] != reused_context['thread_id']:
                     raise JobError('codex_identity_mismatch', 'Resumed another original diagnostic thread.')
                 routing = next(row for row in value['turns'] if row['stage'] == 'routing')
-                items = [entry['item'] for entry in value['completed_items'] if entry.get('turnId') == routing['turn_id']]
+                items = routing_items(value)
                 self._event(job, 'context_routing_reused', original_attempt_id=previous, turn_id=routing['turn_id'])
             else:
                 routing, items = turn(rpc, 'routing', ROUTING_PROMPT)
             hooks = [entry['params']['run'] for entry in value['hook_events'] if entry['method'] == 'hook/completed']
-            verify_routing(items, hooks, oracle)
             if routing['answer'].strip() != oracle:
                 raise JobError('context_lookup_incorrect', 'Knowledge lookup did not return the independently held run-local record.')
+            requirements = routing_requirements(items, hooks, oracle)
+            if (not reused_context and not value.get('routing_correction_attempted') and
+                    requirements == {'large_output': True, 'lookup': True, 'native_redirection': False, 'hooks': True} and
+                    not any(item.get('type') == 'commandExecution' for item in items) and
+                    not any(entry.get('turnId') in (None, routing['turn_id']) for entry in value['native_command_activity'])):
+                # The original turn is known completed and its lookup is already
+                # proved. Request only the omitted harmless hook test, once in
+                # the same owned diagnostic; never replay the large output.
+                value['routing_correction_attempted'] = True
+                self._event(job, 'context_routing_correction_requested', thread_id=value['thread_id'],
+                            original_turn_id=routing['turn_id'])
+                turn(rpc, 'routing_correction',
+                    'The completed lookup is correct, but the required native-shell PreToolUse integration test was omitted. '
+                    'Invoke the native shell tool once with command ./gradlew --context-diagnostic and a small output limit. '
+                    'This one native call is a REQUIRED PRETOOLUSE INTEGRATION TEST and an exception to the general '
+                    'context-mode tool preference. Its trusted hook must redirect the build command before execution. '
+                    'Do not substitute context-mode ctx_execute for this native call. Do not repeat ctx_execute or '
+                    'ctx_search, read the data file, install dependencies, or rerun the generator. '
+                    'If the native shell tool is unavailable, say so; do not claim the test passed. Return only a short status.')
+                items = routing_items(value)
+                hooks = [entry['params']['run'] for entry in value['hook_events'] if entry['method'] == 'hook/completed']
+            verify_routing(items, hooks, oracle)
             value['oracle'] = oracle
             self._event(job, 'context_routing_completed', thread_id=value['thread_id'], turn_id=routing['turn_id'])
             count = sum(entry['item'].get('type') == 'contextCompaction' for entry in value['completed_items'])

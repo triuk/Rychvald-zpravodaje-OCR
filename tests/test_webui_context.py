@@ -71,6 +71,77 @@ class ContextReadinessTests(unittest.TestCase):
         self.assertFalse(result['autonomous_ocr_ready'])
         self.assertIsNone(result['turn_id'])
 
+    def test_completed_lookup_gets_one_targeted_native_routing_correction(self):
+        self.peer('repair_redirect')
+        started = self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})
+        self.assertTrue(started['ok'], started)
+        result = self.wait()
+        self.assertEqual(result['state'], 'completed', result.get('error'))
+        self.assertTrue(result['context_verified'])
+        self.assertFalse(result['autonomous_ocr_ready'])
+        self.assertEqual([row['stage'] for row in result['turns']], ['routing', 'routing_correction', 'recovery'])
+        self.assertEqual(len({row['thread_id'] for row in result['turns']}), 1)
+        self.assertEqual(len({row['turn_id'] for row in result['turns']}), 3)
+        requests = json.loads((self.registry / result['artifacts']['request']).read_text())['requests']
+        correction = next(row for row in requests if row['stage'] == 'routing_correction')
+        self.assertNotIn(result['oracle'], correction['params']['input'][0]['text'])
+        corrected = [row['item'] for row in result['completed_items']
+                     if row.get('turnId') == result['turns'][1]['turn_id']]
+        self.assertTrue(any(row.get('type') == 'commandExecution' for row in corrected))
+        self.assertFalse(any(row.get('type') == 'mcpToolCall' for row in corrected))
+
+    def test_native_routing_still_missing_after_one_correction_stops_without_another_turn(self):
+        self.peer('repair_redirect_missing')
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertEqual(result['error']['code'], 'context_routing_unverified')
+        self.assertFalse(result['context_verified'])
+        self.assertEqual([row['stage'] for row in result['turns']], ['routing', 'routing_correction'])
+        requests = self.registry / result['artifacts']['request']
+        original = requests.read_bytes()
+        self.assertEqual(len(json.loads(original)['requests']), 2)
+        self.app.close()
+        self.app = Application(self.registry)
+        status = self.app.dispatch('context_status', {'run_id': self.identifier})
+        self.assertTrue(status['ok'], status)
+        self.assertEqual(status['data']['state'], 'failed')
+        self.assertFalse(status['data']['context_verified'])
+        self.assertEqual(requests.read_bytes(), original)
+
+    def test_unfinished_routing_turn_never_starts_a_corrective_request(self):
+        self.peer('repair_redirect_unknown')
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertFalse(result['context_verified'])
+        self.assertEqual([row['stage'] for row in result['turns']], ['routing'])
+        self.assertEqual(result['turns'][0]['state'], 'running')
+        requests = json.loads((self.registry / result['artifacts']['request']).read_text())['requests']
+        self.assertEqual(len(requests), 1)
+
+    def test_started_native_command_without_completion_never_starts_a_corrective_request(self):
+        self.peer('repair_redirect_started')
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertEqual(result['error']['code'], 'context_routing_unverified')
+        self.assertFalse(result['context_verified'])
+        self.assertEqual([row['stage'] for row in result['turns']], ['routing'])
+        self.assertEqual(result['turns'][0]['state'], 'completed')
+        requests = json.loads((self.registry / result['artifacts']['request']).read_text())['requests']
+        self.assertEqual(len(requests), 1)
+
+    def test_incorrect_lookup_answer_never_starts_a_native_routing_correction(self):
+        self.peer('repair_redirect_bad_answer')
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertFalse(result['context_verified'])
+        self.assertEqual([row['stage'] for row in result['turns']], ['routing'])
+        requests = json.loads((self.registry / result['artifacts']['request']).read_text())['requests']
+        self.assertEqual(len(requests), 1)
+
     def test_missing_chatgpt_account_or_wrong_model_never_enables_context_readiness(self):
         for mode, code in [('missing_account', 'chatgpt_account_required'), ('wrong_model', 'model_configuration_mismatch')]:
             with self.subTest(mode=mode):
