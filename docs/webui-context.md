@@ -109,6 +109,8 @@ historii; bez skutečného přepsaného příkazu diagnostika dál neprojde.
 Nedokončený či chybový tah, chybná odpověď a chybějící další důkazy tento
 doplňující požadavek nespustí. Načtení stavu ani obnova nepřidá další požadavek
 na tuto opravu.
+Záznam zahájení nativního příkazu bez jeho dokončení také zakáže opravu;
+dokončený modelový tah sám neprokazuje dokončení příkazu.
 
 ## Izolace a podporovaná obnova
 

@@ -8,7 +8,8 @@ from contextlib import closing
 
 mode = sys.argv[1]
 turn_count = 0
-correction_modes = ('repair_redirect', 'repair_redirect_missing', 'repair_redirect_unknown', 'repair_redirect_bad_answer')
+correction_modes = ('repair_redirect', 'repair_redirect_missing', 'repair_redirect_unknown', 'repair_redirect_bad_answer',
+                    'repair_redirect_started')
 settings = {}
 for index, argument in enumerate(sys.argv):
     if argument == '-c':
@@ -44,7 +45,7 @@ for line in sys.stdin:
         if mode == 'approval_policy' and not all(settings['mcp_servers']['context_mode'].get('tools', {}).get(tool, {}).get('approval_mode') == 'approve' for tool in ['ctx_execute', 'ctx_execute_file', 'ctx_batch_execute', 'ctx_index', 'ctx_search', 'ctx_stats']):
             print(json.dumps({'id': request['id'], 'error': {'code': -32602, 'message': 'Named tools need explicit approval policy'}}), flush=True)
             continue
-        if mode in correction_modes:
+        if method == 'thread/start' and mode in (*correction_modes, 'autonomous_protocol'):
             # Explicit controlled stores: these make the public diagnostic reach
             # its real evidence reader; they are never actual plugin evidence.
             store = Path.cwd().parent / 'store'
@@ -72,7 +73,11 @@ for line in sys.stdin:
         print(json.dumps({'id': request['id'], 'result': result}), flush=True)
         text = next(line.split(' = ', 1)[1] for line in Path('diagnostic-data.txt').read_text().splitlines()
                     if line.startswith('CONTEXT_DIAGNOSTIC_RECORD = '))
-        if mode in ('no_recovery', 'full_protocol', 'wrong_generator', *correction_modes):
+        if mode == 'repair_redirect_started' and not correction and not recovery:
+            print(json.dumps({'method': 'item/started', 'params': {'threadId': 'context-fixture-thread', 'turnId': turn_id,
+                  'item': {'type': 'commandExecution', 'id': 'unfinished-native-command', 'status': 'inProgress',
+                  'command': './gradlew --context-diagnostic'}}}), flush=True)
+        if mode in ('no_recovery', 'full_protocol', 'wrong_generator', 'autonomous_protocol', *correction_modes):
             if mode not in correction_modes or correction and mode == 'repair_redirect':
                 print(json.dumps({'method': 'item/completed', 'params': {'threadId': 'context-fixture-thread', 'turnId': turn_id,
                       'item': {'type': 'commandExecution', 'id': 'redirect', 'status': 'completed', 'exitCode': 0,
@@ -103,7 +108,7 @@ for line in sys.stdin:
         continue
     elif method == 'thread/compact/start':
         print(json.dumps({'id': request['id'], 'result': {}}), flush=True)
-        if mode in ('full_protocol', 'wrong_generator', *correction_modes):
+        if mode in ('full_protocol', 'wrong_generator', 'autonomous_protocol', *correction_modes):
             print(json.dumps({'method': 'hook/completed', 'params': {'threadId': 'context-fixture-thread',
                   'turnId': None, 'run': {'id': 'preCompact', 'eventName': 'preCompact', 'status': 'completed', 'entries': []}}}), flush=True)
         print(json.dumps({'method': 'item/completed', 'params': {'threadId': 'context-fixture-thread',

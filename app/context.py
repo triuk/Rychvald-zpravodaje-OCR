@@ -113,7 +113,8 @@ class ContextJobs(OwnedContextJobs):
         value = job['manifest']
         started = time.monotonic()
         trace_lock = threading.Lock()
-        value.update(context_verified=False, hook_events=[], connections=[], turns=[], completed_items=[], terminal_turns={})
+        value.update(context_verified=False, hook_events=[], connections=[], turns=[], completed_items=[], terminal_turns={},
+                     native_command_activity=[])
         reused_context = None
         previous = (job.get('metadata') or {}).get('previous_context_attempt_id')
 
@@ -127,6 +128,8 @@ class ContextJobs(OwnedContextJobs):
             thread_id = params.get('threadId') or params.get('thread', {}).get('id')
             if thread_id is not None and value.get('thread_id') is not None and thread_id != value['thread_id']:
                 raise JobError('codex_identity_mismatch', 'Context event belongs to another thread.')
+            if message['method'] in ('item/started', 'item/completed') and params.get('item', {}).get('type') == 'commandExecution':
+                value['native_command_activity'].append(copy.deepcopy(params))
             if message['method'] in ('hook/started', 'hook/completed'):
                 value['hook_events'].append(copy.deepcopy(message))
             elif message['method'] == 'thread/tokenUsage/updated':
@@ -298,7 +301,8 @@ class ContextJobs(OwnedContextJobs):
             requirements = routing_requirements(items, hooks, oracle)
             if (not reused_context and not value.get('routing_correction_attempted') and
                     requirements == {'large_output': True, 'lookup': True, 'native_redirection': False, 'hooks': True} and
-                    not any(item.get('type') == 'commandExecution' for item in items)):
+                    not any(item.get('type') == 'commandExecution' for item in items) and
+                    not any(entry.get('turnId') in (None, routing['turn_id']) for entry in value['native_command_activity'])):
                 # The original turn is known completed and its lookup is already
                 # proved. Request only the omitted harmless hook test, once in
                 # the same owned diagnostic; never replay the large output.

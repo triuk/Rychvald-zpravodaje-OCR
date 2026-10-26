@@ -120,6 +120,18 @@ class ContextReadinessTests(unittest.TestCase):
         requests = json.loads((self.registry / result['artifacts']['request']).read_text())['requests']
         self.assertEqual(len(requests), 1)
 
+    def test_started_native_command_without_completion_never_starts_a_corrective_request(self):
+        self.peer('repair_redirect_started')
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertEqual(result['error']['code'], 'context_routing_unverified')
+        self.assertFalse(result['context_verified'])
+        self.assertEqual([row['stage'] for row in result['turns']], ['routing'])
+        self.assertEqual(result['turns'][0]['state'], 'completed')
+        requests = json.loads((self.registry / result['artifacts']['request']).read_text())['requests']
+        self.assertEqual(len(requests), 1)
+
     def test_incorrect_lookup_answer_never_starts_a_native_routing_correction(self):
         self.peer('repair_redirect_bad_answer')
         self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
