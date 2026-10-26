@@ -2,6 +2,7 @@
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 import sys
 import tempfile
@@ -105,10 +106,10 @@ class WebUIReadingTests(unittest.TestCase):
         for name in ['content', 'sessions']:
             (storage / name).mkdir(parents=True, exist_ok=True)
             (storage / name / 'fixture.db').unlink(missing_ok=True)
-        with sqlite3.connect(storage / 'content/fixture.db') as db:
+        with closing(sqlite3.connect(storage / 'content/fixture.db')) as db, db:
             db.executescript('CREATE VIRTUAL TABLE chunks USING fts5(content); CREATE TABLE sources(id);')
             db.execute('INSERT INTO chunks VALUES(?)', ('CONTEXT_DIAGNOSTIC_RECORD fixture-oracle',))
-        with sqlite3.connect(storage / 'sessions/fixture.db') as db:
+        with closing(sqlite3.connect(storage / 'sessions/fixture.db')) as db, db:
             db.executescript('CREATE TABLE session_meta(session_id,project_dir,compact_count);'
                 'CREATE TABLE session_events(session_id); CREATE TABLE session_resume(session_id,snapshot,event_count,consumed);')
             db.execute('INSERT INTO session_meta VALUES(?,?,1)', ('fixture-context', str(workspace)))

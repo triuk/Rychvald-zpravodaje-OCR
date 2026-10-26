@@ -1,5 +1,6 @@
 """Read-only verification of actual run-local context-mode SQLite evidence."""
 from pathlib import Path
+from contextlib import closing
 import sqlite3
 from urllib.parse import quote
 
@@ -13,13 +14,13 @@ def inspect_stores(storage, workspace, thread_id, oracle, minimum_bytes):
     if len(content) != 1 or len(sessions) != 1 or any(path.is_symlink() for path in content + sessions):
         raise JobError('context_evidence_invalid', 'Exactly one own content store and one own session store are required.')
     try:
-        with sqlite3.connect('file:' + quote(str(content[0])) + '?mode=ro', uri=True) as database:
+        with closing(sqlite3.connect('file:' + quote(str(content[0])) + '?mode=ro', uri=True)) as database:
             chunks, stored_bytes = database.execute('SELECT count(*), coalesce(sum(length(content)),0) FROM chunks').fetchone()
             records = database.execute('SELECT content FROM chunks WHERE chunks MATCH ?', ('CONTEXT_DIAGNOSTIC_RECORD',)).fetchall()
             sources = database.execute('SELECT count(*) FROM sources').fetchone()[0]
             if stored_bytes < minimum_bytes // 2 or not any(oracle in row[0] for row in records):
                 raise JobError('context_evidence_invalid', 'The large output and exact run-local record are not in the actual FTS5 store.')
-        with sqlite3.connect('file:' + quote(str(sessions[0])) + '?mode=ro', uri=True) as database:
+        with closing(sqlite3.connect('file:' + quote(str(sessions[0])) + '?mode=ro', uri=True)) as database:
             meta = database.execute('SELECT project_dir, compact_count FROM session_meta WHERE session_id=?', (thread_id,)).fetchone()
             events = database.execute('SELECT count(*) FROM session_events WHERE session_id=?', (thread_id,)).fetchone()[0]
             resume = database.execute('SELECT length(snapshot), event_count, consumed FROM session_resume WHERE session_id=?', (thread_id,)).fetchone()

@@ -2,6 +2,7 @@
 from pathlib import Path
 import runpy
 import sqlite3
+from contextlib import closing
 import sys
 
 fixtures = Path(__file__).resolve().parent
@@ -15,11 +16,11 @@ elif Path('diagnostic-data.txt').exists():
     store = Path.cwd().parent / 'store'
     for name in ('content', 'sessions'):
         (store / name).mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(store / 'content/fixture.db') as db:
+    with closing(sqlite3.connect(store / 'content/fixture.db')) as db, db:
         db.executescript('CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5(content); CREATE TABLE IF NOT EXISTS sources(id);')
         db.execute('DELETE FROM chunks')
         db.execute('INSERT INTO chunks VALUES(?)', (Path('diagnostic-data.txt').read_text(),))
-    with sqlite3.connect(store / 'sessions/fixture.db') as db:
+    with closing(sqlite3.connect(store / 'sessions/fixture.db')) as db, db:
         db.executescript('CREATE TABLE IF NOT EXISTS session_meta(session_id,project_dir,compact_count);'
             'CREATE TABLE IF NOT EXISTS session_events(session_id); CREATE TABLE IF NOT EXISTS session_resume(session_id,snapshot,event_count,consumed);'
             'DELETE FROM session_meta; DELETE FROM session_events; DELETE FROM session_resume;')

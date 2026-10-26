@@ -3,6 +3,7 @@ import copy
 import json
 
 from .jobs import JobError, sha
+from .original_protocol import read_original_protocol
 from .recovery import NAMESPACES
 from tools import ocr_correction_graph
 
@@ -80,56 +81,8 @@ def _stage_failure(root, run, parent):
             raise JobError('attempt_invalid', 'Failure evidence escaped the owned workspace.')
         if protocol.exists():
             failure.update(evidence_path=str(protocol.relative_to(root)), evidence_sha256=sha(protocol))
-            pending, submitted, malformed = {}, [], False
-            for line in protocol.read_text().splitlines(keepends=True):
-                if not line.endswith('\n'):
-                    malformed = True
-                    continue
-                try:
-                    row = json.loads(line)
-                except ValueError:
-                    malformed = True
-                    continue
-                message, connection = row['message'], str(row.get('connection_id', '0'))
-                key = (connection, message.get('id'))
-                if row['direction'] == 'client' and message.get('method') == 'turn/start':
-                    record = {'thread_id': message['params']['threadId'], 'turn_id': None,
-                        'connection_id': connection, 'visual_stage': row.get('stage'),
-                        'request_id': message.get('id'), 'delivery_state': 'unknown', 'original_error': None}
-                    pending[key] = record
-                    submitted.append(record)
-                elif row['direction'] == 'server':
-                    if key in pending and 'method' not in message and row.get('stage') == pending[key]['visual_stage']:
-                        record = pending[key]
-                        if message.get('error'):
-                            if record['turn_id'] is not None:
-                                raise JobError('attempt_conflict', 'Original turn has conflicting acceptance/rejection evidence.')
-                            record.update(delivery_state='rejected', original_error=copy.deepcopy(message['error']))
-                        elif message.get('result', {}).get('turn', {}).get('id'):
-                            identifier = message['result']['turn']['id']
-                            if record['delivery_state'] == 'rejected' or record['turn_id'] not in (None, identifier):
-                                raise JobError('attempt_conflict', 'Original request has conflicting turn identities.')
-                            record['turn_id'] = identifier
-                            if record['delivery_state'] == 'unknown':
-                                record['delivery_state'] = 'accepted'
-                    elif message.get('method') in ('turn/started', 'turn/completed'):
-                        params = message['params']
-                        terminal = params['turn']
-                        candidates = [record for record in submitted if record['connection_id'] == connection and
-                            record['thread_id'] == params.get('threadId') and record['visual_stage'] == row.get('stage') and
-                            record['delivery_state'] != 'rejected' and
-                            record['turn_id'] == terminal['id']]
-                        if len(candidates) == 1:
-                            record = candidates[0]
-                            known_terminal = record['delivery_state'] in ('completed', 'failed', 'interrupted')
-                            if message['method'] == 'turn/completed':
-                                if known_terminal and record['delivery_state'] != terminal['status']:
-                                    raise JobError('attempt_conflict', 'Original turn has conflicting terminal states.')
-                                record.update(turn_id=terminal['id'], delivery_state=terminal['status'])
-                                if terminal.get('error') and not known_terminal:
-                                    record['original_error'] = copy.deepcopy(terminal['error'])
-                            elif not known_terminal:
-                                record.update(turn_id=terminal['id'], delivery_state='accepted')
+            original = read_original_protocol(protocol)
+            submitted, malformed = original.submissions, original.malformed
             if submitted:
                 edges = _continued_submissions(work, child, submitted) if namespace in ('correction-attempts', 'output-review-attempts') else []
                 active = [item for item in submitted if not item.get('resolved_by')] or submitted

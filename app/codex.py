@@ -184,7 +184,8 @@ class RpcProcess:
         self.process.stdout.close()
 
 
-class CodexJobs:
+class OwnedJobs:
+    """Owned RPC lifecycle and preserved status, without diagnostic execution."""
     namespace = 'codex-attempts'
 
     def __init__(self, publish, runtime=None):
@@ -254,6 +255,43 @@ class CodexJobs:
             job['thread'].start()
             return result
 
+    def _start_original_continuation(self, root, run, value, directory, reconciliation, metadata, *, provider=None, cycle_id=None):
+        """Start the same validated child after durable original snapshots.
+
+        Each operation verifies its own native inputs and parent binding before
+        calling this common ownership transition under the manager lock.
+        """
+        with self._lock:
+            if self._active is not None:
+                raise JobError('operation_active', 'The original operation is still owned.')
+            work = root / run['artifacts']['workspace']['path']
+            session = directory / 'recovery-sessions' / uuid.uuid4().hex
+            session.mkdir(parents=True)
+            atomic_json(session / 'original-attempt.json', value)
+            original_protocol = session / 'original-protocol.jsonl'
+            protocol = root / value['artifacts']['protocol']
+            with original_protocol.open('xb') as stream:
+                stream.write(protocol.read_bytes() if protocol.exists() else b'')
+                stream.flush(); os.fsync(stream.fileno())
+            atomic_json(session / 'reconciliation-reference.json', reconciliation)
+            value.setdefault('recovery_sessions', []).append({'path': str(session.relative_to(work)),
+                'original_sha256': sha(session / 'original-attempt.json'), 'started_at': now()})
+            value.update(state='starting', error=None, ended_at=None, owner_pid=os.getpid(),
+                owner_start_ticks=process_identity(os.getpid()))
+            atomic_json(directory / 'attempt.json', value)
+            job = {'manifest': value, 'directory': directory, 'workspace': directory / 'workspace',
+                'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
+                'metadata': copy.deepcopy(metadata), 'resume_original': True, 'recovery_directory': session,
+                'reconciliation': reconciliation, 'reconciliation_protocol': original_protocol}
+            if provider is not None:
+                job['reconciliation_provider'] = copy.deepcopy(provider)
+            if cycle_id is not None:
+                job['cycle_id'] = cycle_id
+            self._active = job
+            job['thread'] = threading.Thread(target=self._execute, args=(job,), daemon=True)
+            job['thread'].start()
+            return copy.deepcopy(value)
+
     def _execute(self, job):
         process = getattr(self, 'process', None)
         if process is not None:
@@ -283,6 +321,70 @@ class CodexJobs:
         atomic_json(job['directory'] / 'attempt.json', value)
         self.publish('codex_progress', root=value['root'], run_id=value['run_id'], event=event)
 
+
+    def status(self, root, run_id, work, operation=None):
+        try:
+            return self._status(root, run_id, work, operation)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise JobError('attempt_invalid', f'Cannot read preserved Codex attempt: {error}') from None
+
+    def _status(self, root, run_id, work, operation=None):
+        paths = list((work / 'application' / self.namespace).glob('*/attempt.json'))
+        if not paths:
+            return {'run_id': run_id, 'state': 'not_started', 'autonomous_ocr_ready': False}
+        values = [json.loads(path.read_text()) for path in paths]
+        if operation is not None:
+            values = [value for value in values if value.get('operation') == operation]
+        if not values:
+            return {'run_id': run_id, 'state': 'not_started', 'autonomous_ocr_ready': False}
+        value = max(values, key=lambda item: item['started_at'])
+        if value['root'] != str(root) or value['run_id'] != run_id:
+            raise JobError('attempt_invalid', 'Saved Codex attempt belongs to a different run.')
+        recovery_path = (work / 'application' / self.namespace / value['attempt_id'] / 'local-recovery.json').resolve()
+        if not recovery_path.is_relative_to(work.resolve()):
+            raise JobError('attempt_invalid', 'Saved recovery path is outside the selected run.')
+        if recovery_path.exists():
+            recovery = json.loads(recovery_path.read_text())
+            if (sha(root / value['artifacts']['attempt']) != recovery['original_sha256'] or
+                    any(sha(root / path) != digest for path, digest in recovery['evidence'].items())):
+                raise JobError('checkpoint_invalid', 'Local recovery no longer matches original evidence.')
+            value.update(recovery['result'])
+            value['local_recovery'] = str(recovery_path.relative_to(root))
+        if value['image'] is not None:
+            image = (root / value['image']['path']).resolve()
+            if not image.is_relative_to(work.resolve()) or not image.is_file() or sha(image) != value['image']['sha256']:
+                value.update(state='invalidated', combination_verified=False,
+                             error={'code': 'diagnostic_image_changed', 'message': 'Preserved diagnostic image is missing or changed.'})
+        with self._lock:
+            if self._active is not None and self._active['manifest']['attempt_id'] == value['attempt_id']:
+                value['login_url'] = self._active.get('login_url')
+                if value['state'] not in ('starting', 'running', 'awaiting_login'):
+                    # A terminal event can precede worker cleanup. Public
+                    # completion waits for ownership release and final write.
+                    value['state'] = 'running'
+                    value['combination_verified'] = False
+                    if 'reading_complete' in value:
+                        value['reading_complete'] = False
+                    if 'geometry_complete' in value:
+                        value['geometry_complete'] = False
+        return value
+
+    def close(self):
+        with self._lock:
+            job = self._active
+            if job is not None:
+                job['cancel'] = True
+        if job is not None:
+            job['thread'].join(timeout=8)
+
+    def control(self, action):
+        with self._lock:
+            if self._active:
+                self._active['pause' if action == 'pause' else 'cancel'] = True
+
+
+class CodexJobs(OwnedJobs):
+    """Account/model diagnostic execution over the shared owned lifecycle."""
     def _run(self, job):
         value = job['manifest']
         started = time.monotonic()
@@ -441,63 +543,3 @@ class CodexJobs:
                     atomic_json(job['directory'] / 'attempt.json', value)
                     self._active = None
                 self.publish('codex_finished', root=value['root'], run_id=value['run_id'], state=value['state'])
-
-    def status(self, root, run_id, work, operation=None):
-        try:
-            return self._status(root, run_id, work, operation)
-        except (OSError, ValueError, KeyError, TypeError) as error:
-            raise JobError('attempt_invalid', f'Cannot read preserved Codex attempt: {error}') from None
-
-    def _status(self, root, run_id, work, operation=None):
-        paths = list((work / 'application' / self.namespace).glob('*/attempt.json'))
-        if not paths:
-            return {'run_id': run_id, 'state': 'not_started', 'autonomous_ocr_ready': False}
-        values = [json.loads(path.read_text()) for path in paths]
-        if operation is not None:
-            values = [value for value in values if value.get('operation') == operation]
-        if not values:
-            return {'run_id': run_id, 'state': 'not_started', 'autonomous_ocr_ready': False}
-        value = max(values, key=lambda item: item['started_at'])
-        if value['root'] != str(root) or value['run_id'] != run_id:
-            raise JobError('attempt_invalid', 'Saved Codex attempt belongs to a different run.')
-        recovery_path = (work / 'application' / self.namespace / value['attempt_id'] / 'local-recovery.json').resolve()
-        if not recovery_path.is_relative_to(work.resolve()):
-            raise JobError('attempt_invalid', 'Saved recovery path is outside the selected run.')
-        if recovery_path.exists():
-            recovery = json.loads(recovery_path.read_text())
-            if (sha(root / value['artifacts']['attempt']) != recovery['original_sha256'] or
-                    any(sha(root / path) != digest for path, digest in recovery['evidence'].items())):
-                raise JobError('checkpoint_invalid', 'Local recovery no longer matches original evidence.')
-            value.update(recovery['result'])
-            value['local_recovery'] = str(recovery_path.relative_to(root))
-        if value['image'] is not None:
-            image = (root / value['image']['path']).resolve()
-            if not image.is_relative_to(work.resolve()) or not image.is_file() or sha(image) != value['image']['sha256']:
-                value.update(state='invalidated', combination_verified=False,
-                             error={'code': 'diagnostic_image_changed', 'message': 'Preserved diagnostic image is missing or changed.'})
-        with self._lock:
-            if self._active is not None and self._active['manifest']['attempt_id'] == value['attempt_id']:
-                value['login_url'] = self._active.get('login_url')
-                if value['state'] not in ('starting', 'running', 'awaiting_login'):
-                    # A terminal event can precede worker cleanup. Public
-                    # completion waits for ownership release and final write.
-                    value['state'] = 'running'
-                    value['combination_verified'] = False
-                    if 'reading_complete' in value:
-                        value['reading_complete'] = False
-                    if 'geometry_complete' in value:
-                        value['geometry_complete'] = False
-        return value
-
-    def close(self):
-        with self._lock:
-            job = self._active
-            if job is not None:
-                job['cancel'] = True
-        if job is not None:
-            job['thread'].join(timeout=8)
-
-    def control(self, action):
-        with self._lock:
-            if self._active:
-                self._active['pause' if action == 'pause' else 'cancel'] = True

@@ -74,6 +74,16 @@ class ContextReadinessTests(unittest.TestCase):
     def test_missing_chatgpt_account_or_wrong_model_never_enables_context_readiness(self):
         for mode, code in [('missing_account', 'chatgpt_account_required'), ('wrong_model', 'model_configuration_mismatch')]:
             with self.subTest(mode=mode):
+                # Authentication failure is a registry-wide hold, including a
+                # truthfully unsubmitted request. These are independent input
+                # cases, not permission to replace that original admission.
+                self.app.close()
+                self.registry = self.directory / ('registry-' + mode)
+                self.app = Application(self.registry)
+                imported = self.app.dispatch('import_sources', {'path': str(self.directory / 'source.pdf')})['data']
+                profile = self.app.dispatch('inspect_profile', {'path': str(ROOT / 'profiles/faithful-reading.json')})['data']
+                self.identifier = self.app.dispatch('create_run', {'edition_id': imported['editions'][0]['edition_id'],
+                    'name': mode, 'profile_path': profile['path'], 'profile_sha256': profile['sha256']})['data']['project']['run_id']
                 self.peer(mode)
                 self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
                 result = self.wait()
@@ -81,6 +91,9 @@ class ContextReadinessTests(unittest.TestCase):
                 self.assertEqual(result['error']['code'], code)
                 self.assertFalse(result['context_verified'])
                 self.assertFalse(result['autonomous_ocr_ready'])
+                denied = self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})
+                self.assertFalse(denied['ok'], denied)
+                self.assertEqual(denied['error']['code'], 'reconciliation_required')
 
     def test_registration_and_correct_answer_without_actual_routing_never_enable_readiness(self):
         self.peer('answer_only')

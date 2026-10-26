@@ -1,14 +1,11 @@
 """Actual exported-page examination; publication remains a native transaction."""
 import copy
 import json
-import os
 from pathlib import Path
-import threading
 import time
-import uuid
 
-from .context import ContextJobs
-from .codex import now, process_identity
+from .context import OwnedContextJobs
+from .codex import now
 from .jobs import JobError, atomic_json, sha
 from .visual_session import examine
 
@@ -54,7 +51,7 @@ OUTPUT_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required':
                         'reason': {'type': 'string'}, 'evidence': {'type': 'array', 'items': {'type': 'string'}}}}}}}}}
 
 
-class OutputReviewJobs(ContextJobs):
+class OutputReviewJobs(OwnedContextJobs):
     namespace = 'output-review-attempts'
     step_id = 'output_review'
 
@@ -79,26 +76,8 @@ class OutputReviewJobs(ContextJobs):
                     (protocol.exists() and sha(protocol) != proof['provider']['originals'].get(str(protocol.relative_to(root))))):
                 raise JobError('reconciliation_required', 'Original inspected output evidence changed before continuation.')
             self.process.request(root, 'verify-output-preparation', value['run_id'], '--sha256', preparation_sha256)
-            session = directory / 'recovery-sessions' / uuid.uuid4().hex
-            session.mkdir(parents=True)
-            atomic_json(session / 'original-attempt.json', value)
-            original_protocol = session / 'original-protocol.jsonl'
-            original_protocol.write_bytes(protocol.read_bytes() if protocol.exists() else b'')
-            atomic_json(session / 'reconciliation-reference.json', reconciliation)
-            value.setdefault('recovery_sessions', []).append({'path': str(session.relative_to(work)),
-                'original_sha256': sha(session / 'original-attempt.json'), 'started_at': now()})
-            value.update(state='starting', error=None, ended_at=None, owner_pid=os.getpid(),
-                owner_start_ticks=process_identity(os.getpid()))
-            atomic_json(directory / 'attempt.json', value)
-            job = {'manifest': value, 'directory': directory, 'workspace': directory / 'workspace',
-                'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
-                'metadata': {'environment': environment, 'prepared_review_sha256': preparation_sha256},
-                'recovery_directory': session, 'cycle_id': binding['cycle_id'], 'reconciliation': reconciliation,
-                'reconciliation_protocol': original_protocol}
-            self._active = job
-            job['thread'] = threading.Thread(target=self._execute, args=(job,), daemon=True)
-            job['thread'].start()
-            return copy.deepcopy(value)
+            return self._start_original_continuation(root, run, value, directory, reconciliation,
+                {'environment': environment, 'prepared_review_sha256': preparation_sha256}, cycle_id=binding['cycle_id'])
 
     def _run(self, job):
         value = job['manifest']
@@ -199,7 +178,7 @@ class OutputReviewJobs(ContextJobs):
 
     def status(self, root, run_id, work, operation=None):
         # This namespace is image examination, not context diagnostics.
-        value = super(ContextJobs, self).status(root, run_id, work, operation)
+        value = super().status(root, run_id, work, operation)
         if value.get('output_review_complete') and value['state'] == 'completed':
             try:
                 if sha(work / 'output-review-publication.json') != value['publication_sha256']:
