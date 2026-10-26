@@ -7,7 +7,7 @@ import time
 import uuid
 import fcntl
 
-from .context import ContextJobs
+from .context import OwnedContextJobs
 from .codex import now
 from .jobs import JobError, atomic_json, sha
 from .context_runtime import verify_resources
@@ -15,7 +15,7 @@ from .visual_session import examine
 from .geometry_contract import SOURCE_SCHEMA, GEOMETRY_SCHEMA, SOURCE_PROMPT, GEOMETRY_PROMPT
 
 
-class GeometryJobs(ContextJobs):
+class GeometryJobs(OwnedContextJobs):
     namespace = 'geometry-attempts'
     step_id = 'geometry'
 
@@ -183,7 +183,7 @@ class GeometryJobs(ContextJobs):
                 self.publish('geometry_finished', root=str(root), run_id=value['run_id'], state=value['state'])
 
     def status(self, root, run_id, work, operation=None):
-        value = super(ContextJobs, self).status(root, run_id, work, operation)
+        value = super().status(root, run_id, work, operation)
         recovery_path = work/'geometry-recovery.json'
         if recovery_path.exists() and value.get('state') in ('failed', 'interrupted'):
             try:

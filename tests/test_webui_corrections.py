@@ -57,14 +57,14 @@ class CorrectionTests(unittest.TestCase):
             time.sleep(.05)
         self.fail(operation + ' did not settle')
 
-    def correction(self, **extra):
+    def correction(self, *, wait_seconds=90, **extra):
         manifest = json.loads((self.work / 'output-manifest.json').read_text())
         response = self.app.dispatch('start_corrections', {'run_id': self.identifier,
             'expected_iteration_id': manifest['iteration_id'],
             'expected_validation_sha256': hashlib.sha256((self.work / 'checks/run-validation.json').read_bytes()).hexdigest(),
             'environment': os.environ.get('OCR_ENVIRONMENT'), **extra})
         self.assertTrue(response['ok'], response)
-        return self.wait('correction_status')
+        return self.wait('correction_status', wait_seconds)
 
     def test_targeted_source_patch_creates_new_iteration_with_original_reports_and_expectations(self):
         self.start()
@@ -152,7 +152,10 @@ class CorrectionTests(unittest.TestCase):
 
     def test_three_distinct_failures_exhaust_the_durable_budget_without_acceptance(self):
         self.start('limit')
-        status = self.correction()
+        # Three complete native geometry/export/review cycles need their own
+        # bounded budget; the single-cycle deadline can cancel cycle three
+        # under concurrent native checks before its final validation.
+        status = self.correction(wait_seconds=3 * 90)
         self.assertEqual(status['cycles_used'], 3, status)
         self.assertEqual(status['cycles_remaining'], 0)
         self.assertEqual(status['stop_reason'], 'limit_reached', status)

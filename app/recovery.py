@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .codex import RpcProcess, now, scrub
 from .jobs import JobError, atomic_json, sha
+from .original_protocol import read_original_protocol
 from tools.ocr_correction_graph import output_child
 
 
@@ -79,49 +80,26 @@ def inspect_original(app, work, parent, destination):
         if not original.resolve().is_relative_to(work.resolve()):
             raise JobError('attempt_invalid', 'Original AI protocol escaped the run workspace.')
         originals[str(path.relative_to(app.root))] = sha(path)
-        frames = []
+        parsed = None
         if original.exists():
             originals[str(original.relative_to(app.root))] = sha(original)
-            for raw in original.read_text().splitlines(keepends=True):
-                if not raw.endswith('\n'):
-                    observations.append({'attempt_id': attempt['attempt_id'], 'state': 'unknown', 'reason': 'incomplete_original_protocol'})
-                    break
-                frames.append(json.loads(raw))
-        pending, submitted = {}, []
-        for row in frames:
-            message = row['message']
-            connection = str(row.get('connection_id', '0'))
-            key = (connection, message.get('id'))
-            if row['direction'] == 'client' and message.get('method') == 'turn/start':
-                record = {'attempt_id': attempt['attempt_id'], 'stage': stage['stage'],
-                    'connection_id': connection, 'thread_id': message['params']['threadId'],
-                    'turn_id': None, 'state': 'unknown', 'visual_stage': row.get('stage')}
-                pending[key] = record
-                submitted.append(record)
-            elif row['direction'] == 'server' and key in pending and 'method' not in message:
-                record = pending[key]
-                if message.get('error'):
-                    record.update(state='rejected', error=message['error'])
-                elif message.get('result', {}).get('turn', {}).get('id'):
-                    record['turn_id'] = message['result']['turn']['id']
-            elif row['direction'] == 'server' and message.get('method') == 'turn/started':
-                params = message['params']
-                candidates = [record for record in submitted if record['connection_id'] == connection and
-                    record['thread_id'] == params.get('threadId') and record['turn_id'] is None and record['state'] != 'rejected']
-                if len(candidates) == 1:
-                    candidates[0]['turn_id'] = params['turn']['id']
-        for index, record in enumerate(submitted):
+            parsed = read_original_protocol(original)
+        if parsed is not None and parsed.malformed:
+            observations.append({'attempt_id': attempt['attempt_id'], 'state': 'unknown', 'reason': 'incomplete_original_protocol'})
+        submitted = parsed.submissions if parsed is not None else []
+        for index, submission in enumerate(submitted):
+            record = {'attempt_id': attempt['attempt_id'], 'stage': stage['stage'],
+                'connection_id': submission['connection_id'], 'thread_id': submission['thread_id'],
+                'turn_id': submission['turn_id'], 'state': 'unknown', 'visual_stage': submission['visual_stage']}
+            if submission['delivery_state'] == 'rejected':
+                record.update(state='rejected', error=submission['original_error'])
             if record['state'] == 'rejected' or record['turn_id'] is None:
                 observations.append(record)
                 continue
-            # An original completed native frame is already authoritative about
-            # termination. Reuse still requires the exact saved local result.
-            if stage['stage'] in ('corrections', 'output_review') and any(row['direction'] == 'server' and
-                    row['message'].get('method') == 'turn/completed' and
-                    row['message']['params'].get('threadId') == record['thread_id'] and
-                    row['message']['params']['turn'].get('id') == record['turn_id'] and
-                    row['message']['params']['turn'].get('status') == 'completed' and
-                    str(row.get('connection_id', '0')) == record['connection_id'] for row in frames):
+            # Only a correlated request ACK and same stage/connection/thread/
+            # turn terminal establish original native completion. A foreign
+            # started notification cannot substitute for a lost ACK.
+            if stage['stage'] in ('corrections', 'output_review') and submission['delivery_state'] == 'completed':
                 record.update(state='completed', inspection='original_native_terminal')
                 observations.append(record)
                 continue

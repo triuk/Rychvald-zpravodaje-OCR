@@ -1,13 +1,11 @@
 """Owned bounded correction worker; opening history never submits a provider request."""
 import copy
 import json
-import os
 from pathlib import Path
-import threading
 import time
 import uuid
 
-from .context import ContextJobs
+from .context import OwnedContextJobs
 from .codex import now, process_identity
 from .jobs import JobError, atomic_json, sha
 from .visual_session import examine
@@ -52,7 +50,7 @@ REPAIR_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required':
         'remaining_uncertainties': {'type': 'array', 'items': {'type': 'string'}}}}
 
 
-class CorrectionJobs(ContextJobs):
+class CorrectionJobs(OwnedContextJobs):
     namespace = 'correction-attempts'
     step_id = 'corrections'
 
@@ -103,27 +101,8 @@ class CorrectionJobs(ContextJobs):
             ledger = work / 'application/corrections/ledger.json'
             self.process.request(root, 'verify-correction-resume', value['run_id'], '--attempt', identifier,
                 '--ledger-sha256', sha(ledger))
-            session = directory / 'recovery-sessions' / uuid.uuid4().hex
-            session.mkdir(parents=True)
-            atomic_json(session / 'original-attempt.json', value)
-            original_protocol = session / 'original-protocol.jsonl'
-            source_protocol = root / value['artifacts']['protocol']
-            original_protocol.write_bytes(source_protocol.read_bytes() if source_protocol.exists() else b'')
-            atomic_json(session / 'reconciliation-reference.json', reconciliation)
-            value.setdefault('recovery_sessions', []).append({'path': str(session.relative_to(work)),
-                'original_sha256': sha(session / 'original-attempt.json'), 'started_at': now()})
-            value.update(state='starting', error=None, ended_at=None, owner_pid=os.getpid(),
-                owner_start_ticks=process_identity(os.getpid()))
-            atomic_json(directory / 'attempt.json', value)
-            job = {'manifest': value, 'directory': directory, 'workspace': directory / 'workspace',
-                'history': root / run['artifacts']['history']['path'], 'cancel': False, 'rpc': None,
-                'metadata': {'payload': payload}, 'resume_original': True, 'recovery_directory': session,
-                'reconciliation': reconciliation, 'reconciliation_provider': proof['provider'],
-                'reconciliation_protocol': original_protocol}
-            self._active = job
-            job['thread'] = threading.Thread(target=self._execute, args=(job,), daemon=True)
-            job['thread'].start()
-            return copy.deepcopy(value)
+            return self._start_original_continuation(root, run, value, directory, reconciliation,
+                {'payload': payload}, provider=proof['provider'])
 
     def _examine(self, job, stage, prompt, schema, work, images):
         directory = job['directory'] / stage

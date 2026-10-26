@@ -8,7 +8,7 @@ from pathlib import Path
 import threading
 import time
 
-from .context import ContextJobs
+from .context import OwnedContextJobs
 from .codex import MODEL, EFFORT, RpcProcess, now, process_identity, scrub
 from .context_runtime import verify_resources, configuration, command, verify_hooks
 from .jobs import JobError, atomic_json, sha
@@ -132,7 +132,7 @@ def verify_trace(value, packet, protocol):
     return proposal
 
 
-class ReadingJobs(ContextJobs):
+class ReadingJobs(OwnedContextJobs):
     namespace = 'reading-attempts'
     step_id = 'visual_reading'
 
@@ -408,7 +408,7 @@ class ReadingJobs(ContextJobs):
                 self.publish('reading_finished', root=value['root'], run_id=value['run_id'], state=value['state'])
 
     def status(self, root, run_id, work, operation=None):
-        value = super(ContextJobs, self).status(root, run_id, work, operation)
+        value = super().status(root, run_id, work, operation)
         if value.get('reading_complete') and value['state'] == 'completed':
             try:
                 packet = json.loads((work / 'reading-input.json').read_text())

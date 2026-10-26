@@ -1,5 +1,5 @@
 """Run-local context readiness: registration alone never enables autonomous OCR."""
-from .codex import CodexJobs, RpcProcess, MODEL, EFFORT, now, process_identity, scrub
+from .codex import OwnedJobs, RpcProcess, MODEL, EFFORT, now, process_identity, scrub
 from .jobs import JobError, atomic_json, sha
 from pathlib import Path
 from .context_runtime import default_context_runtime, verify_resources, configuration, command, verify_hooks
@@ -67,13 +67,18 @@ def verify_routing(items, hooks, oracle):
         raise JobError('context_routing_unverified', 'Actual trusted hook redirection, large generator execution and exact stored lookup were not all observed.')
 
 
-class ContextJobs(CodexJobs):
+class OwnedContextJobs(OwnedJobs):
+    """Owned model lifecycle plus runtime selection, without diagnostic setup."""
     namespace = 'context-attempts'
     step_id = 'context_diagnostic'
 
     def __init__(self, publish, runtime=None, context_runtime=None):
         super().__init__(publish, runtime)
         self.context_runtime = context_runtime if context_runtime is not None else default_context_runtime()
+
+
+class ContextJobs(OwnedContextJobs):
+    """Context diagnostic preparation and evidence, separate from visual jobs."""
 
     def prepare(self, root, run):
         work = root / run['artifacts']['workspace']['path']

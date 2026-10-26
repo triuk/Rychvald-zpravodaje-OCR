@@ -82,7 +82,16 @@ class DescendantGuardTests(unittest.TestCase):
         self.app.close()
         self.configure_mode('foreign_started')
         self.app = self.open_app()
-        self.queue_scenario('unknown')
+        saved = self.queue_scenario('unknown')
+        identity = {'run_id': saved['output']['run_id'],
+            'attempt_id': saved['output']['parent_binding']['parent_attempt_id']}
+        checked = self.request('reconcile_autonomous', identity)
+        self.assertFalse(checked['provider']['safe_to_continue'], checked)
+        self.assertTrue(all(row.get('turn_id') != 'foreign-turn' for row in checked['provider']['turns']), checked)
+        refused = self.app.dispatch('resume_autonomous', {**identity,
+            'reconciliation_id': checked['reconciliation_id']})
+        self.assertFalse(refused['ok'], refused)
+        self.assertEqual(saved['protocol'].read_bytes(), saved['retained'])
 
     def queue_scenario(self, delivery):
         first, second = self.enqueue('Original correction output'), self.enqueue('Must stay pending')
