@@ -101,6 +101,15 @@ dohledá unikátní hodnotu. Kontrola vyžaduje i reálný obsah FTS5 databáze.
 Průběžné zprávy modelu se zachovávají v protokolu; očekávání se porovnává
 s odpovědí označenou `final_answer`.
 
+Pokud první tah prokazatelně skončil, správně dohledal hodnotu a doložil
+ostatní hooky, ale úplně vynechal nativní příkaz, aplikace ve stejném vlákně
+jednou vyžádá jen tento chybějící test přesměrování. Velký výstup ani hledání
+neopakuje. Požadavek i nový tah zůstanou ve stejném vlastněném pokusu a jeho
+historii; bez skutečného přepsaného příkazu diagnostika dál neprojde.
+Nedokončený či chybový tah, chybná odpověď a chybějící další důkazy tento
+doplňující požadavek nespustí. Načtení stavu ani obnova nepřidá další požadavek
+na tuto opravu.
+
 ## Izolace a podporovaná obnova
 
 Každý průchod má vlastní `work/RUN/context/workspace` a

@@ -71,6 +71,38 @@ class AutonomousExportTests(unittest.TestCase):
             time.sleep(.05)
         self.fail('Output review did not finish')
 
+    def test_targeted_context_correction_remains_owned_by_the_original_autonomous_stage(self):
+        self.peer('repair_context_routing')
+        profile = self.app.dispatch('inspect_profile', {'path': str(ROOT / 'profiles/faithful-reading.json')})['data']
+        started = self.app.dispatch('start_autonomous', {'source_path': str(self.source),
+            'name': 'Autonomous native routing correction', 'profile_path': profile['path'],
+            'profile_sha256': profile['sha256'], 'defer_corrections': True,
+            'environment': os.environ.get('OCR_ENVIRONMENT')})
+        self.assertTrue(started['ok'], started)
+        identifier = started['data']['run_id']
+        deadline = time.monotonic() + 150
+        while time.monotonic() < deadline:
+            response = self.app.dispatch('autonomous_status', {'run_id': identifier})
+            self.assertTrue(response['ok'], response)
+            status = response['data']
+            if status['state'] not in ('starting', 'running'):
+                break
+            time.sleep(.1)
+        self.assertEqual(status['state'], 'completed', status)
+        context = self.app.dispatch('context_status', {'run_id': identifier})
+        self.assertTrue(context['ok'], context)
+        context = context['data']
+        self.assertTrue(context['context_verified'])
+        self.assertEqual([row['stage'] for row in context['turns']], ['routing', 'routing_correction', 'recovery'])
+        stage = next(row for row in status['stages'] if row['stage'] == 'context_diagnostic')
+        self.assertEqual(context['parent_binding'], {'parent_attempt_id': status['attempt_id'],
+            'intent_id': stage['intent_id'], 'stage': 'context_diagnostic'})
+        selected = self.app.dispatch('select_run', {'run_id': identifier})['data']
+        work = self.root / selected['artifacts']['workspace']['path']
+        self.assertEqual(len(list((work / 'application/context-attempts').glob('*/attempt.json'))), 1)
+        self.assertEqual(selected['project']['validation'], 'ready_with_open_items')
+        self.assertEqual(selected['project']['acceptance'], 'not_recorded')
+
     def test_one_public_action_drives_source_to_actual_export_reports_and_truthful_validation(self):
         source_bytes = self.source.read_bytes()
         profile = self.app.dispatch('inspect_profile', {'path': str(ROOT / 'profiles/faithful-reading.json')})['data']
