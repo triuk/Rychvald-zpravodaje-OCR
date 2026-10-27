@@ -4,6 +4,9 @@ The supported runtime is the selected Linux x86_64-v3 closure with its captured
 loader and libraries. A desktop browser/display is an external prerequisite for
 normal GUI launch. This is not a claim of compatibility with every Linux system.
 Program installation and edition project data must use separate directories.
+The program directory must be outside model-writable workspaces, context storage,
+and their enclosing writable Git repository. See the
+[context runtime installation requirements](webui-context.md).
 
 The existing `capture`, `build`, `install` and `bin/rychvald-ocr` interfaces remain
 available. The complete application uses two additional public operations:
@@ -41,7 +44,9 @@ so the wrapper's downloader cannot repair a missing library. Installed mode
 ignores development runtime overrides, selects its bundled OCR/Codex, and reads
 `native/bundled-context.json`. Raw native executable hashes remain distinct from
 generated loader command vectors. Hooks and MCP use bundled env/Node/Python/
-Bash/sh and libraries; their PATH contains only the per-run runtime directory.
+Bash/sh and libraries; their PATH contains only the selected per-run runtime
+directory and the protected bundled `runtime/sandbox-bin` helper directory.
+Host executable directories are not added to PATH.
 Installed per-run interpreter commands are executable shims generated from the
 verified descriptor's absolute loader/native vectors. They do not invoke the
 bundle's location-relative shell wrappers through symlinks. Each resolved command
