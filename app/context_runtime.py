@@ -40,7 +40,7 @@ def default_context_runtime():
 
             for name in ('node', 'package'):
                 runtime[name] = relative(runtime[name])
-            for item in [*runtime['files'], *runtime['interpreters']]:
+            for item in [*runtime['files'], *runtime['interpreters'], *runtime.get('native_helpers', [])]:
                 item['path'] = relative(item['path'])
             for name in ('node_command', 'env_command'):
                 runtime[name] = [relative(item) if index in (0, 3, 4) else item
@@ -81,7 +81,25 @@ def default_context_runtime():
                 'console.log(JSON.stringify({node:process.version,sqlite_fts5:true}))']}
 
 
+def native_helpers(runtime):
+    if not runtime.get('bundled'):
+        return []
+    helpers = runtime.get('native_helpers')
+    if (not isinstance(helpers, list) or len(helpers) != 1 or not isinstance(helpers[0], dict) or
+            helpers[0].get('name') != 'bwrap'):
+        raise JobError('context_runtime_invalid', 'Installed context runtime requires its pinned bwrap helper.')
+    pins = {item['path']: item['sha256'] for item in runtime.get('files', [])}
+    for helper in helpers:
+        path = Path(helper['path'])
+        if (not path.is_absolute() or not path.is_file() or not path.stat().st_mode & 0o111 or
+                any(part.is_symlink() for part in [path, *path.parents]) or
+                not helper.get('sha256') or pins.get(str(path)) != helper['sha256']):
+            raise JobError('context_runtime_invalid', 'Installed sandbox helper is missing, linked or outside the pinned file closure.')
+    return helpers
+
+
 def verify_resources(runtime, codex):
+    native_helpers(runtime)
     for item in [*runtime.get('files', []), *codex['files']]:
         path = Path(item['path'])
         if not path.is_file() or sha(path) != item['sha256']:
@@ -102,6 +120,15 @@ def verify_resources(runtime, codex):
 
 
 def configuration(runtime, codex, workspace, storage):
+    helpers = native_helpers(runtime)
+    helper_directories = []
+    for helper in helpers:
+        path = Path(helper['path'])
+        if path.is_relative_to(workspace.resolve()) or path.is_relative_to(storage.resolve()):
+            raise JobError('context_runtime_invalid', 'Sandbox helper must remain outside model-owned workspace and storage.')
+        directory = str(path.parent)
+        if directory not in helper_directories:
+            helper_directories.append(directory)
     binary = workspace / '.runtime-bin'
     if binary.is_symlink():
         raise JobError('context_runtime_invalid', 'Runtime command directory was replaced.')
@@ -109,6 +136,8 @@ def configuration(runtime, codex, workspace, storage):
     executables = [{'name': 'node', 'path': runtime['node']}, {'name': 'codex', 'path': codex['command'][0]},
                    *runtime.get('interpreters', [])]
     if runtime.get('bundled'):
+        if any(helper['name'] in runtime['launcher_commands'] for helper in helpers):
+            raise JobError('context_runtime_invalid', 'Sandbox helpers must not be copied into the model workspace.')
         vectors = {**runtime['launcher_commands'], 'codex': [codex['command'][0]]}
         identity = hashlib.sha256(json.dumps(vectors, sort_keys=True).encode()).hexdigest()
         binary = binary / identity
@@ -136,7 +165,7 @@ def configuration(runtime, codex, workspace, storage):
     home.mkdir(exist_ok=True)
     context_env = {'CONTEXT_MODE_PLATFORM': 'codex', 'CONTEXT_MODE_PROJECT_DIR': str(workspace),
                    'CONTEXT_MODE_DIR': str(storage), 'TMPDIR': str(temporary), 'CODEX_HOME': str(home),
-                   'PATH': str(binary) if runtime.get('bundled') else str(binary) + os.pathsep + '/usr/bin:/bin'}
+                   'PATH': os.pathsep.join([str(binary), *helper_directories]) if runtime.get('bundled') else str(binary) + os.pathsep + '/usr/bin:/bin'}
     if runtime.get('bundled'):
         context_env['SHELL'] = str(binary / 'bash')
         context_env['HOME'] = str(home)

@@ -168,6 +168,9 @@ def safe_relative(name):
 
 
 def populate_release(bundle, inputs, root, release):
+    required = {'runtime/native/bwrap', 'lib/libcap.so.2'}
+    if not required.issubset(release['resources']):
+        raise BundleError('sandbox_resource_missing', 'Release requires its pinned bubblewrap program and libcap dependency.')
     for name, record in release['source_files'].items():
         target = bundle / safe_relative(name)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -186,8 +189,8 @@ def populate_release(bundle, inputs, root, release):
         shutil.copyfile(inputs / record['sha256'], target)
         target.chmod(0o644)
 
-    def wrapper(name, program, python=False):
-        target = bundle / 'runtime/bin' / name
+    def wrapper(name, program, python=False, directory='runtime/bin'):
+        target = bundle / directory / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text('#!/bin/sh\nroot=${0%/*}/../..\n'
                           'unset LD_PRELOAD LD_LIBRARY_PATH' +
@@ -200,6 +203,7 @@ def populate_release(bundle, inputs, root, release):
                           ('sh', 'runtime/native/bash'), ('env', 'runtime/native/env'),
                           ('python3', 'bin/python3.14')]:
         wrapper(name, program, name == 'python3')
+    wrapper('bwrap', 'runtime/native/bwrap', directory='runtime/sandbox-bin')
     loader = ['lib/ld-linux-x86-64.so.2', '--inhibit-cache', '--library-path', 'lib']
     context_lock = json.loads((root / 'native/context-runtime.json').read_text())
     runtime_files = {name: record['sha256'] for name, record in release['resources'].items()
@@ -207,11 +211,14 @@ def populate_release(bundle, inputs, root, release):
     runtime_files['bin/python3.14'] = sha(bundle / 'bin/python3.14')
     for path in (bundle / 'runtime/bin').iterdir():
         runtime_files[str(path.relative_to(bundle))] = sha(path)
+    helper = 'runtime/sandbox-bin/bwrap'
+    runtime_files[helper] = sha(bundle / helper)
     descriptor = {'kind': 'native', 'version': context_lock['version'],
                   'node': 'runtime/bin/node', 'node_command': [*loader, 'runtime/native/node'],
                   'env_command': [*loader, 'runtime/native/env'],
                   'package': 'runtime/context-mode', 'tree_sha256': release['prepared_context'],
                   'files': [{'path': name, 'sha256': value} for name, value in sorted(runtime_files.items())],
+                  'native_helpers': [{'name': 'bwrap', 'path': helper, 'sha256': runtime_files[helper]}],
                   'interpreters': [{'name': name, 'path': 'runtime/bin/' + name} for name in ('python3', 'bash', 'sh')]}
     descriptor['launcher_commands'] = {
         'node': [*loader, 'runtime/native/node'],
@@ -232,6 +239,8 @@ def populate_release(bundle, inputs, root, release):
         'Codex 0.162.0-alpha.17.2 and companion: LicenseRef-OpenAI-Proprietary; see Codex-LICENSE.\n'
         'Node 24.21.0 is the selected CUA build; see node-LICENSE and node-manifest.json.\n'
         'context-mode 1.0.169: Elastic License 2.0; runtime/context-mode/LICENSE and dependency licenses.\n'
+        'bubblewrap 0.13.1: LGPL-2.1-or-later; libcap 2.78: BSD-3-Clause OR GPL-2.0-only. '
+        'See licenses/release/ and provenance/sandbox/. The sandbox helper remains outside model-writable data.\n'
         'WebUI2 2.5.8 wrapper and native WebUI: MIT; copyright Hassan Draga, '
         'https://github.com/webui-dev/webui and https://github.com/webui-dev/python-webui; '
         'see lib/python3.14/site-packages/webui2-2.5.8.dist-info/licenses/LICENSE.\n'

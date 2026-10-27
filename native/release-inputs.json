@@ -23,6 +23,18 @@
       "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/071e34179e645b25f8a8c2e7108894dc665caa9f5f8c939cd579a75b6638bc3f",
       "version": "2.44+r50+g1848099f063e-3"
     },
+    "lib/libcap.so.2": {
+      "archive_sha256": "ae693abdfc1b97e70c760589664cc75e03f6faadba2503b5257dfeb068e0dd92",
+      "executable": true,
+      "kind": "package-archive-member",
+      "license": "BSD-3-Clause OR GPL-2.0-only",
+      "member": "usr/lib/libcap.so.2.78",
+      "owner": "libcap",
+      "sha256": "86e6c51b059d7dba0d3b2f37d34b223708ead6176047f2fa4a819c9ddf0bfd0e",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/objects/86e6c51b059d7dba0d3b2f37d34b223708ead6176047f2fa4a819c9ddf0bfd0e",
+      "version": "2.78-1.1"
+    },
     "lib/libdl.so.2": {
       "executable": true,
       "kind": "locked-installed-file",
@@ -301,6 +313,23 @@
       "sha256": "5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace",
       "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/context-stable-runtime/node-LICENSE"
     },
+    "licenses/release/bubblewrap-LGPL-2.1-or-later.txt": {
+      "executable": false,
+      "kind": "installed-license",
+      "license": "LGPL-2.1-or-later",
+      "original_source": "/usr/share/licenses/spdx/LGPL-2.1-or-later.txt",
+      "sha256": "5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/objects/5749785c8bdefafcb5d798270ed0a967036fe2ca63dcedade1627565dfef81d2"
+    },
+    "licenses/release/libcap-License": {
+      "executable": false,
+      "kind": "package-license",
+      "license": "BSD-3-Clause OR GPL-2.0-only",
+      "owner": "libcap",
+      "sha256": "68467e731f4744bd6e0bb69e8df9c3a994e09cd6b203d0c41327ac6d079c581d",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/objects/68467e731f4744bd6e0bb69e8df9c3a994e09cd6b203d0c41327ac6d079c581d",
+      "version": "2.78-1.1"
+    },
     "licenses/release/usr/share/licenses/libgcc/RUNTIME.LIBRARY.EXCEPTION": {
       "executable": false,
       "kind": "package-provided",
@@ -443,6 +472,51 @@
       "sha256": "065d91eca8286d6c88c75177943d0f6fcaf30273d3d87eca8dce10ee6d6e0e3e",
       "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/context-stable-runtime/node-manifest.json"
     },
+    "provenance/sandbox/bubblewrap-BUILDINFO": {
+      "archive_sha256": "beb4926dcd835b7f84c8c1a8283e87355b6ecd6b9a1fd7430f8fc1b2bc1a48d1",
+      "executable": false,
+      "kind": "package-metadata",
+      "owner": "bubblewrap",
+      "sha256": "300842f63764f67210edce6211bf1452c851eb6be4e30b95612fee324ecf2c15",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/packages/bubblewrap-BUILDINFO",
+      "version": "0.13.1-1.1"
+    },
+    "provenance/sandbox/bubblewrap-PKGINFO": {
+      "archive_sha256": "beb4926dcd835b7f84c8c1a8283e87355b6ecd6b9a1fd7430f8fc1b2bc1a48d1",
+      "executable": false,
+      "kind": "package-metadata",
+      "owner": "bubblewrap",
+      "sha256": "ee3fa36eba212491773e4e6542879dfd90e5e11ab9b9f9730deea13bda1e1d7c",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/packages/bubblewrap-PKGINFO",
+      "version": "0.13.1-1.1"
+    },
+    "provenance/sandbox/libcap-BUILDINFO": {
+      "archive_sha256": "ae693abdfc1b97e70c760589664cc75e03f6faadba2503b5257dfeb068e0dd92",
+      "executable": false,
+      "kind": "package-metadata",
+      "owner": "libcap",
+      "sha256": "4af6e45d7b67acd6b732ba3a74b5a6559bf9e3d371e9f6d8a47b916937bf0e8a",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/packages/libcap-BUILDINFO",
+      "version": "2.78-1.1"
+    },
+    "provenance/sandbox/libcap-PKGINFO": {
+      "archive_sha256": "ae693abdfc1b97e70c760589664cc75e03f6faadba2503b5257dfeb068e0dd92",
+      "executable": false,
+      "kind": "package-metadata",
+      "owner": "libcap",
+      "sha256": "bd19f19fb3788d6a2d0d79125d7b426749ec7c228a2376ded6c55cf431276b8c",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/packages/libcap-PKGINFO",
+      "version": "2.78-1.1"
+    },
+    "provenance/sandbox/package-inputs.json": {
+      "executable": false,
+      "sha256": "5439284544497368bd1208eeb3367af982947092198d92e9ee76a04ff67f9990",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/provenance.json"
+    },
     "runtime/codex/codex": {
       "archive_sha256": "85a1626517420e61f79a794831bddfb727ef3ec816985b442a3a33580b06751a",
       "executable": true,
@@ -468,6 +542,18 @@
       "sha256": "917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2",
       "source": "/home/gordon/Dokumenty/OCR/.scratch/rychvald-webui-6477/native-recovered-inputs/917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2",
       "version": "5.3.20-2"
+    },
+    "runtime/native/bwrap": {
+      "archive_sha256": "beb4926dcd835b7f84c8c1a8283e87355b6ecd6b9a1fd7430f8fc1b2bc1a48d1",
+      "executable": true,
+      "kind": "package-archive-member",
+      "license": "LGPL-2.1-or-later",
+      "member": "usr/bin/bwrap",
+      "owner": "bubblewrap",
+      "sha256": "a7adb079800910ff28fc05c7e1dd2441ff87fb09b369dbb7e82bcededdab079b",
+      "signature_verification": "not performed",
+      "source": "/home/gordon/Dokumenty/Rychvald-zpravodaje-OCR/.scratch/ticket-23-proof/native-codex-sandbox/resources-bwrap-0.13.1-v2/objects/a7adb079800910ff28fc05c7e1dd2441ff87fb09b369dbb7e82bcededdab079b",
+      "version": "0.13.1-1.1"
     },
     "runtime/native/env": {
       "executable": true,

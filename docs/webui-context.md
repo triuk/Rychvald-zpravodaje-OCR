@@ -64,9 +64,26 @@ sady a skutečný FTS5 probe. Při chybě nevytváří modelové vlákno.
 
 Vývojový start může určit již připravenou sadu proměnnou
 `RYCHVALD_CONTEXT_RUNTIME`; výchozí distribuční cesta je
-`runtime/context-mode`. Neprobíhá automatická příprava ani oprava při
-startu GUI. Přenositelnost celého balíku včetně dynamických knihoven je
-součástí distribučního přírůstku, nikoli tohoto testu.
+`runtime/context-mode`. Při startu GUI se prostředí automaticky neopravuje.
+Distribuovaná varianta navíc obsahuje bubblewrap 0.13.1 a libcap 2.78
+z přesně zaznamenaných balíčků CachyOS. Původ, kontrolní součty, balíčková
+metadata a licenční texty jsou v `provenance/sandbox/`, `provenance/release.json`
+a `licenses/release/`; podpisy balíčků nebyly ověřovány.
+
+Nativní pomocník se spouští přes přibalený loader a knihovny z odděleného
+adresáře programu `runtime/sandbox-bin`. Jeho hash je součástí `native_helpers`
+i úplného seznamu souborů. Chybějící záznam, změněný soubor, odkaz nebo ztráta
+práva spuštění zastaví diagnostiku před spuštěním poskytovatele. Do vlastního
+pracovního prostoru se helper nekopíruje; PATH obsahuje pouze vlastní vybrané
+spouštěče a tento přibalený adresář, bez hostitelského `/usr/bin` či `/bin`.
+
+Program umístěte mimo modelu zapisovatelný pracovní prostor, úložiště a případný
+nadřazený Git projekt. Codex takový zapisovatelný helper z bezpečnostních důvodů
+nepoužije. Přesun nebo volba programu nemění požadovaná omezení práce modelu.
+
+Přenositelnost celého balíku včetně dynamických knihoven se ověřuje samostatnými
+distribučními scénáři. Obecné předpoklady uvádí
+[dokumentace Codexu](https://learn.chatgpt.com/docs/sandboxing#prerequisites).
 
 Pro výslovně vybranou stabilní vývojovou kopii lze zadat
 `RYCHVALD_CODEX_RUNTIME` s cestou ke Codexu a `RYCHVALD_CONTEXT_BIN` s adresářem
