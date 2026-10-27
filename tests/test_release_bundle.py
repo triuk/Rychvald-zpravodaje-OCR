@@ -8,12 +8,65 @@ import shutil
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 PROOF = Path(os.environ.get('OCR_RELEASE_ARTIFACTS', ROOT / '.scratch/release-proof'))
+
+
+class SandboxResourceContractTests(unittest.TestCase):
+    def fixture(self):
+        from tools.ocr_bundle import populate_release
+        temporary = tempfile.TemporaryDirectory(prefix='Release helper contract ')
+        self.addCleanup(temporary.cleanup)
+        directory = Path(temporary.name)
+        bundle, inputs = directory / 'bundle', directory / 'inputs'
+        for name in ['bin', 'native', 'provenance', 'licenses']:
+            (bundle / name).mkdir(parents=True)
+        inputs.mkdir()
+        (bundle / 'bin/python3.14').write_bytes(b'Explicit nonexecuted Python fixture')
+        resources = {}
+        for name in ['runtime/native/node', 'runtime/native/bash', 'runtime/native/env',
+                     'runtime/native/bwrap', 'lib/libcap.so.2']:
+            content = ('Explicit nonexecuted resource: ' + name).encode()
+            digest = hashlib.sha256(content).hexdigest()
+            (inputs / digest).write_bytes(content)
+            resources[name] = {'sha256': digest, 'executable': True}
+        release = {'source_files': {}, 'resources': resources, 'context_files': {}, 'prepared_context': 'controlled-unit-only'}
+        return populate_release, bundle, inputs, release
+
+    def test_release_declares_the_pinned_helper_in_its_separate_program_directory(self):
+        populate, bundle, inputs, release = self.fixture()
+        populate(bundle, inputs, ROOT, release)
+        descriptor = json.loads((bundle / 'native/bundled-context.json').read_text())
+        self.assertIn('native_helpers', descriptor)
+        helpers = descriptor['native_helpers']
+        self.assertEqual(len(helpers), 1)
+        self.assertEqual(helpers[0]['name'], 'bwrap')
+        self.assertEqual(helpers[0]['path'], 'runtime/sandbox-bin/bwrap')
+        helper = bundle / helpers[0]['path']
+        self.assertFalse(helper.is_symlink())
+        self.assertTrue(helper.stat().st_mode & 0o111)
+        self.assertEqual(hashlib.sha256(helper.read_bytes()).hexdigest(), helpers[0]['sha256'])
+        pins = {row['path']: row['sha256'] for row in descriptor['files']}
+        self.assertEqual(pins[helpers[0]['path']], helpers[0]['sha256'])
+        self.assertEqual(pins['runtime/native/bwrap'], release['resources']['runtime/native/bwrap']['sha256'])
+        self.assertEqual(pins['lib/libcap.so.2'], release['resources']['lib/libcap.so.2']['sha256'])
+        self.assertNotIn('bwrap', descriptor['launcher_commands'])
+
+    def test_release_without_sandbox_program_or_library_fails_before_population(self):
+        from tools.ocr_bundle import BundleError
+        for name in ['runtime/native/bwrap', 'lib/libcap.so.2']:
+            with self.subTest(resource=name):
+                populate, bundle, inputs, release = self.fixture()
+                del release['resources'][name]
+                with self.assertRaises(BundleError) as failure:
+                    populate(bundle, inputs, ROOT, release)
+                self.assertEqual(failure.exception.code, 'sandbox_resource_missing')
+                self.assertFalse((bundle / 'native/bundled-context.json').exists())
 
 
 class ReleaseCaptureTests(unittest.TestCase):

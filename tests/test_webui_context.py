@@ -1,6 +1,7 @@
 """Context readiness via the approved public application/process boundary."""
 import json
 import hashlib
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -51,7 +52,7 @@ class ContextReadinessTests(unittest.TestCase):
         self.assertIsNone(result['pid'])
         self.assertIsNone(result['turn_id'])
 
-    def peer(self, mode):
+    def peer(self, mode, *, context_changes=None):
         self.app.close()
         fixture = ROOT / 'tests/context_app_server_fixture.py'
         codex = {'kind': 'controlled_process_fixture', 'version': 'fixture14',
@@ -60,7 +61,69 @@ class ContextReadinessTests(unittest.TestCase):
         context = {'kind': 'controlled_process_fixture', 'package': str(self.directory), 'node': sys.executable,
                    'files': [], 'interpreters': [], 'probe_command': [sys.executable, '-c',
                        'print(\'{"node":"fixture","sqlite_fts5":true}\')']}
+        context.update(context_changes or {})
         self.app = Application(self.registry, codex_runtime=codex, context_runtime=context)
+
+    def bundled_peer(self, *, declare_helper=True):
+        helper = self.directory / 'selected-program/runtime/sandbox-bin/bwrap'
+        helper.parent.mkdir(parents=True)
+        helper.write_text('#!/bin/sh\n# Explicit controlled helper, never native acceptance evidence.\nexit 0\n')
+        helper.chmod(0o755)
+        pin = {'path': str(helper), 'sha256': hashlib.sha256(helper.read_bytes()).hexdigest()}
+        settings = {'bundled': True, 'launcher_commands': {'node': [sys.executable],
+            'python3': [sys.executable], 'bash': ['/usr/bin/bash'], 'sh': ['/usr/bin/sh']}}
+        if declare_helper:
+            settings.update(native_helpers=[{'name': 'bwrap', **pin}], files=[pin])
+        self.peer('repair_redirect', context_changes=settings)
+        return helper
+
+    def test_installed_runtime_without_declared_sandbox_helper_stops_before_provider(self):
+        self.bundled_peer(declare_helper=False)
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertEqual(result['error']['code'], 'context_runtime_invalid')
+        self.assertIsNone(result['pid'])
+        self.assertIsNone(result['turn_id'])
+        self.assertFalse(result['context_verified'])
+
+    def test_installed_sandbox_helper_is_on_protected_path_and_not_copied_to_workspace(self):
+        helper = self.bundled_peer()
+        original = helper.read_bytes()
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'completed', result.get('error'))
+        self.assertTrue(result['context_verified'])
+        paths = result['effective_context_config']['context_environment']['PATH'].split(os.pathsep)
+        self.assertEqual(paths[-1], str(helper.parent))
+        workspace = Path(result['context_paths']['workspace'])
+        self.assertFalse(helper.is_relative_to(workspace))
+        self.assertFalse((Path(paths[0]) / 'bwrap').exists())
+        self.assertNotIn('/usr/bin', paths)
+        self.assertNotIn('/bin', paths)
+        self.assertEqual(helper.read_bytes(), original)
+
+    def test_installed_sandbox_helper_without_execute_permission_stops_before_provider(self):
+        helper = self.bundled_peer()
+        helper.chmod(0o644)
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertEqual(result['error']['code'], 'context_runtime_invalid')
+        self.assertIsNone(result['pid'])
+        self.assertIsNone(result['turn_id'])
+
+    def test_linked_installed_sandbox_helper_stops_before_provider(self):
+        helper = self.bundled_peer()
+        original = helper.with_name('original-bwrap')
+        helper.rename(original)
+        helper.symlink_to(original)
+        self.assertTrue(self.app.dispatch('start_context_diagnostic', {'run_id': self.identifier})['ok'])
+        result = self.wait()
+        self.assertEqual(result['state'], 'failed')
+        self.assertEqual(result['error']['code'], 'context_runtime_invalid')
+        self.assertIsNone(result['pid'])
+        self.assertIsNone(result['turn_id'])
 
     def test_untrusted_actual_hook_metadata_stops_before_any_model_turn(self):
         self.peer('untrusted')
