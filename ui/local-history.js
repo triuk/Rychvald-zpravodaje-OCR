@@ -46,11 +46,12 @@
         const data = await request('run_metrics', {run_id: run.project.run_id, kind: 'local',
           phase: view.phase, newest_first: true, offset: append ? view.offset : 0, limit: 25});
         if (!view.section.isConnected || selectedRun !== run.project.run_id) return;
-        const active = data.steps.filter(step => step.state === 'running');
+        const active = data.running_steps || data.steps.filter(step => step.state === 'running');
         view.activity.textContent = active.length ? `Místní práce: ${active.map(step => step.tool?.name || step.operation).join(' · ')}` :
           `Místní práce: právě neběží · ${data.step_total} zaznamenaných kroků v této fázi.`;
-        if (!append && view.hash === data.source_hash) return;
-        view.hash = data.source_hash;
+        const signature = JSON.stringify([data.source_hash, data.steps.map(step => [step.step_id, step.state, step.ended_at])]);
+        if (!append && view.hash === signature) return;
+        view.hash = signature;
         if (!append) { view.list.replaceChildren(); view.offset = 0; }
         for (const step of data.steps) {
           const item = node('details', undefined, 'local-step');

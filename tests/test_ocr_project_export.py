@@ -168,6 +168,10 @@ class ProjectExportTests(unittest.TestCase):
                 break
             time.sleep(.02)
         self.assertIsNotNone(running, 'The active export must be visible before it finishes.')
+        active_page = app.dispatch('run_metrics', {'run_id': self.identifier, 'kind': 'local',
+                                   'phase': 'assembly', 'newest_first': True, 'limit': 1})
+        self.assertTrue(active_page['ok'], active_page)
+        self.assertIn(running['step_id'], {step['step_id'] for step in active_page['data']['running_steps']})
         os.killpg(process.pid, signal.SIGKILL)
         process.communicate(timeout=5)
         interrupted = app.dispatch('step_detail', {'run_id': self.identifier, 'step_id': running['step_id']})

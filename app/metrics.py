@@ -540,7 +540,9 @@ def summary(ledger, offset=0, limit=100, *, kind=None, phase=None, newest_first=
     if newest_first:
         steps.reverse()
     result.update(step_total=len(steps),
-                  step_next_offset=offset + limit if offset + limit < len(steps) else None)
+                  step_next_offset=offset + limit if offset + limit < len(steps) else None,
+                  running_steps=[{key: step.get(key) for key in ('step_id', 'operation', 'tool', 'scope', 'parent_step_id')}
+                                 for step in steps if step['state'] in ('running', 'starting')])
     for step in steps[offset:offset + limit]:
         result['steps'].append({k: v for k, v in step.items() if k not in ('attempt', 'events', 'usage_sources')})
         result['steps'][-1]['usage_sources'] = [{k: v for k, v in source.items() if k != 'original'}
