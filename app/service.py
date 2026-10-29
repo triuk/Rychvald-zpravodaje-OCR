@@ -121,8 +121,9 @@ class Application:
     error code and an event cursor. events(after) returns changes since a cursor.
     """
 
-    def __init__(self, root, *, process_command=None, codex_runtime=None, context_runtime=None):
+    def __init__(self, root, *, process_command=None, codex_runtime=None, context_runtime=None, path_picker=None):
         self.root = Path(root).expanduser().resolve()
+        self.path_picker = path_picker
         self.process = OcrProcess(process_command)
         self._lock = threading.RLock()
         self._events = deque(maxlen=1000)
@@ -159,6 +160,16 @@ class Application:
             except (OSError, ValueError, KeyError, TypeError) as error:
                 return {'ok': False, 'data': None, 'error': {'code': 'preview_invalid', 'message': str(error)},
                     'event_cursor': self._sequence}
+        if operation == 'choose_path':
+            # A modal desktop dialog must not hold the application lock: status
+            # polling and background OCR continue while the operator chooses.
+            from .path_picker import PathSelectionError, select_path
+            try:
+                data = select_path(payload, self.path_picker)
+                return {'ok': True, 'data': data, 'error': None, 'event_cursor': self._sequence}
+            except (PathSelectionError, OSError, ValueError, TypeError) as error:
+                return {'ok': False, 'data': None, 'event_cursor': self._sequence,
+                        'error': {'code': getattr(error, 'code', 'path_invalid'), 'message': str(error)}}
         with self._lock:
             manual_lease = None
             try:
