@@ -156,3 +156,23 @@ class PhasePreviewTests(unittest.TestCase):
         self.assertEqual(data['page_count'], 2)
         self.assertIn('fresh-lines.json', data['artifacts'])
         self.assertEqual(self.app.dispatch('select_run', {'run_id': run_id})['data'], before)
+
+    def test_damaged_legacy_pdf_returns_a_public_error_without_crashing_the_native_bridge(self):
+        damaged = self.directory / 'Poškozené starší PDF.pdf'
+        damaged.write_bytes(b'%PDF-1.4\nlegacy header only\n%%EOF\n')
+        imported = self.app.dispatch('import_sources', {'path': str(damaged)})
+        self.assertTrue(imported['ok'], imported)
+        edition = next(item for item in imported['data']['editions'] if item['name'] == damaged.name)
+        result = self.app.dispatch('phase_preview', {'run_id': edition['runs'][0]['run_id'],
+            'edition_id': edition['edition_id'], 'phase': 'preparation', 'page': 1})
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['error']['code'], 'preview_invalid')
+        self.assertTrue(self.app.dispatch('projects')['ok'])
+
+    def test_malformed_historical_manifest_is_an_unavailable_artifact_without_current_fallback(self):
+        archive = self.work / 'phase-previews/reading'
+        archive.mkdir(parents=True)
+        (archive / 'manifest.json').write_text('[]')
+        data = self.preview(phase='reading')
+        self.assertEqual(data['state'], 'artifact_invalid')
+        self.assertEqual(data['overlays'], [])

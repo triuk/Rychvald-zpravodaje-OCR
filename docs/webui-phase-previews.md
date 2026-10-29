@@ -19,8 +19,8 @@ v překryvu, bez dalšího přepínače nebo inspektoru řádku.
 ```
 
 `edition_id` je volitelná kontrola shody s průchodem. Stránky se číslují od 1.
-Fáze jsou `preparation`, `reading`, `geometry` a `assembly`; poslední tři používají
-stejný prohlížeč a společný rozšiřovací bod `app.phase_preview.phase_content`.
+Fáze jsou `preparation`, `reading`, `geometry` a `assembly`; používají stejný
+prohlížeč a společný rozšiřovací bod `app.phase_preview.phase_content`.
 Ruční revize a Výstupy zůstávají placeholdery.
 
 Výsledek obsahuje `state`, srozumitelné `message`, `identity` projektu, průchodu,
@@ -67,3 +67,41 @@ Při vývoji 29. 10. 2026 prošlo pět veřejných testů a nativní scénář n
 Xvfb displeji. Použito bylo výslovně vybrané a ověřené místní testovací prostředí
 `/tmp/rychvald-native-recovery/environment.json`; nejde o doklad původního
 přenosného runtime ani o přijetí celého Linux balíku.
+
+## První dokončený Přepis
+
+Nativní `publish-reading` při prvním zveřejnění uloží samostatný archiv
+`phase-previews/reading/`. Obsahuje původní přepis, návrh, doklad zveřejnění,
+vstupní packet a manifest stránek. Manifest archivu váže jejich přesné hashe na
+zdroj, průchod a zmrazený profil. Adresář vzniká jedním přejmenováním hotového
+celku a pozdější oprava ani další zveřejnění jej nepřepisují.
+
+Záložka Přepis čte tento archiv; nepoužívá aktuální `review.json`. Zobrazuje
+původní oblasti i text automaticky nad stejným zdrojovým skenem. Průchod v
+archivu musí odpovídat vybranému průchodu. Poškozený archiv se označí jako
+neplatný, místo aby byl tiše nahrazen aktuálním stavem.
+
+Starší projekt bez nového archivu může využít svůj nejdřívější dokončený
+originální návrh z `application/reading-attempts`. Ověřují se hashe, původní
+dokončené odpovědi a protokol, zdroj a zmrazený profil. U pokračovaného čtení
+se ověřuje i zachovaný původní zdrojový tah. Chybí-li takové doklady, vrací
+se `historical_missing`; dotaz nevytváří nové soubory ani AI požadavky.
+
+`tests/test_webui_reading_preview.py` ověřuje celý veřejný průchod se skutečným
+místním exportem a výslovně řízeným AI partnerem. První přepis obsahuje `AXC`,
+řízená cílená oprava změní pracovní přepis na `ABC`, ale identita a obsah
+původního náhledu zůstanou stejné i po restartu. Test následně ověří starší
+originální doklady a jejich skutečnou nedostupnost bez fallbacku.
+
+```sh
+OCR_ENVIRONMENT=/cesta/k/overenemu/environment.json \
+  python -m unittest discover -s tests -p test_webui_reading_preview.py -v
+DISPLAY=:91 OCR_ENVIRONMENT=/cesta/k/overenemu/environment.json \
+  python tools/smoke_webui_reading_preview.py --screenshot /tmp/prvni-prepis.png
+```
+
+Tento nativní scénář prokazuje skutečně viditelný původní text `AXC` po opravě
+pracovního přepisu na `ABC`. AI partner je řízená testovací náhrada; test není
+dokladem dostupnosti skutečného modelu. Ověření poškozeného staršího PDF navíc
+zaručuje veřejnou chybu `preview_invalid` bez výjimky unikající do nativního
+WebUI callbacku.

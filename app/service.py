@@ -164,7 +164,7 @@ class Application:
             except (ApplicationError, PreviewError) as error:
                 return {'ok': False, 'data': None, 'error': {'code': error.code, 'message': str(error)},
                     'event_cursor': self._sequence}
-            except (OSError, ValueError, KeyError, TypeError) as error:
+            except (OSError, ValueError, KeyError, TypeError, RuntimeError, AttributeError, IndexError) as error:
                 return {'ok': False, 'data': None, 'error': {'code': 'preview_invalid', 'message': str(error)},
                     'event_cursor': self._sequence}
         if operation == 'choose_path':
