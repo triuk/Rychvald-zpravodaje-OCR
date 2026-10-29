@@ -5,7 +5,7 @@ function renderContextPanel(detail, data) {
   const panel = element('section', undefined, 'codex-panel');
   panel.id = 'context-panel';
   panel.append(element('h3', 'Context-mode · směrování a obnova'), element('p',
-    'Ověření vytvoří rozsáhlý místní výstup, dohledá znalost a obnoví skutečnou relaci po kompaktaci. Používá účet ChatGPT a přesně gpt-6.1-sol · high.', 'hint'));
+    'Ověření vytvoří rozsáhlý místní výstup, dohledá znalost a obnoví skutečnou relaci po kompaktaci. Používá účet ChatGPT a přesně uložený model a reasoning tohoto průchodu.', 'hint'));
   const start = element('button', 'Ověřit context-mode');
   start.id = 'start-context-diagnostic';
   start.dataset.runId = data.project.run_id;

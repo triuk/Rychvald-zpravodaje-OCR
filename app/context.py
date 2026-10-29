@@ -1,5 +1,5 @@
 """Run-local context readiness: registration alone never enables autonomous OCR."""
-from .codex import OwnedJobs, RpcProcess, MODEL, EFFORT, now, process_identity, scrub
+from .codex import OwnedJobs, RpcProcess, now, process_identity, scrub
 from .jobs import JobError, atomic_json, sha
 from pathlib import Path
 from .context_runtime import default_context_runtime, verify_resources, configuration, command, verify_hooks
@@ -111,6 +111,7 @@ class ContextJobs(OwnedContextJobs):
 
     def _run(self, job):
         value = job['manifest']
+        model, effort = value['requested']['model'], value['requested']['reasoning_effort']
         started = time.monotonic()
         trace_lock = threading.Lock()
         value.update(context_verified=False, hook_events=[], connections=[], turns=[], completed_items=[], terminal_turns={},
@@ -176,7 +177,7 @@ class ContextJobs(OwnedContextJobs):
                 job['stderr'].close()
 
         def turn(rpc, stage, prompt):
-            params = {'threadId': value['thread_id'], 'model': MODEL, 'effort': EFFORT,
+            params = {'threadId': value['thread_id'], 'model': model, 'effort': effort,
                       'input': [{'type': 'text', 'text': prompt}]}
             value.setdefault('application_requests', []).append({'stage': stage, 'params': params})
             atomic_json(job['directory'] / 'request.json', {'requests': value['application_requests'],
@@ -265,7 +266,7 @@ class ContextJobs(OwnedContextJobs):
             cursor, found, cursors = None, None, set()
             while True:
                 catalog = rpc.request('model/list', {'cursor': cursor, 'limit': 100}, notify)
-                found = next((item for item in catalog['data'] if item.get('model') == MODEL), found)
+                found = next((item for item in catalog['data'] if item.get('model') == model), found)
                 cursor = catalog.get('nextCursor')
                 if cursor is None:
                     break
@@ -273,10 +274,10 @@ class ContextJobs(OwnedContextJobs):
                     raise JobError('codex_protocol_invalid', 'Model catalog cursor did not advance.')
                 cursors.add(cursor)
             if found is None or 'image' not in found.get('inputModalities', []) or not any(
-                    item.get('reasoningEffort') == EFFORT for item in found.get('supportedReasoningEfforts', [])):
-                raise JobError('model_capability_unavailable', 'Exact model/high/image capability is not advertised.')
+                    item.get('reasoningEffort') == effort for item in found.get('supportedReasoningEfforts', [])):
+                raise JobError('model_capability_unavailable', 'Exact selected model/reasoning/image capability is not advertised.')
             value['declared_model'] = found
-            thread_params = {'model': MODEL, 'cwd': str(workspace), 'config': {'model_reasoning_effort': EFFORT},
+            thread_params = {'model': model, 'cwd': str(workspace), 'config': {'model_reasoning_effort': effort},
                              'approvalPolicy': 'never', 'sandbox': 'workspace-write',
                              'runtimeWorkspaceRoots': [str(workspace), str(storage)],
                              'developerInstructions': 'Use the context-mode MCP tools and routing hooks. Work only in this run workspace. Never install or repair dependencies.'}
@@ -285,8 +286,8 @@ class ContextJobs(OwnedContextJobs):
             thread = rpc.request('thread/resume' if reused_context else 'thread/start', thread_params, notify)
             value['thread_id'] = thread['thread']['id']
             value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort'), 'source': 'thread/start'}
-            if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
-                raise JobError('model_configuration_mismatch', 'Context thread did not confirm the exact model and high effort.')
+            if thread.get('model') != model or thread.get('reasoningEffort') != effort:
+                raise JobError('model_configuration_mismatch', 'Context thread did not confirm the exact model and reasoning.')
             if reused_context:
                 if value['thread_id'] != reused_context['thread_id']:
                     raise JobError('codex_identity_mismatch', 'Resumed another original diagnostic thread.')
@@ -336,10 +337,10 @@ class ContextJobs(OwnedContextJobs):
             disconnect()
             rpc = connect(settings, trust)
             verify_hooks(rpc.request('hooks/list', {'cwds': [str(workspace)]}, notify), settings, trusted=True, expected=trust)
-            resumed = rpc.request('thread/resume', {'threadId': value['thread_id'], 'model': MODEL, 'cwd': str(workspace),
-                'config': {'model_reasoning_effort': EFFORT}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
+            resumed = rpc.request('thread/resume', {'threadId': value['thread_id'], 'model': model, 'cwd': str(workspace),
+                'config': {'model_reasoning_effort': effort}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
                 'runtimeWorkspaceRoots': [str(workspace), str(storage)], 'excludeTurns': True}, notify)
-            if resumed['thread']['id'] != value['thread_id'] or resumed.get('model') != MODEL or resumed.get('reasoningEffort') != EFFORT:
+            if resumed['thread']['id'] != value['thread_id'] or resumed.get('model') != model or resumed.get('reasoningEffort') != effort:
                 raise JobError('model_configuration_mismatch', 'Resumed thread does not match the exact original configuration.')
             self._event(job, 'context_resumed', thread_id=value['thread_id'])
             recovery = next((row for row in value['turns'] if row['stage'] == 'recovery' and row['state'] == 'completed'), None)
