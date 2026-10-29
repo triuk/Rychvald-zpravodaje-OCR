@@ -155,6 +155,8 @@ class GeometryPreviewMigrationTests(unittest.TestCase):
         # validator can require trusted activity names without rewriting old code.
         shutil.copyfile(ROOT / 'tests/fixtures/visual-evidence-before-activity-overrides.py',
             old_prefix / 'tools/ocr_visual_evidence.py')
+        shutil.copyfile(ROOT / 'tests/fixtures/output-review-before-activity-overrides.py',
+            old_prefix / 'tools/ocr_project_output_review.py')
         from app.service import Application
         self.app = Application(self.root, process_command=[sys.executable, str(old_prefix / 'tools/ocr_projects.py')],
             codex_runtime=self.runtime, context_runtime=self.context)

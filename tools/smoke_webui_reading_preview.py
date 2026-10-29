@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -32,8 +33,11 @@ def main():
         if status['state'] != 'completed':
             raise RuntimeError(str(status))
         case.app.close()
+        browser_profile = tempfile.TemporaryDirectory(prefix='Native phase browser ')
+        case.addCleanup(browser_profile.cleanup)
         adapter = WebUIApplication(case.root, browser='Chromium',
-            browser_parameters='--headless --no-sandbox --disable-gpu' if args.headless else '--no-sandbox --ozone-platform=x11')
+            browser_parameters='--headless --no-sandbox --disable-gpu' if args.headless else '--no-sandbox --ozone-platform=x11',
+            browser_profile=Path(browser_profile.name))
         case.app = adapter.api
         from webui import webui
 

@@ -14,18 +14,18 @@
       "validator_sha256": "ce6d912f9bddc7d58a61e8ce1b37fb733a2768a3bdb6c7637e76734281b4d2ae"
     },
     {
-      "previous_adapter_sha256": "046c6af647313926f0e2a8d7bf4a8b1ee46b05d2aaf46382e7d0fb7165f12261",
-      "validator_sha256": "2206b45b4fdfb348a8cf2310a7c69422e0232bef0b1206df81ceb4f212c76d4e"
+      "previous_adapter_sha256": "27c12d6dccdc82716813d7224d17a094fce332d661623dec0bc4660e72727294",
+      "validator_sha256": "12be4c7aef7677354fb7d0fec7073ddb3d0d0e3d68916b8cce722f29b14408b6"
     },
     {
-      "previous_adapter_sha256": "27c12d6dccdc82716813d7224d17a094fce332d661623dec0bc4660e72727294",
-      "validator_sha256": "2206b45b4fdfb348a8cf2310a7c69422e0232bef0b1206df81ceb4f212c76d4e"
+      "previous_adapter_sha256": "046c6af647313926f0e2a8d7bf4a8b1ee46b05d2aaf46382e7d0fb7165f12261",
+      "validator_sha256": "12be4c7aef7677354fb7d0fec7073ddb3d0d0e3d68916b8cce722f29b14408b6"
     },
     {
       "previous_adapter_sha256": "ce6d912f9bddc7d58a61e8ce1b37fb733a2768a3bdb6c7637e76734281b4d2ae",
-      "validator_sha256": "2206b45b4fdfb348a8cf2310a7c69422e0232bef0b1206df81ceb4f212c76d4e"
+      "validator_sha256": "12be4c7aef7677354fb7d0fec7073ddb3d0d0e3d68916b8cce722f29b14408b6"
     }
   ],
   "installed_resource_scope": "Exact validator-only opt-in for missing immutable installed evidence captured from a verified original prefix and inventory. Run-local source/review/profile/pixels/CAS and changed-existing files remain strict. Old original adapter bytes remain required in the existing workspace snapshot. No generating, segmentation, font selection, samples, quality criteria or OCR output changes.",
-  "phase_preview_scope": "Exact reviewed prior validator adapters to the snapshot-only publication hook. Native generation, segmentation, source/review/profile/environment, original model observations, bytes of original archived adapters and all installed-resource checks remain unchanged. No inferred or wildcard compatibility."
+  "phase_preview_scope": "Exact reviewed prior validator adapters to trusted geometry-activity verification plus the first-phase snapshot publication hook. Prior profiles have no activity overrides and resolve to the same frozen model/reasoning. Native generation, segmentation, source/review/profile/environment, original model observations, bytes of original archived adapters and all installed-resource checks remain unchanged. No inferred or wildcard compatibility."
 }
