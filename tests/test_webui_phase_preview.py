@@ -168,3 +168,11 @@ class PhasePreviewTests(unittest.TestCase):
         self.assertFalse(result['ok'])
         self.assertEqual(result['error']['code'], 'preview_invalid')
         self.assertTrue(self.app.dispatch('projects')['ok'])
+
+    def test_malformed_historical_manifest_is_an_unavailable_artifact_without_current_fallback(self):
+        archive = self.work / 'phase-previews/reading'
+        archive.mkdir(parents=True)
+        (archive / 'manifest.json').write_text('[]')
+        data = self.preview(phase='reading')
+        self.assertEqual(data['state'], 'artifact_invalid')
+        self.assertEqual(data['overlays'], [])

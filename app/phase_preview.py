@@ -144,7 +144,7 @@ def preview(root, run, payload):
         result.update(phase_content(work, edition_id, phase, number, result['artifacts'], source_page))
         if result.get('snapshot_binding', {}).get('run_id', identity['run_id']) != identity['run_id']:
             raise PreviewError('Zachovaný podklad patří k jinému průchodu OCR.')
-    except (OSError, ValueError, KeyError, TypeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError) as error:
         result.update(state='artifact_invalid', message=f'Podklad fáze nelze ověřit: {error}', overlays=[])
     # If a worker replaced a file during this read, do not publish mixed states.
     try:
