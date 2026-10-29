@@ -68,6 +68,32 @@ Události pohledu jsou dočasné; trvalá historie průchodu zůstává v jeho a
 Nativní `requestB` předává JSON požadavek tomuto rozhraní. Živé události se
 nezapisují do stdout OCR procesu.
 
+## Výběr cest
+
+Tlačítka vedle cest otevřou systémový dialog pro příslušný adresář nebo soubor.
+Pro import je samostatná volba jednoho PDF a celé složky. Zrušení ponechá
+dosavadní text; cestu lze stále napsat ručně. Zvolená cesta se pouze vyplní,
+otevření evidence, import a načtení profilu nadále potvrzuje jejich vlastní akce.
+
+Veřejný požadavek `choose_path` přijímá `kind` a volitelnou `current_path`.
+Podporované typy jsou `registry_directory`, `source_directory`, `source_pdf`,
+`profile`, `environment_manifest` a `image`. Vrací `kind`, `path`, `cancelled`.
+Neexistující, nepřístupná nebo typově neodpovídající cesta vrací `path_invalid`.
+Dialog nezamyká aplikační službu a neblokuje zpracování ani dotazy na jeho stav.
+
+Desktopový adaptér používá dostupný `kdialog`, `zenity` nebo standardní Tk.
+Při vývojovém spuštění tedy potřebuje vedle grafické relace jeden z těchto
+prostředků (Tk je například součástí balíčku Python Tk distribuce Linuxu).
+Pokud žádný není dostupný, zobrazí se chyba `path_picker_unavailable` a ruční
+zadání zůstává použitelné. Distribuovaný Linux balík musí mít dostupný dialog
+ověřený spolu se svým Python runtime.
+
+Ověření adaptéru 29. 10. 2026 použilo skutečný Tk dialog v Linux relaci Xvfb
+a vstup klávesnice přes xdotool. Ověřen byl výběr PDF s mezerami a diakritikou
+v cestě s následným importem přes veřejnou operaci, výběr vstupního adresáře
+a zrušení dialogu se zachováním předchozí hodnoty. Nešlo o náhradu dialogu
+v testu; kontrola distribuovaného runtime a rozložení GUI je samostatná.
+
 ## Ověření
 
 `python -m unittest discover -s tests -p 'test_webui_projects.py' -v` ověřuje
