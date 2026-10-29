@@ -301,6 +301,7 @@ function renderRun(data) {
   if (typeof renderReadingPanel === 'function') renderReadingPanel(phases.reading, data);
   if (typeof renderGeometryPanel === 'function') renderGeometryPanel(phases.geometry, data);
   if (typeof renderExportPanel === 'function') renderExportPanel(phases.assembly, data);
+  if (typeof window.renderLocalHistory === 'function') window.renderLocalHistory(phases, data, request);
   window.renderMetricsPanel(technical, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');

@@ -39,7 +39,13 @@ class ProgressReporter:
                     raise ProjectError('progress_invalid', 'Existing progress history is invalid; preserve it.') from None
 
     def emit(self, event_type, step_id='preparation', **data):
+        from ocr_local_history import progress_event
+        progress_event(event_type, step_id, data)
         if self.path is None:
+            if event_type in ('step_started', 'unit_started'):
+                self._starts[step_id] = time.monotonic()
+            elif event_type in ('step_completed', 'step_failed', 'unit_completed', 'unit_cached'):
+                self._starts.pop(step_id, None)
             return
         with self._lock:
             now = time.monotonic()

@@ -48,7 +48,18 @@ class NativeEnvironment:
         return [str(self.resolve(self.manifest['programs'][command[0]]['path'])), *map(str, command[1:])]
 
     def run(self, command):
-        return subprocess.run(self.command(command), capture_output=True, text=True, env=self.env)
+        from ocr_local_history import active_trace, child_environment
+        vector = self.command(command)
+        trace = active_trace()
+        environment = child_environment(self.env)
+        if trace is None or len(command) == 2 and str(command[1]) in ('--version', '-v'):
+            return subprocess.run(vector, capture_output=True, text=True, env=environment)
+        with trace.span(operation=str(command[0]), command=vector,
+                        tool={'name': str(command[0]), 'version': self.manifest['programs'][command[0]].get('version')}) as observation:
+            result = subprocess.run(vector, capture_output=True, text=True, env=environment)
+            observation.update(returncode=result.returncode, state='failed' if result.returncode else 'completed',
+                               error={'code': 'tool_failed', 'message': result.stderr} if result.returncode else None)
+            return result
 
     def check_file(self, name, record):
         path = self.resolve(record['path'])

@@ -92,7 +92,9 @@ def _prepare_project(registry, project_id, *, dpi, language, environment, resume
     if donor and (donor['target_parameters']['dpi'] != dpi or donor['target_parameters']['language'] != language):
         raise ProjectError('configuration_changed', 'Local import must use the destination immutable profile parameters.')
     try:
-        progress.emit('step_started', 'environment')
+        progress.emit('step_started', 'environment', tool={'name': 'ocr_environment.verify_environment',
+                      'version': sys.version.split()[0]},
+                      parameters={'environment': str(environment) if environment is not None else None, 'language': language})
         native = verify_environment(environment, language)
         progress.emit('step_completed', 'environment', environment=native.identity,
                       environment_manifest=str(native.path))
@@ -193,7 +195,9 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
         progress.emit('units_planned', pages_total=len(document), ocr_total=len(document) * 2)
         for number, page in enumerate(document, 1):
             step_id = f'raster:page:{number}'
-            progress.admit(step_id, unit_kind='raster', page=number)
+            progress.admit(step_id, unit_kind='raster', page=number, dpi=dpi,
+                           tool={'name': 'PyMuPDF', 'version': fitz.VersionBind},
+                           inputs=[{'path': str(source), 'sha256': identity['source_sha256']}])
             raster = work / 'raster' / f'page-{number}.png'
             overview = work / 'raster' / f'overview-{number}.png'
             raster_checkpoint = work / 'raster' / f'page-{number}-checkpoint.json'
@@ -258,10 +262,13 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
         def recognize(job):
             number, psm = job
             step_id = f'ocr:page:{number}:psm:{psm}'
-            progress.admit(step_id, unit_kind='ocr', page=number, psm=psm)
             prefix = work / 'ocr' / f'page-{number}-psm{psm}'
             command = ['tesseract', str(work / 'raster' / f'page-{number}.png'), str(prefix),
                        '-l', language, '--psm', str(psm), '-c', 'hocr_char_boxes=1', 'hocr', 'tsv', 'txt', 'makebox']
+            progress.admit(step_id, unit_kind='ocr', page=number, psm=psm,
+                           tool={'name': 'tesseract', 'version': tesseract}, command=native.command(command),
+                           inputs=[{'path': str(work / 'raster' / f'page-{number}.png'),
+                                    'sha256': source_hash(work / 'raster' / f'page-{number}.png')}])
             if donor:
                 donor_command = list(command)
                 donor_command[1] = str(donor['work'] / f'raster/page-{number}.png')
@@ -276,23 +283,28 @@ def prepare_artifacts(source, work, *, dpi, language, native, resume=False, reta
                                               ['.hocr', '.tsv', '.txt', '.box'], tesseract)
             progress.emit('unit_cached' if reused else 'unit_completed', step_id,
                           unit_kind='ocr', page=number, psm=psm,
-                          outputs=read_checkpoint(Path(str(prefix) + '-cache.json'))['outputs'], **importer.origin(step_id, reused))
+                          outputs={str(Path(str(prefix) + suffix).relative_to(work)): digest
+                                   for suffix, digest in read_checkpoint(Path(str(prefix) + '-cache.json'))['outputs'].items()},
+                          **importer.origin(step_id, reused))
             return {'page': number, 'psm': psm, 'command': native.command(command), 'cache_hit': reused}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             commands = list(pool.map(recognize, [(number, psm) for number in range(1, len(pages) + 1) for psm in [3, 11]]))
         atomic_json(work / 'ocr-commands.json', commands)
         progress.admit()
-        progress.emit('step_started', 'candidates')
+        progress.emit('step_started', 'candidates', tool={'name': 'lxml / parse_hocr',
+                      'version': native.manifest['packages']['lxml']['version']},
+                      inputs=[{'path': str(work / 'ocr' / f'page-{number}-psm3.hocr')} for number in range(1, len(pages) + 1)])
         lines = []
         for number in range(1, len(pages) + 1):
             lines.extend(workflow.parse_hocr(work / 'ocr' / f'page-{number}-psm3.hocr', number, f'p{number}-full'))
         atomic_json(work / 'fresh-lines.json', lines)
-        progress.emit('step_completed', 'candidates', lines=len(lines))
+        progress.emit('step_completed', 'candidates', lines=len(lines), outputs={'fresh-lines.json': source_hash(work / 'fresh-lines.json')})
         counts = {'pages': len(pages), 'rasters_computed': len(pages) - rasters_reused, 'rasters_reused': rasters_reused,
                   'ocr_computed': sum(not row['cache_hit'] for row in commands),
                   'ocr_reused': sum(row['cache_hit'] for row in commands), 'lines': len(lines)}
-        progress.emit('step_started', 'artifact_validation')
+        progress.emit('step_started', 'artifact_validation', tool={'name': 'verified_preparation_outputs',
+                      'version': sys.version.split()[0]})
         progress.admit()
         outputs = verified_preparation_outputs(work, identity, len(pages), native, commands)
         progress.emit('step_completed', 'artifact_validation', outputs_verified=len(outputs))

@@ -63,12 +63,16 @@ class OcrProcess:
             raise ApplicationError('operation_cancelled', 'Application stopped before native work was admitted.')
         try:
             command = [*self.command, '--root', str(root), '--json', *map(str, arguments)]
+            environment = os.environ.copy()
+            if job is not None:
+                environment['OCR_LOCAL_OWNER'] = json.dumps({key: job['manifest'].get(key)
+                    for key in ('attempt_id', 'operation', 'run_id')})
             if cancelled is None:
-                result = subprocess.run(command, capture_output=True, timeout=timeout)
+                result = subprocess.run(command, capture_output=True, timeout=timeout, env=environment)
             else:
                 import signal
                 import time
-                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, env=environment)
                 try:
                     if owned:
                         owned(process)
@@ -320,6 +324,10 @@ class Application:
                     offset, limit = payload.get('offset', 0), payload.get('limit', 100)
                     if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 200:
                         raise ApplicationError('invalid_request', 'Metric pages require offset >=0 and limit 1..200.')
+                    if (payload.get('kind') not in (None, 'local', 'ai') or
+                            payload.get('phase') not in (None, 'preparation', 'reading', 'geometry', 'assembly') or
+                            type(payload.get('newest_first', False)) is not bool):
+                        raise ApplicationError('invalid_request', 'Metric filters require a known kind, phase and boolean ordering.')
                     run = self.select_run(payload.get('run_id'), notify=False)
                     if not run.get('run'):
                         raise ApplicationError('named_run_required', 'Metrics require a named run; legacy data stays available in its read view.')
@@ -333,7 +341,8 @@ class Application:
                             raise ApplicationError('step_not_found', 'Choose a recorded step of this run.')
                         data = step_detail(data, step, offset, limit)
                     else:
-                        data = summary(data, offset, limit)
+                        data = summary(data, offset, limit, kind=payload.get('kind'),
+                                       phase=payload.get('phase'), newest_first=payload.get('newest_first', False))
                 elif operation in ('check_codex_account', 'start_codex_login'):
                     data = self.start_model_diagnostic(payload, operation='check_account' if operation == 'check_codex_account' else 'login')
                 elif operation == 'events':
