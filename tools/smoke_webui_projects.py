@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--headless', action='store_true', help='Use a real Chromium browser without a display.')
     parser.add_argument('--screenshot', type=Path, help='Optional screenshot via ImageMagick import (X11).')
     parser.add_argument('--profiles', action='store_true', help='Also exercise GUI import, profile inspection and two named runs.')
+    parser.add_argument('--preferences', action='store_true', help='Exercise global/project preferences and frozen named runs through the real GUI.')
     parser.add_argument('--preparation', action='store_true', help='Also run real native OCR and interact with the GUI while active.')
     parser.add_argument('--ocr-python', type=Path, help='Designated verified OCR Python, independent of the GUI runtime.')
     parser.add_argument('--evidence-directory', type=Path, help='Preserve the actual temporary fixture, registry and process artifacts.')
@@ -91,7 +92,7 @@ def main():
                     {'statuses': ['registered', 'idle', 'not_run', 'not_recorded'], 'artifacts': 5})
                 print('NATIVE_SELECTED ' + json.dumps(selected), flush=True)
                 exercise_layout()
-                if args.profiles:
+                if args.profiles or args.preferences:
                     exercise_profiles()
                 if args.preparation:
                     exercise_preparation()
@@ -189,6 +190,27 @@ def main():
                 {'name': 'Vizuální čtení A', 'profile': '300 DPI · ces · gpt-6.1-sol · high',
                  'prompt': 'Přečti celý zdrojový sken.', 'history': 1})
             print('NATIVE_NAMED_RUNS ' + json.dumps({'named_runs': 2, 'first_preserved': preserved}, ensure_ascii=False), flush=True)
+
+            if args.preferences:
+                response = app.api.dispatch('set_global_preferences', {'model': 'gpt-6.1-sol', 'reasoning_effort': 'medium'})
+                if not response['ok']:
+                    raise AssertionError(response)
+                app.window.script("document.querySelector('#project-settings').open=true;document.querySelector('#global-settings').open=true;updateModelPreferences(true);return true;", timeout=2)
+                wait_for("return JSON.stringify({global:document.querySelector('#global-reasoning').value,project:document.querySelector('#project-reasoning').value});",
+                         {'global': 'medium', 'project': 'high'})
+                submit('#global-preferences-form', {})
+                wait_for("return JSON.stringify(document.querySelector('#message').textContent);", 'Globální předvolby uloženy pro nové projekty.')
+                app.window.script("document.querySelector('#adopt-global-preferences').click();return true;", timeout=2)
+                wait_for("return JSON.stringify(document.querySelector('#project-reasoning').value);", 'medium')
+                submit('#project-preferences-form', {})
+                wait_for("return JSON.stringify(document.querySelector('#message').textContent);", 'Předvolby projektu uloženy pro další průchod.')
+                submit('#run-form', {'#run-name': 'Předvolby C'})
+                wait_for("return JSON.stringify(document.querySelector('#run-profile p')?.textContent);", '400 DPI · ces · gpt-6.1-sol · medium')
+                original = app.api.dispatch('select_run', {'run_id': first_id})
+                if original['data']['run']['profile']['parameters']['reasoning_effort'] != 'high':
+                    raise AssertionError('Preferences changed a frozen original run.')
+                print('NATIVE_PREFERENCES ' + json.dumps({'global': 'medium', 'project': 'medium', 'new_run': 'medium', 'original_run': 'high'}), flush=True)
+
             app.window.script("document.querySelector('.run-technical').open=true;document.querySelector('#run-profile details').open=true;document.querySelector('#run-profile').scrollIntoView({block:'start'});return true;", timeout=2)
             wait_for("return JSON.stringify(document.querySelector('#run-profile').getBoundingClientRect().top < window.innerHeight);", True)
 

@@ -103,3 +103,40 @@ skutečný nativní scénář o import přes formulář, prohlédnutí profilu, 
 dvou pojmenovaných průchodů po externí úpravě profilu a opětovný výběr prvního
 s jeho původními parametry a historií. Pro spuštění bez displeje lze použít
 `xvfb-run -a`; volitelný `--screenshot` zachytí skutečné okno.
+
+## Globální a projektové předvolby modelu
+
+Globální nastavení vlevo dole určuje model a reasoning nových projektů vydání
+v otevřené evidenci. Při importu se hodnoty zkopírují k identitě zdrojového PDF.
+Další změna globálních hodnot neovlivní existující projekty. Jejich vlastní
+nastavení je u tlačítka **Nastavení**; **Převzít globální předvolby** provede
+výslovnou kopii. U starších projektů bez záznamu předvoleb zůstává původní
+výchozí kombinace. Změna předvoleb nepřepisuje žádný existující průchod.
+
+Modely a jejich úrovně reasoningu se načítají tlačítkem **Obnovit nabídku modelů
+Codexu** ze skutečného `model/list` připojeného připnutého runtime. Dotaz běží
+na pozadí a nevytváří AI tah. Uložená hodnota zůstane viditelná i při změně
+nebo nedostupnosti runtime; aplikace ji tiše nenahrazuje. Známá nedostupná
+kombinace zabrání založení nového průchodu. Samotná nabídka nezaručuje přístup
+účtu: každý skutečný AI krok ověří přesnou zvolenou kombinaci a odmítne jinou
+odpověď poskytovatele i přesměrování modelu.
+
+Při založení průchodu se předvolby projektu vyhodnotí nad prohlédnutým externím
+profilem. Jeho původní soubor se nemění; pokud se model nebo reasoning liší,
+vytvoří se přesná vyhodnocená kopie pro nativní import. Prompty, DPI a jazyk
+zůstávají z externího profilu. Zmrazená kopie průchodu je pak zdrojem nastavení
+čtení, geometrie, kontrol, oprav i jejich obnovení. Formulář nového průchodu
+před spuštěním zobrazuje účinnou dvojici model/reasoning.
+
+Veřejné operace jsou `global_preferences`, `set_global_preferences`,
+`project_preferences`, `set_project_preferences`, `adopt_global_preferences`,
+`model_capabilities` a `start_model_capabilities`. Projektové operace používají
+`edition_id`; zápis dvojice používá `model` a `reasoning_effort`. Záznam je
+v `application/preferences.json`, aktualizuje se atomicky pod procesovým zámkem.
+
+Ověření: `tests/test_webui_preferences.py` používá veřejné požadavky a skutečné
+nativní PDF zpracování s výslovně řízeným app-server partnerem. Kontroluje
+nezávislost kopií, převzetí globálu, restart, zmrazení průchodu a předání jiné
+dvojice všem AI činnostem včetně cílené opravy. Skutečné WebUI a Chromium
+ověřuje `tools/smoke_webui_projects.py --headless --profiles --preferences`;
+spuštění stále vyžaduje dostupný Linux displej pro nativní adaptér.

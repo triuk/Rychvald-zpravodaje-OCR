@@ -12,6 +12,7 @@
   <script src="app.js" defer></script>
   <script src="preview.js" defer></script>
   <script src="path-picker.js" defer></script>
+  <script src="preferences.js" defer></script>
   <script src="context.js" defer></script>
   <script src="reading.js" defer></script>
   <script src="geometry.js" defer></script>
@@ -37,6 +38,14 @@
       <details id="project-settings" class="sidebar-settings">
         <summary>Nastavení projektu a nový průchod</summary>
         <p id="project-settings-name" class="hint">Vyberte projekt vydání.</p>
+        <form id="project-preferences-form" class="setup-form">
+          <p class="hint">Vlastní předvolby tohoto PDF platí pro další průchod. Rozpracované a starší průchody mají své uložené nastavení.</p>
+          <label for="project-model">Model AI</label><select id="project-model" required></select>
+          <label for="project-reasoning">Reasoning</label><select id="project-reasoning" required></select>
+          <p id="project-model-availability" class="hint"></p>
+          <button type="submit">Uložit předvolby projektu</button>
+          <button id="adopt-global-preferences" type="button" class="secondary">Převzít globální předvolby</button>
+        </form>
   <section class="setup-panel" aria-label="Import a nové průchody">
     <form id="source-form" class="setup-form">
       <label for="source-path">Zdrojový sken nebo složka PDF</label>
@@ -56,6 +65,7 @@
     <form id="run-form" class="run-form">
       <div><label for="edition-choice">Projekt vydání</label><select id="edition-choice" required></select></div>
       <div><label for="run-name">Jméno nového průchodu</label><input id="run-name" type="text" required maxlength="160" placeholder="Například: První vizuální čtení"></div>
+      <p id="effective-run-preferences" class="hint"></p>
       <button id="create-run" type="submit" disabled>Založit nový průchod</button>
 
       <label for="autonomous-environment">Nativní prostředí pro celý průchod (volitelné)</label>
@@ -69,6 +79,15 @@
       </details>
       <details id="global-settings" class="sidebar-settings global-settings">
         <summary>Globální nastavení</summary>
+        <form id="global-preferences-form" class="setup-form">
+          <p class="hint">Výchozí hodnoty pro nové projekty vydání v této evidenci. Existující projekty si ponechají vlastní předvolby.</p>
+          <label for="global-model">Výchozí model AI</label><select id="global-model" required></select>
+          <label for="global-reasoning">Výchozí reasoning</label><select id="global-reasoning" required></select>
+          <p id="global-model-availability" class="hint"></p>
+          <button type="submit">Uložit globální předvolby</button>
+        </form>
+        <button id="refresh-model-capabilities" type="button" class="secondary">Obnovit nabídku modelů Codexu</button>
+        <p id="model-capabilities-state" class="hint">Nabídka se načítá z připojeného Codexu na vyžádání.</p>
         <p class="hint">Adresář evidence celé aplikace</p>
   <form id="registry-form" class="registry-bar">
     <label for="registry-root">Adresář evidence</label>

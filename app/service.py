@@ -25,6 +25,8 @@ from .output_review import OutputReviewJobs
 from .autonomous import AutonomousJobs
 from .corrections import CorrectionJobs
 from .run_queue import RunQueue
+from .preferences import Preferences
+from .model_capabilities import ModelCapabilities
 
 
 class ApplicationError(Exception):
@@ -131,6 +133,7 @@ class Application:
         self._closing = False
         self.preparation = PreparationJobs(self.process.command, self.publish)
         self.codex = CodexJobs(self.publish, codex_runtime)
+        self.model_catalog = ModelCapabilities(self.codex.runtime, self.publish)
         self.context = ContextJobs(self.publish, codex_runtime, context_runtime)
         self.reading = ReadingJobs(self.publish, codex_runtime, context_runtime, self.process)
         self.geometry = GeometryJobs(self.publish, codex_runtime, context_runtime, self.process)
@@ -226,6 +229,13 @@ class Application:
                     data = compare(self, payload)
                 elif operation == 'import_sources':
                     data = self.import_sources(payload.get('path'))
+                elif operation == 'start_model_capabilities':
+                    data = self.model_catalog.start(self.root)
+                elif operation == 'model_capabilities':
+                    data = self.model_catalog.status(self.root)
+                elif operation in ('global_preferences', 'set_global_preferences', 'project_preferences',
+                        'set_project_preferences', 'adopt_global_preferences'):
+                    data = self.preferences(operation, payload)
                 elif operation == 'inspect_profile':
                     data = self.inspect_profile(payload.get('path'))
                 elif operation == 'create_run':
@@ -431,11 +441,30 @@ class Application:
                         raise ApplicationError('invalid_source', f'Source has no PDF header: {pdf.name}')
         except OSError as error:
             raise ApplicationError('source_unreadable', str(error)) from None
+        previous_editions = {item['edition_id'] for item in self.projects()['editions']}
         result = self.process.request(self.root, 'import', source)
         counts = {'sources': len(files), **result['counts']}
         data = self.projects()
+        Preferences(self.root).capture_imported(data['editions'], previous_editions)
         self.publish('sources_imported', **counts)
         return {**data, 'counts': counts}
+
+    def preferences(self, operation, payload):
+        store = Preferences(self.root)
+        if operation in ('global_preferences', 'set_global_preferences'):
+            value = store.set_global({key: payload.get(key) for key in ('model', 'reasoning_effort')}) if operation == 'set_global_preferences' else store.global_value()
+            return {'scope': 'global', 'preferences': value, 'availability': self.model_catalog.availability(self.root, value)}
+        edition_id = payload.get('edition_id')
+        if not any(item['edition_id'] == edition_id for item in self.projects()['editions']):
+            raise ApplicationError('edition_not_found', 'Vyberte existující projekt vydání.')
+        if operation == 'set_project_preferences':
+            value = store.set_project(edition_id, {key: payload.get(key) for key in ('model', 'reasoning_effort')})
+        elif operation == 'adopt_global_preferences':
+            value = store.set_project(edition_id, store.global_value())
+        else:
+            value = store.project_value(edition_id)
+        return {'scope': 'project', 'edition_id': edition_id, 'preferences': value,
+                'availability': self.model_catalog.availability(self.root, value)}
 
     def inspect_profile(self, path):
         return load_profile(path)
@@ -451,6 +480,10 @@ class Application:
         edition = next((item for item in editions if item['edition_id'] == edition_id), None)
         if edition is None:
             raise ApplicationError('edition_not_found', 'Choose an existing edition before creating a run.')
+        availability = self.model_catalog.availability(self.root, Preferences(self.root).project_value(edition_id))
+        if availability['state'] == 'unavailable':
+            raise ApplicationError('model_capability_unavailable', availability['message'])
+        profile = Preferences(self.root).resolve_profile(profile, edition_id)
         representative = self.process.request(self.root, 'status', edition['runs'][0]['run_id'])
         source = self.root / representative['artifacts']['source']
         result = self.process.request(self.root, 'import', source, '--new-run',
@@ -500,6 +533,7 @@ class Application:
         with self._lock:
             self._closing = True
             self.queue.close()
+        self.model_catalog.close()
         self.autonomous.close()
         self.corrections.close()
         self.preparation.close()
