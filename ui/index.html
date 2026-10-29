@@ -44,6 +44,11 @@
           <label for="project-model">Model AI</label><select id="project-model" required></select>
           <label for="project-reasoning">Reasoning</label><select id="project-reasoning" required></select>
           <p id="project-model-availability" class="hint"></p>
+          <details id="project-activity-overrides"><summary>Výjimky pro AI činnosti</summary>
+            <p class="hint">Bez výjimky se použije společná dvojice. Ověření obrazu a context-mode používá nastavení čtení.</p>
+            <div id="project-activity-fields"></div>
+          </details>
+          <ul id="project-effective-settings" class="hint" aria-label="Uložené účinné nastavení činností"></ul>
           <button type="submit">Uložit předvolby projektu</button>
           <button id="adopt-global-preferences" type="button" class="secondary">Převzít globální předvolby</button>
         </form>
@@ -85,6 +90,11 @@
           <label for="global-model">Výchozí model AI</label><select id="global-model" required></select>
           <label for="global-reasoning">Výchozí reasoning</label><select id="global-reasoning" required></select>
           <p id="global-model-availability" class="hint"></p>
+          <details id="global-activity-overrides"><summary>Výjimky pro AI činnosti</summary>
+            <p class="hint">Bez výjimky se použije společná dvojice. Ověření obrazu a context-mode používá nastavení čtení.</p>
+            <div id="global-activity-fields"></div>
+          </details>
+          <ul id="global-effective-settings" class="hint" aria-label="Uložené účinné nastavení činností"></ul>
           <button type="submit">Uložit globální předvolby</button>
         </form>
         <button id="refresh-model-capabilities" type="button" class="secondary">Obnovit nabídku modelů Codexu</button>

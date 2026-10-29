@@ -6,14 +6,14 @@ import json
 from pathlib import Path
 
 from .jobs import JobError, atomic_json
-from tools.ocr_profiles import load_profile
+from tools.ocr_profiles import load_profile, validate_activity_overrides
 
 DEFAULTS = {'model': 'gpt-6.1-sol', 'reasoning_effort': 'high'}
 EFFORTS = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra')
 
 
 def validate(value):
-    if not isinstance(value, dict) or set(value) != {'model', 'reasoning_effort'}:
+    if not isinstance(value, dict) or set(value) not in ({'model', 'reasoning_effort'}, {'model', 'reasoning_effort', 'overrides'}):
         raise JobError('preferences_invalid', 'Předvolby musí obsahovat model a reasoning.')
     model = value['model']
     if (not isinstance(model, str) or not model.strip() or model != model.strip() or
@@ -21,7 +21,14 @@ def validate(value):
         raise JobError('preferences_invalid', 'Model musí mít neprázdný název bez řídicích znaků.')
     if value['reasoning_effort'] not in EFFORTS:
         raise JobError('preferences_invalid', 'Nepodporovaná úroveň reasoningu.')
-    return copy.deepcopy(value)
+    try:
+        validate_activity_overrides(value.get('overrides', {}))
+    except ValueError as error:
+        raise JobError('preferences_invalid', str(error)) from None
+    result = copy.deepcopy(value)
+    if not result.get('overrides'):
+        result.pop('overrides', None)
+    return result
 
 
 class Preferences:
@@ -84,7 +91,12 @@ class Preferences:
 
     def resolve_profile(self, profile, edition_id):
         effective = copy.deepcopy(profile['profile'])
-        effective['parameters'].update(self.project_value(edition_id))
+        preferences = self.project_value(edition_id)
+        effective['parameters'].update({key: preferences[key] for key in ('model', 'reasoning_effort')})
+        if preferences.get('overrides'):
+            effective['parameters']['activity_overrides'] = preferences['overrides']
+        else:
+            effective['parameters'].pop('activity_overrides', None)
         if effective == profile['profile']:
             return profile
         # The external profile remains untouched; this exact evaluated copy is
