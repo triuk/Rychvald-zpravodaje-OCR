@@ -149,6 +149,7 @@ function updateProjectSettings() {
   const edition = editionCatalog.find(item => item.edition_id === document.querySelector('#edition-choice').value);
   document.querySelector('#project-settings-name').textContent = edition ?
     `${edition.name} · zdroj ${edition.edition_id.slice(0, 12)}…` : 'Vyberte projekt vydání nebo importujte zdrojový sken.';
+  if (typeof updateModelPreferences === 'function') updateModelPreferences();
 }
 
 function selectPhase(phase, {focus = false} = {}) {
@@ -160,6 +161,7 @@ function selectPhase(phase, {focus = false} = {}) {
     if (active && focus) tab.focus();
   });
   document.querySelectorAll('[role=tabpanel]').forEach(panel => { panel.hidden = panel.dataset.phase !== phase; });
+  if (window.phasePreview) window.phasePreview.refresh(phase);
 }
 
 function renderPhaseTabs(detail) {
@@ -324,6 +326,7 @@ function renderRun(data) {
     technical.append(profile);
   }
   detail.append(technical);
+  if (window.phasePreview) window.phasePreview.mount(detail, data);
   selectPhase(selectedPhase);
 }
 
@@ -355,10 +358,12 @@ function stepLabel(step) {
 function renderPreparation(status) {
   const state = document.querySelector('#preparation-state');
   if (!state || status.run_id !== selectedRun) return;
+  const previousState = state.dataset.state;
   const names = { not_started: 'Dosud nespouštěna', starting: 'Spouští se', running: 'Probíhá',
     completed: 'Dokončena; podklady ověřeny', failed: 'Poslední pokus selhal',
     interrupted: 'Přerušena', invalidated: 'Podklady se změnily; kontrola neprošla' };
   state.dataset.state = status.state;
+  if (window.phasePreview && selectedPhase === 'preparation' && previousState !== status.state) window.phasePreview.refresh();
   state.dataset.attemptId = status.attempt_id || '';
   state.dataset.activeSteps = (status.active_steps || []).join(' ');
   if (status.environment && !preparationEnvironments.has(selectedRun)) {
@@ -404,7 +409,7 @@ function codexRunning() {
 function renderCodexPanel(detail, data) {
   const panel = element('section', undefined, 'codex-panel');
   panel.append(element('h3', 'Codex · obrazové ověření'), element('p',
-    'Požadavek: gpt-6.1-sol · high. Dokončená diagnostika účtu a obrazu nenahrazuje autonomní OCR; to vyžaduje také ověřený context-mode.', 'hint'));
+    'Ověří uložený model a reasoning tohoto průchodu. Dokončená diagnostika účtu a obrazu nenahrazuje autonomní OCR; to vyžaduje také ověřený context-mode.', 'hint'));
   const accountControls = element('div', undefined, 'input-row');
   for (const [operation, id, title] of [['check_codex_account', 'codex-account-check', 'Ověřit přihlášení'],
     ['start_codex_login', 'codex-login', 'Přihlásit účet ChatGPT']]) {

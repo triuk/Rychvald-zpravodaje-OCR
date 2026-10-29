@@ -13,6 +13,11 @@ def sha(path):
 
 
 def verify_visual_turn(proof, work, images, *, archive=None):
+    if __package__:
+        from .ocr_profiles import load_profile, effective_ai_settings
+    else:
+        from ocr_profiles import load_profile, effective_ai_settings
+    settings = effective_ai_settings(load_profile(Path(work) / 'application/profile.json')['profile'])
     protocol = resolve_bound(proof['protocol']['path'], proof['protocol']['sha256'])
     messages = [json.loads(line)['message'] for line in protocol.read_text().splitlines()]
     identifier, thread = proof['turn_id'], proof['thread_id']
@@ -21,8 +26,8 @@ def verify_visual_turn(proof, work, images, *, archive=None):
     if len(requests) != 1 or any(m.get('method') == 'model/rerouted' for m in messages):
         raise ValueError('One non-rerouted original visual turn is required')
     request = requests[0]
-    if request['model'] != 'gpt-6.1-sol' or request['effort'] != 'high':
-        raise ValueError('Exact gpt-6.1-sol/high visual turn required')
+    if request['model'] != settings['model'] or request['effort'] != settings['reasoning_effort']:
+        raise ValueError('The exact frozen profile model/reasoning is required for a visual turn')
     result = [m['result'] for m in messages if isinstance(m.get('result'), dict) and
         isinstance(m['result'].get('thread'), dict) and m['result']['thread']['id'] == thread]
     if not result or result[-1].get('model') != request['model'] or result[-1].get('reasoningEffort') != request['effort']:

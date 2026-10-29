@@ -247,8 +247,10 @@ def recover_local(app, work, run_id, route):
         return
     result = {'state': 'completed', 'error': None, 'original_attempt_state': value['state']}
     if stage == 'model_diagnostic':
-        if (value.get('effective', {}).get('model') != 'gpt-6.1-sol' or
-                value.get('effective', {}).get('reasoning_effort') != 'high' or value.get('reroutes') or
+        from tools.ocr_profiles import effective_ai_settings
+        requested = effective_ai_settings(app.select_run(run_id)['run']['profile'], 'vision_diagnostic')
+        if (value.get('effective', {}).get('model') != requested['model'] or
+                value.get('effective', {}).get('reasoning_effort') != requested['reasoning_effort'] or value.get('reroutes') or
                 value.get('tool_events') or not value.get('answer')):
             raise JobError('local_recovery_invalid', 'Original completed diagnostic did not verify the requested combination.')
         frames = [json.loads(raw)['message'] for raw in (app.root / value['artifacts']['protocol']).read_text().splitlines()]

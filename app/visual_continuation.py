@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import uuid
 
+from tools.ocr_profiles import load_profile, effective_ai_settings
 from .jobs import JobError, atomic_json, sha
 
 
@@ -64,7 +65,9 @@ def reserve_continuation(manager, job, stage, directory, frames, prompt, schema,
         raise JobError('reconciliation_required', 'Original physical phase differs from inspected protocol.')
     if params != json.loads((directory / 'request.json').read_text()):
         raise JobError('reconciliation_required', 'Original physical request changed.')
-    expected = {'model': 'gpt-6.1-sol', 'effort': 'high', 'outputSchema': schema,
+    settings = effective_ai_settings(load_profile(work / 'application/profile.json',
+        expected_sha256=job['manifest']['profile_sha256'])['profile'], stage)
+    expected = {'model': settings['model'], 'effort': settings['reasoning_effort'], 'outputSchema': schema,
         'input': [{'type': 'text', 'text': prompt}] + [
             {'type': 'localImage', 'path': str((work / image['path']).resolve())} for image in images]}
     if content_hash(params) != content_hash(expected):
