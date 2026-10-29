@@ -1,5 +1,29 @@
 # WebUI: přehled projektů vydání
 
+Pro vývojové spuštění z repozitáře slouží `./start.sh`. Používá místní
+`.venv/bin/python` a předává všechny argumenty aplikaci:
+
+```sh
+./start.sh --root /cesta/k/testovaci-evidenci --browser Chromium
+./start.sh --root /cesta/k/testovaci-evidenci --serve
+./start.sh --help
+```
+
+Skript lze zavolat i absolutní cestou z jiného adresáře. Relativní uživatelské
+cesty se vyhodnocují vůči adresáři, ze kterého jej spustíte. Bez `--root` platí
+výchozí evidence aplikace (`$XDG_DATA_HOME/rychvald-ocr`, jinak
+`~/.local/share/rychvald-ocr`).
+
+Závislosti připravte jednorázově; pokud `.venv` již existuje, první příkaz vynechte:
+
+```sh
+python3.14 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt -r requirements-gui.txt
+```
+
+Start nic nestahuje ani neinstaluje. Skutečné AI zpracování navíc vyžaduje
+[připravené připnuté prostředky Codexu a context-mode](webui-context.md).
+
 Nativní aplikace se spouští příkazem `python main.py --root "/cesta/k/evidenci"`.
 GUI potřebuje `pip install -r requirements-gui.txt`, dostupný prohlížeč a grafické
 prostředí. Volitelný `--browser Chromium` vybere konkrétní prohlížeč. Pro samostatně
