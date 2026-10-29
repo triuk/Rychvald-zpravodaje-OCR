@@ -1,0 +1,26 @@
+.phase-workspace {display:grid;grid-template-columns:minmax(0,var(--phase-detail-width,38%)) 12px minmax(0,1fr);align-items:start;min-height:550px;gap:0;margin-top:20px}
+.phase-details {min-width:0;padding-right:12px;overflow-wrap:anywhere}
+.phase-details .phase-panel {padding:0}
+.phase-details .input-row {display:flex;flex-wrap:wrap}
+.phase-details .input-row > * {min-width:0;flex:1 1 110px}
+.phase-details .input-row > input,.phase-details .input-row > select {flex-basis:100%;width:100%}
+.phase-details button {overflow-wrap:normal;word-break:normal}
+.phase-details pre {max-height:420px;overflow:auto}
+.phase-splitter {height:100%;min-height:550px;cursor:col-resize;border-inline:4px solid transparent;background:var(--border,#d4dfdc);background-clip:content-box;touch-action:none}
+.phase-splitter:focus {outline:2px solid #315d54}
+.phase-preview {min-width:0;padding-left:12px}
+.preview-controls {display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.preview-controls input {width:65px;min-width:0;flex:0 0 65px;box-sizing:border-box}
+.preview-controls select {width:90px;min-width:0;flex:0 0 90px}
+.preview-controls button {padding:8px;font-size:12px;min-height:36px}
+.preview-state {font-size:12px;min-height:32px;color:#526a63}
+.preview-viewport {max-height:75vh;min-height:420px;overflow:auto;background:#dbe4e0;padding:10px;border:1px solid #c7d5ce;border-radius:6px}
+.preview-surface {position:relative;min-width:1px;margin:0 auto;line-height:0;box-shadow:0 2px 8px #163b2725;background:white}
+.preview-surface img {display:block;width:100%;height:auto}
+.preview-overlay {position:absolute;display:flex;align-items:center;overflow:hidden;white-space:nowrap;color:#003e3c;background:#dcfff5b8;border:1px solid #087c70;font:clamp(7px,1vw,14px)/1.05 sans-serif;box-sizing:border-box;pointer-events:none}
+.preview-overlay.local_ocr_candidate {color:#624a00;background:#fff2c2bd;border-color:#a47b18}
+.preview-enlarged {position:fixed;inset:12px;z-index:1000;padding:18px;background:#f8fbf9;border:1px solid #b6c8bf;border-radius:8px;box-shadow:0 0 0 20px #12372dd9;overflow:auto}
+.preview-enlarged .preview-viewport {height:calc(100vh - 145px);max-height:none}
+.phase-placeholder {display:block;min-height:0}
+.phase-placeholder .phase-preview,.phase-placeholder .phase-splitter {display:none}
+@media(max-width:950px) {.phase-workspace {display:block}.phase-splitter {display:none}.phase-preview {padding:16px 0}.phase-details {padding:0}.preview-viewport {max-height:65vh}}
