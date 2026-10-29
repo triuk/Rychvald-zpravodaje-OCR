@@ -278,6 +278,8 @@ def _publish_geometry(registry, project_id, checkpoint):
         if value['preparation_sha256'] != packet['preparation_sha256']:
             raise ProjectError('geometry_invalid', 'Geometry changed before publication')
         atomic_json(work / 'geometry-checkpoint.json', value)
+        from ocr_phase_snapshot import preserve_geometry
+        preserve_geometry(work, record['project'], packet)
         record['project'].update(phase='geometry_examined', operation_state='completed', validation='not_run')
         record['counts']['geometry_open_items'] = sum(o['status'] == 'open' for o in proposal['lines']+proposal['samples'])
         record['artifacts']['geometry_checkpoint'] = str((work / 'geometry-checkpoint.json').relative_to(registry.root))

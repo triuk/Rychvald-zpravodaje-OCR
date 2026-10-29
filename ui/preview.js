@@ -120,6 +120,15 @@ window.phasePreview = (() => {
         const box = node('span', `${region.order != null ? `${region.order}. ` : ''}${region.text}`, `preview-overlay ${region.kind}`);
         box.style.left = `${x0 * 100}%`; box.style.top = `${y0 * 100}%`;
         box.style.width = `${(x1 - x0) * 100}%`; box.style.height = `${(y1 - y0) * 100}%`;
+        for (const character of region.characters || []) {
+          const [cx0, cy0, cx1, cy1] = character.normalized_bbox;
+          const boundary = node('span', undefined, 'preview-character');
+          boundary.style.left = `${(cx0 - x0) / (x1 - x0) * 100}%`;
+          boundary.style.top = `${(cy0 - y0) / (y1 - y0) * 100}%`;
+          boundary.style.width = `${(cx1 - cx0) / (x1 - x0) * 100}%`;
+          boundary.style.height = `${(cy1 - cy0) / (y1 - y0) * 100}%`;
+          box.append(boundary);
+        }
         box.title = region.text; current.surface.append(box);
       }
     } catch (error) {
