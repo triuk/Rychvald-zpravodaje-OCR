@@ -33,7 +33,9 @@ class ProjectExportTests(unittest.TestCase):
             page = document.new_page(width=216, height=52.8)
             page.insert_image(page.rect, stream=stream.getvalue())
             document.save(self.source)
-        imported = self.command('import', self.source)
+        profile = ROOT / 'profiles/faithful-reading.json'
+        imported = self.command('import', self.source, '--new-run', '--run-name', 'Místní export',
+                                '--profile', profile, '--profile-sha256', hashlib.sha256(profile.read_bytes()).hexdigest())
         self.identifier = imported['project']['project_id']
         self.work = self.root / imported['artifacts']['workspace']
         self.command('prepare', self.identifier)
@@ -93,6 +95,110 @@ class ProjectExportTests(unittest.TestCase):
         self.assertEqual(response['error']['code'], 'geometry_invalid')
         self.assertFalse(list((self.root / 'outputs').glob('*')))
         self.assertFalse((self.work / 'output-manifest.json').exists())
+
+    def test_local_history_covers_export_tools_validation_and_survives_restart(self):
+        """The GUI can explain actual local work beyond source preparation."""
+        sys.path.insert(0, str(ROOT))
+        from app.service import Application
+        self.command('export', self.identifier)
+        self.command('validate', self.identifier, expected=1)
+        app = Application(self.root)
+        self.addCleanup(app.close)
+        response = app.dispatch('run_metrics', {'run_id': self.identifier})
+        self.assertTrue(response['ok'], response)
+        steps = [step for step in response['data']['steps'] if step['kind'] == 'local']
+        operations = {step['operation'] for step in steps}
+        self.assertTrue({'prepare', 'patch', 'export', 'validate', 'segment', 'check', 'samples'}.issubset(operations), operations)
+        exported = next(step for step in steps if step['operation'] == 'export' and step['scope'] == 'native_operation')
+        self.assertEqual(exported['phase'], 'assembly')
+        self.assertEqual(exported['edition_id'], hashlib.sha256(self.source.read_bytes()).hexdigest())
+        self.assertEqual(exported['state'], 'completed')
+        self.assertEqual(exported['tool']['name'], 'ocr_projects')
+        self.assertTrue(exported['tool']['version'])
+        self.assertIn(str(self.identifier), exported['command'])
+        self.assertTrue(exported['outputs'])
+        filtered = app.dispatch('run_metrics', {'run_id': self.identifier, 'kind': 'local',
+                                'phase': 'assembly', 'newest_first': True, 'limit': 2})
+        self.assertTrue(filtered['ok'], filtered)
+        self.assertEqual(len(filtered['data']['steps']), 2)
+        self.assertTrue(all(s['kind'] == 'local' and s['phase'] == 'assembly' for s in filtered['data']['steps']))
+        self.assertGreater(filtered['data']['step_total'], 2)
+        self.assertEqual(filtered['data']['step_next_offset'], 2)
+        tool = next(step for step in steps if step['tool']['name'] == 'qpdf' and '--check' in step['command'])
+        self.assertEqual(tool['phase'], 'assembly')
+        self.assertTrue(tool['tool']['version'].startswith('qpdf version '))
+        self.assertEqual(tool['parent_step_id'] is not None, True)
+        self.assertTrue(tool['timing']['tool_time_is_nested'])
+        self.assertGreaterEqual(tool['timing']['wall_seconds'], 0)
+        detail = app.dispatch('step_detail', {'run_id': self.identifier, 'step_id': tool['step_id']})
+        self.assertTrue(detail['ok'], detail)
+        self.assertEqual(detail['data']['command'], tool['command'])
+        identities = {step['step_id'] for step in steps}
+        app.close()
+        restored = Application(self.root)
+        self.addCleanup(restored.close)
+        refreshed = restored.dispatch('run_metrics', {'run_id': self.identifier})
+        self.assertTrue(refreshed['ok'], refreshed)
+        self.assertEqual({s['step_id'] for s in refreshed['data']['steps'] if s['kind'] == 'local'}, identities)
+
+    def test_local_history_retains_failed_and_interrupted_work_without_claiming_completion(self):
+        sys.path.insert(0, str(ROOT))
+        from app.service import Application
+        checkpoint = self.put('unbound-checkpoint.json', {'status': 'examined'})
+        self.command('export', self.identifier, '--geometry-checkpoint', checkpoint, expected=1)
+        app = Application(self.root)
+        self.addCleanup(app.close)
+        failed = app.dispatch('run_metrics', {'run_id': self.identifier})
+        self.assertTrue(failed['ok'], failed)
+        step = next(s for s in failed['data']['steps'] if s.get('scope') == 'native_operation' and s['operation'] == 'export')
+        self.assertEqual(step['state'], 'failed')
+        self.assertEqual(step['error']['code'], 'geometry_invalid')
+        self.command('export', self.identifier)
+        before = {s['step_id'] for s in app.dispatch('run_metrics', {'run_id': self.identifier})['data']['steps']}
+        process = subprocess.Popen([sys.executable, str(CLI), '--root', str(self.root), '--json', 'export', self.identifier],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        self.addCleanup(lambda: process.poll() is None and os.killpg(process.pid, signal.SIGKILL))
+        deadline, running = time.monotonic() + 10, None
+        while time.monotonic() < deadline and process.poll() is None:
+            observed = app.dispatch('run_metrics', {'run_id': self.identifier})
+            self.assertTrue(observed['ok'], observed)
+            running = next((s for s in observed['data']['steps'] if s['step_id'] not in before and
+                            s.get('scope') == 'native_operation' and s['operation'] == 'export' and s['state'] == 'running'), None)
+            if running:
+                break
+            time.sleep(.02)
+        self.assertIsNotNone(running, 'The active export must be visible before it finishes.')
+        os.killpg(process.pid, signal.SIGKILL)
+        process.communicate(timeout=5)
+        interrupted = app.dispatch('step_detail', {'run_id': self.identifier, 'step_id': running['step_id']})
+        self.assertTrue(interrupted['ok'], interrupted)
+        self.assertEqual(interrupted['data']['state'], 'interrupted')
+        self.assertIsNone(interrupted['data']['ended_at'])
+        self.assertEqual(interrupted['data']['error']['code'], 'native_owner_ended')
+        self.assertIsNone(interrupted['data']['timing']['wall_seconds'])
+
+    def test_local_history_distinguishes_resumed_local_cache_from_new_ocr(self):
+        sys.path.insert(0, str(ROOT))
+        from app.service import Application
+        self.command('resume', self.identifier)
+        app = Application(self.root)
+        self.addCleanup(app.close)
+        response = app.dispatch('run_metrics', {'run_id': self.identifier})
+        self.assertTrue(response['ok'], response)
+        resumed = next(s for s in response['data']['steps'] if s.get('scope') == 'native_operation' and s['operation'] == 'resume')
+        steps = [s for s in response['data']['steps'] if s['attempt_id'] == resumed['attempt_id']]
+        cached = [s for s in steps if s['state'] == 'cached']
+        self.assertEqual(len(cached), 3)  # one raster and the two pre-existing PSM candidates
+        self.assertTrue(all(s['origin'] == 'same_run_cache' for s in cached))
+        ocr = [s for s in cached if s['operation'] == 'ocr']
+        self.assertEqual(len(ocr), 2)
+        self.assertTrue(all(s['tool']['name'] == 'tesseract' and '--psm' in s['command'] and s['outputs'] for s in ocr))
+        for step in ocr:
+            for product in step['outputs']:
+                self.assertTrue(Path(product['path']).is_file(), product)
+                self.assertEqual(hashlib.sha256(Path(product['path']).read_bytes()).hexdigest(), product['sha256'])
+        self.assertFalse(any(s.get('scope') == 'tool' and s['tool']['name'] == 'tesseract' for s in steps))
+        self.assertTrue(all(s['tokens']['status'] == 'not_applicable' for s in steps))
 
     def test_output_review_rejects_template_without_original_turn_and_preserves_reports(self):
         self.command('export', self.identifier)

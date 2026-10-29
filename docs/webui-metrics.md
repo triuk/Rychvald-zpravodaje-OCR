@@ -82,6 +82,46 @@ prahy 0 / 0,001 / 0,01 / 0,1 / 1 / 10 USD a šedou pro neznámou cenu.
 
 ## Trvalé podklady a velikost odpovědí
 
+### Místní práce ve všech automatických fázích
+
+Každá automatická záložka má vlastní přehled místní práce a rozbalitelnou
+historii. Zobrazuje běžící práci, stav, začátek/konec, dostupnou verzi nástroje,
+skutečné argumenty a původ vstupů/výstupů. Starší kroky jsou stránkované;
+výběr záložky ani načtení historie nespouští OCR. Místní cache a převzaté
+místní podklady se rozlišují od nového výpočtu i od cache tokenů AI.
+
+Nativní příkazy ukládají vlastní přijetí práce do
+`application/local-attempts/ATTEMPT.json` a průběžný deník `.jsonl` ve workspace.
+Záznamy se připojují pod zámkem a synchronizují na disk. Pokrývají přípravu,
+práci s přepisem, místní přípravu geometrie, segmentaci, sestavení PDF,
+ověření PDF/textu i místní části opravných cyklů. Vnořené procesy připojují
+své skutečné příkazy do stejného deníku. Rutinní čtecí dotazy (`status`,
+`list`, `query` a ověření při zobrazení uloženého stavu) nepřidávají další
+výpočetní pokusy. Krátké dotazy na verzi nejsou vykazovány jako samostatná
+výpočetní práce; dostupná verze je u nástroje.
+
+Krok má identitu `native:ATTEMPT:STEP`, plný hash zdrojového vydání,
+průchod, fázi a případnou vazbu na rodičovský krok/pokus. `scope` rozlišuje
+nativní operaci, dílčí workflow příkaz, jednotku a podřízený nástroj.
+Čas rodiče zahrnuje jeho potomky a souhrn používá sjednocení časových
+intervalů. Nelze sčítat dobu rodiče a jeho vnořených nástrojů. Čekání bez
+samostatného dokladu zůstává neznámé. V této etapě nejsou CPU a RAM
+dopočítávány z těchto časů; doplňuje je navazující měření prostředků.
+
+Deník zůstává čitelný po restartu, chybě i ukončení procesu. Pokud vlastník
+se stejnou kernelovou identitou již neběží a chybí koncová událost, čtecí
+pohled označí krok jako přerušený s neznámým koncem; nezapisuje vymyšlené
+dokončení. Již publikované koncové události zůstávají zachované. Chyby
+čitelnosti místních dokladů jsou v `local_warnings` a neznehodnocují samy
+o sobě původní tokenové doklady AI. Starší přípravné události jsou nadále
+čitelné přes původní identitu `local:ATTEMPT:STEP`, bez falešného doplnění
+nezaznamenané verze nebo příkazu.
+
+`run_metrics` navíc přijímá volitelné `kind` (`local`/`ai`), `phase`
+(`preparation`/`reading`/`geometry`/`assembly`) a boolean `newest_first`.
+Stránkování se potom vztahuje k vybraným krokům; celkové metriky průchodu
+zůstávají celkové. Bez filtrů se chování dosavadního přehledu nemění.
+
 Odvozený `application/metrics/ledger.json` obsahuje původní vazby,
 naměřené vstupy a hashe zdrojů, účetní politiku, kartu i předpoklady.
 Originální request, attempt a protocol soubory zůstávají nedotčené.
@@ -101,6 +141,20 @@ Pokryje duplicity, více tahů, kumulativní/opožděné snímky, procesové epo
 obnovu, kompaktaci, přerušení, chybějící pole, vnořené časové intervaly,
 stránkování, restart a cenu za stránku po skutečné nativní přípravě rastrů.
 Kontrolované procesy nejsou vydávány za nativní modelovou evidenci.
+
+Tři scénáře `local_history` v `tests/test_ocr_project_export.py` používají
+skutečnou místní přípravu, segmentaci, export, qpdf/extrakci a validaci
+malého syntetického skenu přes nativní CLI a veřejné dotazy aplikace.
+Ověřují dostupné příkazy/vstupy/výstupy, výsledek validace, stránkování
+fáze, cache bez opakování OCR, rozpracovanou práci ukončenou signálem a
+stálé identity po restartu. Nativní `smoke_webui_projects.py --preparation`
+ověřuje také zobrazení místní historie a cache v reálném WebUI/Chromiu.
+
+Místní ověření #34 používá výslovně vybraný, hashi ověřený profil
+`OCR_ENVIRONMENT=/tmp/rychvald-native-recovery/environment.json`
+(Python 3.14.8, Tesseract 5.5.4, Poppler 26.10.0, qpdf 12.4.2 a připnuté
+Python knihovny). Není vydáváno za původní distribuovaný runtime ani
+za ověření skutečné dostupnosti modelu/context-mode.
 
 `tools/smoke_webui_metrics.py` otevře skutečné WebUI/Chromium, vybere již
 uložený pokus, zkontroluje zobrazené tokeny/cenu a otevře audit detailu.

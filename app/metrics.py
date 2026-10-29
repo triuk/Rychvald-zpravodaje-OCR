@@ -298,6 +298,10 @@ def local_steps(root, application, run, sources, warnings):
             if attempt.get('run_id') != run['project']['run_id'] or attempt.get('root') != str(root):
                 raise ValueError('Local attempt has a different registry/run identity.')
             aid = attempt['attempt_id']
+            # New native admissions retain their units in a single journal.
+            # Keep the legacy reader for earlier preparation-only histories.
+            if (application / 'local-attempts' / (aid + '.json')).is_file():
+                continue
             grouped = {}
             for event in events:
                 if event.get('attempt_id') == aid and event.get('step_id'):
@@ -314,6 +318,11 @@ def local_steps(root, application, run, sources, warnings):
                 usage = unknown('Local work is not AI usage.', 'not_applicable')
                 steps.append({'step_id': 'local:' + aid + ':' + sid, 'native_step_id': sid,
                     'kind': 'local', 'operation': 'prepare', 'attempt_id': aid, 'run_id': run['project']['run_id'],
+                    'phase': 'preparation', 'edition_id': run['project']['source_sha256'],
+                    'scope': 'legacy_unit', 'parent_step_id': None,
+                    'tool': first.get('tool', {'name': 'Původní místní krok', 'version': None}),
+                    'command': first.get('command', []), 'parameters': first,
+                    'inputs': first.get('inputs', []), 'outputs': last.get('outputs', []), 'error': last.get('error'),
                     'thread_id': None, 'turn_ids': [], 'started_at': first.get('timestamp'),
                     'origin': last.get('origin', 'same_run_cache' if last.get('type') == 'unit_cached' else 'computed'),
                     'import_provenance': last.get('import_provenance'),
@@ -330,12 +339,87 @@ def local_steps(root, application, run, sources, warnings):
     return steps
 
 
+def native_local_steps(root, application, run, sources, warnings):
+    """Read durable local admissions without changing their terminal state."""
+    from app.jobs import read_history
+    steps = []
+    for path in sorted((application / 'local-attempts').glob('*.json')):
+        try:
+            path = safe_file(root, path)
+            raw = path.read_bytes()
+            sources[str(path.relative_to(root))] = hashlib.sha256(raw).hexdigest()
+            attempt = json.loads(raw)
+            aid = attempt['attempt_id']
+            if (attempt.get('schema_version') != 1 or path.stem != aid or
+                    attempt.get('root') != str(root) or attempt.get('run_id') != run['project']['run_id'] or
+                    attempt.get('edition_id') != run['project']['source_sha256']):
+                raise ValueError('Native local attempt belongs to another registry, source or run.')
+            journal = safe_file(root, path.with_suffix('.jsonl'))
+            content = journal.read_bytes()
+            sources[str(journal.relative_to(root))] = hashlib.sha256(content).hexdigest()
+            events = read_history(journal)
+            grouped, seen = {}, set()
+            for event in events:
+                if event.get('event_id') in seen:
+                    continue
+                if (event.get('attempt_id') != aid or event.get('run_id') != attempt['run_id'] or
+                        event.get('edition_id') != attempt['edition_id']):
+                    raise ValueError('Native journal event has a foreign admission/source identity.')
+                seen.add(event['event_id'])
+                grouped.setdefault(event['step_id'], []).append(event)
+            alive = False
+            try:
+                fields = Path(f'/proc/{attempt["pid"]}/stat').read_text().rsplit(')', 1)[1].split()
+                alive = fields[0] not in ('Z', 'X') and fields[19] == attempt.get('process_start_ticks')
+            except (OSError, KeyError, IndexError):
+                pass
+            for sid, group in grouped.items():
+                first = next((e for e in group if e['type'] == 'started'), None)
+                last = next((e for e in reversed(group) if e['type'] in ('completed', 'failed', 'cached', 'interrupted')), None)
+                if first is None:
+                    continue
+                end = last.get('timestamp') if last else None
+                start = first['timestamp']
+                a, b = stamp(start), stamp(end)
+                intervals = [[a, b]] if a is not None and b is not None and b >= a else []
+                state = last['type'] if last else 'running' if alive else 'interrupted'
+                parent = first.get('parent_step_id')
+                identifier = 'native:' + aid + ':' + sid
+                error = last.get('error') if last else None
+                if not last and not alive:
+                    error = {'code': 'native_owner_ended', 'message': 'Native owner ended before publishing this step result; its completion is unknown.'}
+                steps.append({'step_id': identifier, 'native_step_id': sid, 'kind': 'local',
+                    'operation': first.get('operation', attempt['operation']), 'phase': attempt['phase'],
+                    'edition_id': attempt['edition_id'], 'run_id': attempt['run_id'], 'attempt_id': aid,
+                    'parent_attempt': attempt.get('owner'), 'scope': first.get('scope', 'tool'),
+                    'parent_step_id': 'native:' + aid + ':' + parent if parent is not None else None,
+                    'thread_id': None, 'turn_ids': [], 'started_at': start, 'ended_at': end,
+                    'state': state, 'error': error, 'events': group, 'attempt': attempt,
+                    'tool': first.get('tool', attempt['tool']), 'command': first.get('command', []),
+                    'parameters': first.get('parameters', {}), 'inputs': first.get('inputs', []),
+                    'outputs': last.get('outputs', []) if last else [],
+                    'observations': last.get('details') if last else None,
+                    'result': last.get('result') if last else None,
+                    'origin': last.get('origin', 'computed') if last else 'computed',
+                    'import_provenance': last.get('import_provenance') if last else None,
+                    'artifacts': {'attempt': str(path.relative_to(root)), 'history': str(journal.relative_to(root))},
+                    'usage_sources': [], 'tokens': unknown('Local work is not AI usage.', 'not_applicable'), 'model': None,
+                    'timing': {'wall_seconds': last.get('duration_seconds', b - a if intervals else None) if last else None,
+                        'active_seconds': union_length(intervals) if intervals else None, 'waiting_seconds': None,
+                        'tool_seconds': None, 'active_intervals': intervals, 'waiting_intervals': [],
+                        'tool_time_is_nested': True,
+                        'basis': 'Observed native operation, workflow and tool spans. Parent/child intervals are unioned, never added. Missing terminal records remain incomplete.'}})
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            warnings.append(str(path.relative_to(root)) + ': ' + str(error))
+    return steps
+
+
 def collect(root, run):
     root = Path(root).resolve()
     rid = run['project']['run_id']
     application = safe_file(root, run['artifacts']['run_manifest']['path']).parent
     application = safe_file(root, application)
-    sources, steps, warnings = {}, [], []
+    sources, steps, warnings, local_warnings = {}, [], [], []
     for path in sorted(path for namespace in ('codex-attempts', 'context-attempts', 'reading-attempts', 'geometry-attempts', 'output-review-attempts', 'correction-attempts')
                        for path in (application / namespace).glob('*/attempt.json')):
         path = safe_file(root, path)
@@ -360,6 +444,7 @@ def collect(root, run):
         except (ValueError, KeyError, TypeError) as error:
             warnings.append(relative + ': ' + str(error))
     steps.extend(local_steps(root, application, run, sources, warnings))
+    steps.extend(native_local_steps(root, application, run, sources, local_warnings))
     steps.sort(key=lambda s: (s.get('started_at') or '', s['step_id']))
     directory = application / 'metrics'
     directory.mkdir(parents=True, exist_ok=True)
@@ -419,7 +504,7 @@ def collect(root, run):
     span = max(ends) - min(starts) if starts and len(ends) == len(steps) else None
     page_count = run.get('counts', {}).get('pages')
     result = {'schema_version': 1, 'policy': POLICY, 'run_id': rid,
-              'source_hash': digest(sources), 'sources': sources, 'warnings': warnings,
+              'source_hash': digest(sources), 'sources': sources, 'warnings': warnings, 'local_warnings': local_warnings,
               'tokens': usage, 'cost': cost, 'steps': steps, 'categories': CATEGORIES, 'cost_scale': COST_SCALE,
               'queue': {'waiting_intervals': queue_intervals,
                   'waiting_seconds': waiting_length(queue_closed, active) if queue_complete else None,
@@ -446,13 +531,17 @@ def collect(root, run):
     return result
 
 
-def summary(ledger, offset=0, limit=100):
+def summary(ledger, offset=0, limit=100, *, kind=None, phase=None, newest_first=False):
     """Keep the GUI overview small; original messages belong in step detail."""
     result = {k: v for k, v in ledger.items() if k != 'steps'}
     result['steps'] = []
-    result.update(step_total=len(ledger['steps']),
-                  step_next_offset=offset + limit if offset + limit < len(ledger['steps']) else None)
-    for step in ledger['steps'][offset:offset + limit]:
+    steps = [step for step in ledger['steps'] if (kind is None or step['kind'] == kind) and
+             (phase is None or step.get('phase') == phase)]
+    if newest_first:
+        steps.reverse()
+    result.update(step_total=len(steps),
+                  step_next_offset=offset + limit if offset + limit < len(steps) else None)
+    for step in steps[offset:offset + limit]:
         result['steps'].append({k: v for k, v in step.items() if k not in ('attempt', 'events', 'usage_sources')})
         result['steps'][-1]['usage_sources'] = [{k: v for k, v in source.items() if k != 'original'}
                                                for source in step['usage_sources'][-5:]]

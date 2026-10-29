@@ -31,9 +31,26 @@ def project_environment(work, path=None):
 
 
 def workflow_command(work, native, command, *arguments, allowed=(0,)):
+    from ocr_local_history import active_trace, child_environment
     vector = [sys.executable, str(WORKFLOW), '--environment', str(native.path),
               command, '--work', str(work), *map(str, arguments)]
-    result = subprocess.run(vector, capture_output=True, text=True, env=native.env)
+    trace = active_trace()
+    outputs = {'segment': ['pages.json', 'reviewed-lines.json', 'geometry.json', 'segmented-review.json'],
+               'sheets': ['checks/geometry-sheets.json'], 'sample-sheets': ['checks/sample-source.json'],
+               'export': ['output-manifest.json'], 'check': ['checks/technical.json'],
+               'samples': ['checks/samples.json'], 'reports': ['checks/visual-review.json', 'checks/findings.json']}
+    products = [work / p for p in outputs.get(command, [])]
+    if command == 'export':
+        for index, argument in enumerate(arguments[:-1]):
+            if str(argument) in ('--pdf', '--txt'):
+                products.append(Path(arguments[index + 1]))
+    context = trace.span(operation=command, command=vector, scope='workflow_command',
+                         tool={'name': 'ocr_workflow', 'version': sys.version.split()[0]},
+                         outputs=products) if trace else contextlib.nullcontext({})
+    with context as observation:
+        result = subprocess.run(vector, capture_output=True, text=True, env=child_environment(native.env))
+        observation.update(returncode=result.returncode, state='completed' if result.returncode in allowed else 'failed',
+                           error={'code': 'workflow_failed', 'message': result.stderr} if result.returncode not in allowed else None)
     with (work / 'export-process.log').open('a', encoding='utf-8') as log:
         log.write(json.dumps(vector, ensure_ascii=False) + '\n' + result.stdout + result.stderr + '\n')
     if result.returncode not in allowed:
