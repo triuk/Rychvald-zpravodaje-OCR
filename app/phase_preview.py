@@ -103,6 +103,9 @@ def phase_content(work, source_sha256, phase, number, artifacts, source_page=Non
     if phase == 'reading':
         from .reading_preview import reading
         return reading(work, source_sha256, number, artifacts, source_page)
+    if phase == 'geometry':
+        from .geometry_preview import geometry
+        return geometry(work, source_sha256, number, artifacts, source_page)
     return {'state': 'historical_missing', 'message': 'Zachovaný podklad této fáze zatím není dostupný.', 'overlays': []}
 
 
