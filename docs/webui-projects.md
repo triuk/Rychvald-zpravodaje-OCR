@@ -43,6 +43,19 @@ průchody. Rozdílné zdrojové skeny stejného názvu mají vlastní projekty v
 aktuální fázi, stav operace, validaci a přijetí zadavatelem. Tabulka rozlišuje
 evidované cesty artefaktů a jejich skutečnou dostupnost. Obnovit načte čerstvý stav.
 
+Projekty zůstávají v levém panelu. Jediný průchod lze vybrat přímo; dva a více
+průchodů jsou v rozbalitelné skupině. Tlačítko Nastavení u projektu otevře jeho
+nastavení a založení nového průchodu; globální nastavení evidence je vlevo dole.
+Celý automatický průchod spouští hlavní tlačítko nahoře. Fronta a porovnání jsou
+v rozbalitelné části pod pracovní plochou.
+
+Vybraný průchod má vodorovné záložky Příprava, Přepis, Pořadí a geometrie,
+Sestavení a kontroly, Ruční revize a Výstupy. Přepínání záložek samo nespouští
+zpracování. Obnovení přehledu ponechá vybraný průchod i záložku. Ruční revize
+a Výstupy jsou zatím označená místa pro budoucí práci; automatické PDF se
+prohlíží v Sestavení a kontrolách. Původní profil, soubory a historie jsou
+v rozbalitelných technických podkladech průchodu.
+
 Přehled je kompatibilní čtecí pohled nad verzí 1 evidence: projekt vydání je určen
 celým `source_sha256`, jeho průchody zachovávají původní `project_id` a `run_id`.
 Neprobíhá migrace, kopírování ani přepisování starší práce. Načtení neprovádí
@@ -80,6 +93,12 @@ Skutečný nativní průchod lze spustit v grafickém prostředí:
 ```sh
 python tools/smoke_webui_projects.py --browser Chromium
 ```
+
+Přepínač `--headless` ověří skutečný Chromium bez viditelného okna (nativní
+knihovna WebUI stále potřebuje dostupný displej, případně Xvfb). Scénář navíc
+ověřuje šest záložek, vodorovné rozložení vedle seznamu projektů, rozbalitelné
+průchody a zachování výběru po obnovení. `--profiles` přidá import a dva
+pojmenované průchody s nezávisle uchovanými profily.
 
 V prostředí bez displeje použijte `xvfb-run -a`. Přepínač `--screenshot /tmp/ocr.png`
 volitelně zachytí okno pomocí ImageMagick. Scénář skutečně otevře produkční WebUI,

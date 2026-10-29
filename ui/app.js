@@ -29,6 +29,16 @@ let requestQueue = Promise.resolve();
 let progressRequestPending = false;
 let displayedPreparation = null;
 let editionCatalog = [];
+let selectedPhase = 'preparation';
+const expandedEditions = new Set();
+const workflowPhases = [
+  ['preparation', 'Příprava', 'Místní nástroje připraví sken a pomocné OCR. Zde lze ověřit prostředí a přihlášení AI.'],
+  ['reading', 'Přepis', 'AI vizuálně čte zdrojový sken a rekonstruuje obtížně čitelný text.'],
+  ['geometry', 'Pořadí a geometrie', 'AI určí návaznost článků a umístění textu na stránce.'],
+  ['assembly', 'Sestavení a kontroly', 'Místní nástroje sestaví PDF a text. AI a místní kontroly ověří výstup a provedou cílené automatické opravy.'],
+  ['manual', 'Ruční revize', 'Připravené místo pro budoucí zapojení existujícího opravovacího programu. Ruční revize zde zatím není dostupná.'],
+  ['outputs', 'Výstupy', 'Připravené místo pro budoucí výstupy po ruční revizi. Automatické kontrolní PDF najdete v Sestavení a kontrolách.'],
+];
 const preparationEnvironments = new Map();
 const diagnosticImages = new Map();
 let codexRequestPending = false;
@@ -91,10 +101,36 @@ function renderEditions(data) {
   }
   for (const edition of data.editions) {
     const section = element('section', undefined, 'edition');
-    section.append(element('h3', edition.name));
+    section.dataset.editionId = edition.edition_id;
+    const heading = element('div', undefined, 'section-heading');
+    heading.append(element('h3', edition.name));
+    const settings = element('button', 'Nastavení', 'secondary project-settings-button');
+    settings.type = 'button';
+    settings.setAttribute('aria-label', `Nastavení projektu ${edition.name}`);
+    settings.addEventListener('click', () => {
+      choice.value = edition.edition_id;
+      updateProjectSettings();
+      if (typeof updateComparisonChoices === 'function') updateComparisonChoices();
+      document.querySelector('#project-settings').open = true;
+      document.querySelector('#project-settings').scrollIntoView({block: 'nearest'});
+    });
+    heading.append(settings);
+    section.append(heading);
     const digest = element('div', `Zdroj ${edition.source_sha256.slice(0, 12)}…`, 'source-id');
     digest.title = edition.source_sha256;
     section.append(digest);
+    let runs = section;
+    if (edition.runs.length > 1) {
+      runs = element('details', undefined, 'edition-runs');
+      runs.open = expandedEditions.has(edition.edition_id) || edition.runs.some(run => run.run_id === selectedRun);
+      runs.append(element('summary', `Průchody OCR (${edition.runs.length})`));
+      runs.addEventListener('toggle', () => {
+        if (!runs.isConnected) return;
+        if (runs.open) expandedEditions.add(edition.edition_id);
+        else expandedEditions.delete(edition.edition_id);
+      });
+      section.append(runs);
+    }
     for (const run of edition.runs) {
       const button = element('button', run.run_name || `Importovaný průchod ${run.run_id.slice(-12)}`, 'run');
       button.type = 'button';
@@ -102,10 +138,67 @@ function renderEditions(data) {
       button.setAttribute('aria-pressed', String(run.run_id === selectedRun));
       button.append(element('span', labels[run.phase] || run.phase));
       button.addEventListener('click', () => perform(() => selectRun(run.run_id)));
-      section.append(button);
+      runs.append(button);
     }
     list.append(section);
   }
+  updateProjectSettings();
+}
+
+function updateProjectSettings() {
+  const edition = editionCatalog.find(item => item.edition_id === document.querySelector('#edition-choice').value);
+  document.querySelector('#project-settings-name').textContent = edition ?
+    `${edition.name} · zdroj ${edition.edition_id.slice(0, 12)}…` : 'Vyberte projekt vydání nebo importujte zdrojový sken.';
+}
+
+function selectPhase(phase, {focus = false} = {}) {
+  selectedPhase = phase;
+  document.querySelectorAll('[role=tab]').forEach(tab => {
+    const active = tab.dataset.phase === phase;
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+    if (active && focus) tab.focus();
+  });
+  document.querySelectorAll('[role=tabpanel]').forEach(panel => { panel.hidden = panel.dataset.phase !== phase; });
+}
+
+function renderPhaseTabs(detail) {
+  const tabs = element('div', undefined, 'phase-tabs');
+  tabs.setAttribute('role', 'tablist');
+  tabs.setAttribute('aria-label', 'Fáze průchodu OCR');
+  const panels = {};
+  for (const [id, title, description] of workflowPhases) {
+    const tab = element('button', title);
+    tab.id = `tab-${id}`;
+    tab.type = 'button';
+    tab.dataset.phase = id;
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-controls', `phase-${id}`);
+    tab.addEventListener('click', () => selectPhase(id));
+    tab.addEventListener('keydown', event => {
+      const index = workflowPhases.findIndex(item => item[0] === id);
+      const target = {ArrowRight: (index + 1) % workflowPhases.length,
+        ArrowLeft: (index + workflowPhases.length - 1) % workflowPhases.length,
+        Home: 0, End: workflowPhases.length - 1}[event.key];
+      if (target !== undefined) {
+        event.preventDefault();
+        selectPhase(workflowPhases[target][0], {focus: true});
+      }
+    });
+    tabs.append(tab);
+    const panel = element('section', undefined, 'phase-panel');
+    panel.id = `phase-${id}`;
+    panel.dataset.phase = id;
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', tab.id);
+    panel.append(element('h3', title), element('p', description, 'phase-description'));
+    if (['manual', 'outputs'].includes(id)) {
+      panel.append(element('p', 'Tato část zatím není implementována.', 'placeholder-state'));
+    }
+    panels[id] = panel;
+  }
+  detail.append(tabs, ...Object.values(panels));
+  return panels;
 }
 
 function renderRun(data) {
@@ -126,6 +219,9 @@ function renderRun(data) {
   }
   detail.append(statuses, element('p',
     'Načtení do aplikace nemění výsledek validace ani neznamená přijetí zadavatelem.', 'hint'));
+  const phases = renderPhaseTabs(detail);
+  const technical = element('details', undefined, 'run-technical');
+  technical.append(element('summary', 'Podklady, uložený profil a historie průchodu'));
   const section = element('section', undefined, 'artifact-section');
   section.append(element('h3', 'Artefakty průchodu'));
   const table = element('table', undefined, 'artifacts');
@@ -144,7 +240,7 @@ function renderRun(data) {
   }
   table.append(body);
   section.append(table);
-  detail.append(section);
+  technical.append(section);
   const preparation = element('section', undefined, 'preparation-panel');
   preparation.append(element('h3', 'Místní příprava'));
   const controls = element('form', undefined, 'input-row');
@@ -159,7 +255,11 @@ function renderRun(data) {
   start.id = 'start-preparation';
   start.type = 'submit';
   start.disabled = !data.run;
-  controls.append(environment, start);
+  const environmentPicker = element('button', 'Vybrat…', 'secondary');
+  environmentPicker.type = 'button';
+  environmentPicker.dataset.pickPath = 'environment_manifest';
+  environmentPicker.dataset.pathTarget = 'preparation-environment';
+  controls.append(environment, environmentPicker, start);
   const donor = element('select'); donor.id = 'preparation-donor';
   donor.setAttribute('aria-label', 'Průchod s místními podklady k převzetí');
   const fresh = element('option', 'Nová příprava / vlastní místní cache'); fresh.value = ''; donor.append(fresh);
@@ -190,13 +290,16 @@ function renderRun(data) {
   const events = element('ol', undefined, 'preparation-events');
   events.id = 'preparation-events';
   preparation.append(status, units, events);
-  detail.append(preparation);
-  renderCodexPanel(detail, data);
-  if (typeof renderContextPanel === 'function') renderContextPanel(detail, data);
-  if (typeof renderReadingPanel === 'function') renderReadingPanel(detail, data);
-  if (typeof renderGeometryPanel === 'function') renderGeometryPanel(detail, data);
-  if (typeof renderExportPanel === 'function') renderExportPanel(detail, data);
-  window.renderMetricsPanel(detail, data, request);
+  phases.preparation.append(preparation);
+  const diagnostics = element('details', undefined, 'phase-technical');
+  diagnostics.append(element('summary', 'Ověření AI prostředí a obrazová diagnostika'));
+  phases.preparation.append(diagnostics);
+  renderCodexPanel(diagnostics, data);
+  if (typeof renderContextPanel === 'function') renderContextPanel(diagnostics, data);
+  if (typeof renderReadingPanel === 'function') renderReadingPanel(phases.reading, data);
+  if (typeof renderGeometryPanel === 'function') renderGeometryPanel(phases.geometry, data);
+  if (typeof renderExportPanel === 'function') renderExportPanel(phases.assembly, data);
+  window.renderMetricsPanel(technical, data, request);
   if (data.run) {
     const profile = element('section', undefined, 'run-profile');
     profile.id = 'run-profile';
@@ -217,8 +320,10 @@ function renderRun(data) {
       if (summaries[event.type]) history.append(element('li', `${summaries[event.type]} · ${event.timestamp}`));
     }
     profile.append(element('h3', 'Historie průchodu'), history);
-    detail.append(profile);
+    technical.append(profile);
   }
+  detail.append(technical);
+  selectPhase(selectedPhase);
 }
 
 async function selectRun(runId) {
@@ -231,6 +336,8 @@ async function selectRun(runId) {
   if (selection !== runSelection) return;
   selectedRun = runId;
   document.querySelector('#edition-choice').value = data.edition_id;
+  updateProjectSettings();
+  if (typeof updateComparisonChoices === 'function') updateComparisonChoices();
   document.querySelectorAll('.run').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.runId === selectedRun));
   });
@@ -324,7 +431,9 @@ function renderCodexPanel(detail, data) {
   start.id = 'start-model-diagnostic';
   start.type = 'submit';
   start.disabled = !data.run;
-  row.append(input, start);
+  const picker = element('button', 'Vybrat…', 'secondary');
+  picker.type = 'button'; picker.dataset.pickPath = 'image'; picker.dataset.pathTarget = 'diagnostic-image';
+  row.append(input, picker, start);
   form.append(label, row);
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -457,6 +566,8 @@ document.querySelector('#registry-form').addEventListener('submit', event => {
   });
 });
 document.querySelector('#refresh').addEventListener('click', () => perform(refresh));
+document.querySelector('#application-refresh').addEventListener('click', () => perform(refresh));
+document.querySelector('#edition-choice').addEventListener('change', updateProjectSettings);
 
 document.querySelector('#source-form').addEventListener('submit', event => {
   event.preventDefault();

@@ -9,6 +9,7 @@
   <script src="/webui.js"></script>
   <script src="metrics.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="path-picker.js" defer></script>
   <script src="context.js" defer></script>
   <script src="reading.js" defer></script>
   <script src="geometry.js" defer></script>
@@ -17,26 +18,33 @@
   <script src="queue.js" defer></script>
 </head>
 <body>
-  <header class="app-header">
-    <div><span class="eyebrow">RYCHVALDSKÝ ZPRAVODAJ</span><h1>Pracovna OCR</h1></div>
-    <span class="local-label">Místní evidence vydání</span>
-  </header>
-  <form id="registry-form" class="registry-bar">
-    <label for="registry-root">Adresář evidence</label>
-    <input id="registry-root" name="root" type="text" spellcheck="false" placeholder="Adresář obsahující registry.json">
-    <button type="submit">Otevřít evidenci</button>
-    <button id="refresh" type="button" class="secondary">Obnovit</button>
-  </form>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Projekty a nastavení aplikace">
+      <header class="app-header">
+        <span class="eyebrow">RYCHVALDSKÝ ZPRAVODAJ</span><h1>Pracovna OCR</h1>
+        <details class="application-menu"><summary>Aplikace</summary>
+          <p class="hint">Místní evidence a ovládání aplikace</p>
+          <button id="application-refresh" type="button" class="secondary">Obnovit pohled</button>
+        </details>
+      </header>
+      <section class="edition-browser" aria-label="Projekty vydání">
+        <div class="section-heading"><h2>Projekty vydání</h2><span id="edition-count">0</span></div>
+        <p class="hint">Vyberte průchod. Více průchodů stejného PDF najdete pod jeho názvem.</p>
+        <div id="editions"></div>
+      </section>
+      <details id="project-settings" class="sidebar-settings">
+        <summary>Nastavení projektu a nový průchod</summary>
+        <p id="project-settings-name" class="hint">Vyberte projekt vydání.</p>
   <section class="setup-panel" aria-label="Import a nové průchody">
     <form id="source-form" class="setup-form">
       <label for="source-path">Zdrojový sken nebo složka PDF</label>
       <div class="input-row"><input id="source-path" type="text" spellcheck="false" placeholder="/cesta/ke/zpravodaji.pdf nebo složce">
-        <button type="submit">Importovat</button></div>
+        <button type="button" class="secondary" data-pick-path="source_pdf" data-path-target="source-path">PDF…</button><button type="button" class="secondary" data-pick-path="source_directory" data-path-target="source-path">Složka…</button><button type="submit">Importovat</button></div>
     </form>
     <form id="profile-form" class="setup-form">
       <label for="profile-path">Externí profil průchodu</label>
       <div class="input-row"><input id="profile-path" type="text" spellcheck="false" placeholder="/cesta/k/profilu.json">
-        <button type="submit" class="secondary">Prohlédnout profil</button></div>
+        <button type="button" class="secondary" data-pick-path="profile" data-path-target="profile-path">Vybrat…</button><button type="submit" class="secondary">Prohlédnout profil</button></div>
     </form>
     <section id="profile-preview" class="profile-preview" hidden aria-label="Vybraný profil">
       <h2 id="profile-title"></h2>
@@ -47,15 +55,39 @@
       <div><label for="edition-choice">Projekt vydání</label><select id="edition-choice" required></select></div>
       <div><label for="run-name">Jméno nového průchodu</label><input id="run-name" type="text" required maxlength="160" placeholder="Například: První vizuální čtení"></div>
       <button id="create-run" type="submit" disabled>Založit nový průchod</button>
-      <button id="start-autonomous" type="button" disabled>Spustit celý průchod ze zdrojového PDF</button>
+
       <label for="autonomous-environment">Nativní prostředí pro celý průchod (volitelné)</label>
-      <input id="autonomous-environment" type="text" spellcheck="false" placeholder="Manifest prostředí OCR procesu">
+      <div class="input-row"><input id="autonomous-environment" type="text" spellcheck="false" placeholder="Manifest prostředí OCR procesu"><button type="button" class="secondary" data-pick-path="environment_manifest" data-path-target="autonomous-environment">Vybrat…</button></div>
       <label for="autonomous-donor">Převzít ověřenou místní přípravu z průchodu (volitelné)</label>
       <select id="autonomous-donor"><option value="">Nová místní příprava</option></select>
       <p class="hint">Nejdříve prohlédněte profil. Nový průchod uchová přesnou použitou podobu promptů a nastavení.</p>
     </form>
   </section>
-  <div id="message" role="status" aria-live="polite">Připojování k aplikaci…</div>
+
+      </details>
+      <details id="global-settings" class="sidebar-settings global-settings">
+        <summary>Globální nastavení</summary>
+        <p class="hint">Adresář evidence celé aplikace</p>
+  <form id="registry-form" class="registry-bar">
+    <label for="registry-root">Adresář evidence</label>
+    <input id="registry-root" name="root" type="text" spellcheck="false" placeholder="Adresář obsahující registry.json">
+    <button type="button" class="secondary" data-pick-path="registry_directory" data-path-target="registry-root">Vybrat složku</button><button type="submit">Otevřít evidenci</button>
+    <button id="refresh" type="button" class="secondary">Obnovit</button>
+  </form>
+
+      </details>
+    </aside>
+    <div class="main-workspace">
+      <header class="workspace-toolbar">
+        <span class="local-label">Místní evidence vydání</span>
+        <button id="start-autonomous" type="button" disabled>Spustit celý automatický průchod</button>
+      </header>
+      <div id="message" role="status" aria-live="polite">Připojování k aplikaci…</div>
+      <main id="detail" tabindex="-1">
+        <div class="empty"><span class="eyebrow">PŘEHLED PRŮCHODU</span><h2>Vyberte průchod OCR</h2>
+          <p>Vyberte projekt vlevo nebo otevřete jeho nastavení pro import a nový automatický průchod.</p></div>
+      </main>
+      <details class="workspace-tools"><summary>Fronta a porovnání průchodů</summary>
   <section class="queue-panel" aria-label="Fronta průchodů OCR">
     <h2>Fronta průchodů OCR</h2>
     <p class="hint">Zpracovává se jeden průchod. Zařazení pouze uloží položku; spuštění a pokračování potvrďte tlačítkem níže.</p>
@@ -79,16 +111,9 @@
     </form>
     <div id="comparison-results" aria-live="polite"></div>
   </section>
-  <div class="workspace">
-    <aside aria-label="Projekty vydání">
-      <div class="section-heading"><h2>Projekty vydání</h2><span id="edition-count">0</span></div>
-      <p class="hint">Průchody stejného zdrojového skenu jsou seskupené pod jedním vydáním.</p>
-      <div id="editions"></div>
-    </aside>
-    <main id="detail" tabindex="-1">
-      <div class="empty"><span class="eyebrow">PŘEHLED PRŮCHODU</span><h2>Vyberte průchod OCR</h2>
-        <p>U každého průchodu uvidíte skutečnou fázi, výsledky kontrol a dostupné soubory.</p></div>
-    </main>
+
+      </details>
+    </div>
   </div>
 </body>
 </html>
