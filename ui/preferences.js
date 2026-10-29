@@ -4,10 +4,21 @@ let preferenceGeneration = 0;
 let preferenceCatalog = {state: 'not_checked', models: []};
 let preferenceValues = {};
 let catalogPending = false;
+const preferenceActivities = [['reading', 'Čtení a ověření prostředí'], ['geometry', 'Pořadí a geometrie'],
+  ['final_check', 'Kontroly výsledku'], ['repair', 'Cílené opravy']];
 
 function preferenceSelection(scope) {
-  return {model: document.querySelector(`#${scope}-model`).value,
+  const result = {model: document.querySelector(`#${scope}-model`).value,
     reasoning_effort: document.querySelector(`#${scope}-reasoning`).value};
+  if (scope === 'global' || scope === 'project') {
+    result.overrides = {};
+    for (const [activity] of preferenceActivities) {
+      if (document.querySelector(`#${scope}-${activity}-enabled`).checked) {
+        result.overrides[activity] = preferenceSelection(`${scope}-${activity}`);
+      }
+    }
+  }
+  return result;
 }
 
 function fillPreferenceChoices(scope, preferences) {
@@ -41,10 +52,22 @@ function fillPreferenceChoices(scope, preferences) {
 function renderPreferenceValue(scope, data) {
   preferenceValues[scope] = data.preferences;
   fillPreferenceChoices(scope, data.preferences);
+  const effective = document.querySelector(`#${scope}-effective-settings`);
+  effective.replaceChildren();
+  for (const [activity, title] of preferenceActivities) {
+    const override = data.preferences.overrides?.[activity];
+    const checkbox = document.querySelector(`#${scope}-${activity}-enabled`);
+    checkbox.checked = Boolean(override);
+    const pair = data.effective[activity];
+    fillPreferenceChoices(`${scope}-${activity}`, pair);
+    for (const key of ['model', 'reasoning']) document.querySelector(`#${scope}-${activity}-${key}`).disabled = !override;
+    document.querySelector(`#${scope}-${activity}-availability`).textContent = data.activity_availability[activity].message;
+    effective.append(element('li', `${title}: ${pair.model} · ${pair.reasoning_effort} (${override ? 'výjimka' : 'společné'})`));
+  }
   document.querySelector(`#${scope}-model-availability`).textContent = data.availability.message;
   if (scope === 'project') {
     document.querySelector('#effective-run-preferences').textContent =
-      `Nový průchod použije ${data.preferences.model} · ${data.preferences.reasoning_effort}. Prompty a ostatní parametry převezme z vybraného externího profilu.`;
+      'Nový průchod použije uložená nastavení činností uvedená výše. Prompty a ostatní parametry převezme z vybraného externího profilu.';
   }
 }
 
@@ -69,6 +92,41 @@ async function updateModelPreferences(force = false) {
       document.querySelector('#global-model-availability').textContent = error.message;
       document.querySelector('#project-model-availability').textContent = error.message;
     }
+  }
+}
+
+for (const scope of ['global', 'project']) {
+  const fields = document.querySelector(`#${scope}-activity-fields`);
+  for (const [activity, title] of preferenceActivities) {
+    const field = element('fieldset');
+    field.append(element('legend', title));
+    const toggleLabel = element('label');
+    const toggle = element('input');
+    toggle.type = 'checkbox';
+    toggle.id = `${scope}-${activity}-enabled`;
+    toggleLabel.append(toggle, document.createTextNode(' Použít vlastní model a reasoning'));
+    field.append(toggleLabel);
+    for (const [key, label] of [['model', 'Model AI'], ['reasoning', 'Reasoning']]) {
+      const id = `${scope}-${activity}-${key}`;
+      const caption = element('label', label);
+      caption.htmlFor = id;
+      const select = element('select');
+      select.id = id;
+      select.disabled = true;
+      select.addEventListener('change', () => {
+        if (key === 'model') fillPreferenceChoices(`${scope}-${activity}`, preferenceSelection(`${scope}-${activity}`));
+        document.querySelector(`#${scope}-${activity}-availability`).textContent = 'Výjimka není uložená.';
+      });
+      field.append(caption, select);
+    }
+    const availability = element('p', '', 'hint');
+    availability.id = `${scope}-${activity}-availability`;
+    field.append(availability);
+    toggle.addEventListener('change', () => {
+      for (const key of ['model', 'reasoning']) document.querySelector(`#${scope}-${activity}-${key}`).disabled = !toggle.checked;
+      availability.textContent = toggle.checked ? 'Výjimka není uložená.' : 'Po uložení se použije společná dvojice.';
+    });
+    fields.append(field);
   }
 }
 

@@ -161,6 +161,12 @@ button:focus-visible, input:focus-visible, summary:focus-visible, select:focus-v
   .preparation-panel > .input-row { grid-template-columns: minmax(100px, 1fr) auto; }
   .preparation-panel > .input-row > button[type="submit"] { grid-column: 1 / -1; }
 }
+
+.sidebar-settings fieldset { min-width: 0; margin: 12px 0; padding: 10px; border: 1px solid #d6dfda; border-radius: 5px; }
+.sidebar-settings fieldset legend { font-size: 12px; font-weight: 600; padding: 0 4px; }
+.sidebar-settings input[type="checkbox"] { min-width: 0; width: auto; flex: none; padding: 0; vertical-align: middle; }
+.sidebar-settings select { width: 100%; max-width: 100%; }
+.sidebar-settings [id$="effective-settings"] { padding-left: 18px; line-height: 1.6; }
 :root { --local-history-border: #d2ddd9; }
 .local-history { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--local-history-border); }
 .local-activity { font-weight: 600; }

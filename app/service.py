@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 
-from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_run_name
+from tools.ocr_profiles import ProfileError, load_profile, run_name as validate_run_name, AI_ACTIVITIES, effective_ai_settings
 from .jobs import JobError, PreparationJobs, read_history, atomic_json
 from .codex import CodexJobs, process_identity
 from .context import ContextJobs
@@ -461,19 +461,27 @@ class Application:
     def preferences(self, operation, payload):
         store = Preferences(self.root)
         if operation in ('global_preferences', 'set_global_preferences'):
-            value = store.set_global({key: payload.get(key) for key in ('model', 'reasoning_effort')}) if operation == 'set_global_preferences' else store.global_value()
-            return {'scope': 'global', 'preferences': value, 'availability': self.model_catalog.availability(self.root, value)}
+            value = store.set_global({**{key: payload.get(key) for key in ('model', 'reasoning_effort')}, **({'overrides': payload['overrides']} if 'overrides' in payload else {})}) if operation == 'set_global_preferences' else store.global_value()
+            return {'scope': 'global', **self.preference_effective(value)}
         edition_id = payload.get('edition_id')
         if not any(item['edition_id'] == edition_id for item in self.projects()['editions']):
             raise ApplicationError('edition_not_found', 'Vyberte existující projekt vydání.')
         if operation == 'set_project_preferences':
-            value = store.set_project(edition_id, {key: payload.get(key) for key in ('model', 'reasoning_effort')})
+            value = store.set_project(edition_id, {**{key: payload.get(key) for key in ('model', 'reasoning_effort')}, **({'overrides': payload['overrides']} if 'overrides' in payload else {})})
         elif operation == 'adopt_global_preferences':
             value = store.set_project(edition_id, store.global_value())
         else:
             value = store.project_value(edition_id)
-        return {'scope': 'project', 'edition_id': edition_id, 'preferences': value,
-                'availability': self.model_catalog.availability(self.root, value)}
+        return {'scope': 'project', 'edition_id': edition_id, **self.preference_effective(value)}
+
+    def preference_effective(self, value):
+        parameters = {key: value[key] for key in ('model', 'reasoning_effort')}
+        parameters['activity_overrides'] = value.get('overrides', {})
+        effective = {activity: effective_ai_settings({'parameters': parameters}, activity) for activity in AI_ACTIVITIES}
+        available = {activity: self.model_catalog.availability(self.root, pair) for activity, pair in effective.items()}
+        unavailable = next((item for item in available.values() if item['state'] == 'unavailable'), None)
+        availability = unavailable or next(iter(available.values()))
+        return {'preferences': value, 'effective': effective, 'availability': availability, 'activity_availability': available}
 
     def inspect_profile(self, path):
         return load_profile(path)
@@ -489,7 +497,7 @@ class Application:
         edition = next((item for item in editions if item['edition_id'] == edition_id), None)
         if edition is None:
             raise ApplicationError('edition_not_found', 'Choose an existing edition before creating a run.')
-        availability = self.model_catalog.availability(self.root, Preferences(self.root).project_value(edition_id))
+        availability = self.preference_effective(Preferences(self.root).project_value(edition_id))['availability']
         if availability['state'] == 'unavailable':
             raise ApplicationError('model_capability_unavailable', availability['message'])
         profile = Preferences(self.root).resolve_profile(profile, edition_id)

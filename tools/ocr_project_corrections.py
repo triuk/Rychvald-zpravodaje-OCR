@@ -254,7 +254,7 @@ def validate_patch(work, packet, publication, *, archive=None):
             *publication['context_runtime'].get('interpreters', [])]):
         if 'sha256' in item and publication['evidence'].get('runtime_' + str(index)) != {'path': item['path'], 'sha256': item['sha256']}:
             raise ValueError('Exact original runtime resource evidence is required')
-    answer = verify_visual_turn(publication['visual_turn'], work, packet['images'], archive=archive)
+    answer = verify_visual_turn(publication['visual_turn'], work, packet['images'], activity='repair', archive=archive)
     if answer != load(publication['evidence']['proposal']['path']):
         raise ValueError('Proposal differs from original completed native assistant JSON')
     if any(answer[key] != packet[key] for key in ('expected_review_sha256', 'expected_iteration_id', 'target_finding_ids')):
@@ -546,7 +546,7 @@ def historical_geometry_observations(work, packet, *, preparing=False):
         if checkpoint['preparation_sha256'] != scope['previous_preparation_sha256']:
             raise ValueError('Historical geometry was bound to another preparation')
         from ocr_visual_evidence import verify_visual_turn
-        answer = verify_visual_turn(checkpoint['visual_turn'], work, old_packet['images'], archive=previous)
+        answer = verify_visual_turn(checkpoint['visual_turn'], work, old_packet['images'], activity='geometry', archive=previous)
         if answer != load_bound(checkpoint['evidence']['proposal']):
             raise ValueError('Historical observations differ from original native assistant JSON')
         if answer['preparation_sha256'] != scope['previous_preparation_sha256']:

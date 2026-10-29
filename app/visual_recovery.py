@@ -55,7 +55,7 @@ def original_output_phase(work, attempt, observation):
         directory = original_directory(work, attempt, observation, 'output-review-attempts')
         answer, proof = original_visual(directory, work, packet['images'],
             OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA,
-            work / 'application/output-review-attempts' / attempt['attempt_id'] / 'protocol.jsonl')
+            work / 'application/output-review-attempts' / attempt['attempt_id'] / 'protocol.jsonl', activity='final_check')
         if proof['thread_id'] != observation['thread_id'] or proof['turn_id'] != observation['turn_id']:
             raise ValueError('Completed output identity differs from original reconciliation')
         return answer, proof
@@ -63,7 +63,7 @@ def original_output_phase(work, attempt, observation):
         raise JobError('original_result_unavailable', str(error)) from error
 
 
-def original_visual(directory, work, images, prompt, schema, aggregate):
+def original_visual(directory, work, images, prompt, schema, aggregate, *, activity):
     protocol = directory / 'protocol.jsonl'
     raw = protocol.read_text().splitlines(keepends=True)
     if not raw or any(not line.endswith('\n') for line in raw):
@@ -87,7 +87,7 @@ def original_visual(directory, work, images, prompt, schema, aggregate):
         raise ValueError('Original visual acknowledgement is unavailable')
     proof = {'protocol': {'path': str(protocol), 'sha256': sha(protocol)},
         'thread_id': params['threadId'], 'turn_id': replies[0]['result']['turn']['id']}
-    answer = verify_visual_turn(proof, work, images)
+    answer = verify_visual_turn(proof, work, images, activity=activity)
     proposal = directory / 'proposal.json'
     if proposal.exists() and json.loads(proposal.read_text()) != answer:
         raise ValueError('Original proposal differs from its completed native trace')
@@ -127,7 +127,7 @@ def original_correction_phase(work, attempt, observation):
         directory = original_directory(work, attempt, observation, 'correction-attempts')
         answer, proof = original_visual(directory, work, packet['images'],
             prompt + json.dumps(packet, ensure_ascii=False), schema,
-            work / 'application/correction-attempts' / attempt['attempt_id'] / 'protocol.jsonl')
+            work / 'application/correction-attempts' / attempt['attempt_id'] / 'protocol.jsonl', activity=stage)
         if proof['thread_id'] != observation['thread_id'] or proof['turn_id'] != observation['turn_id']:
             raise ValueError('Original repair identity differs from reconciliation')
         return answer, proof

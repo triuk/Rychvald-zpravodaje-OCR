@@ -49,7 +49,8 @@ def verify_archive(work, archive, record):
                 raise ValueError('Original examination source/iteration differs')
         archived_bindings(work, archive, packet['inputs'])
         archived_bindings(work, archive, proof['evidence'])
-        answer = verify_visual_turn(proof['visual_turn'], work, packet['images'], archive=archive)
+        answer = verify_visual_turn(proof['visual_turn'], work, packet['images'],
+            activity='geometry' if packet_name == 'geometry-preparation.json' else 'final_check', archive=archive)
         proposal = proof['evidence']['proposal']
         if answer != load_bound(proposal):
             raise ValueError('Original examination differs from original assistant JSON')
@@ -94,7 +95,7 @@ def verify(registry, run_id, attempt, ledger_sha256):
                 raise ValueError('Correction source iteration changed')
             publication = load(work / cycle['publication'])
             check_bindings(publication['evidence'])
-            answer = verify_visual_turn(publication['visual_turn'], work, packet['images'], archive=archive)
+            answer = verify_visual_turn(publication['visual_turn'], work, packet['images'], activity='repair', archive=archive)
             if answer != load(work / cycle['proposal']) or answer['patch'] != load(work / cycle['patch']):
                 raise ValueError('Published correction differs from its original turn')
             if source_hash(work / cycle['patch']) != cycle['patch_sha256']:
