@@ -12,12 +12,12 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def verify_visual_turn(proof, work, images, *, archive=None):
+def verify_visual_turn(proof, work, images, *, activity, archive=None):
     if __package__:
         from .ocr_profiles import load_profile, effective_ai_settings
     else:
         from ocr_profiles import load_profile, effective_ai_settings
-    settings = effective_ai_settings(load_profile(Path(work) / 'application/profile.json')['profile'])
+    settings = effective_ai_settings(load_profile(Path(work) / 'application/profile.json')['profile'], activity)
     protocol = resolve_bound(proof['protocol']['path'], proof['protocol']['sha256'])
     messages = [json.loads(line)['message'] for line in protocol.read_text().splitlines()]
     identifier, thread = proof['turn_id'], proof['thread_id']

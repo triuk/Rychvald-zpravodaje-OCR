@@ -185,7 +185,8 @@ class ContextJobs(OwnedContextJobs):
             result = rpc.request('turn/start', params, notify)
             identifier = result['turn']['id']
             value['turn_id'] = identifier
-            record = {'stage': stage, 'thread_id': value['thread_id'], 'turn_id': identifier, 'state': 'running', 'prompt': prompt}
+            record = {'stage': stage, 'thread_id': value['thread_id'], 'turn_id': identifier, 'state': 'running', 'prompt': prompt,
+                'requested': copy.deepcopy(value['requested']), 'effective': copy.deepcopy(value['effective'])}
             value['turns'].append(record)
             self._event(job, 'context_turn_submitted', stage=stage, thread_id=value['thread_id'], turn_id=identifier)
             deadline = time.monotonic() + 240

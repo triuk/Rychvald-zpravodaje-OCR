@@ -129,7 +129,7 @@ class CorrectionJobs(OwnedContextJobs):
                     finally:
                         job.pop('current_continuation', None)
                 from .visual_recovery import original_visual
-                answer, proof = original_visual(directory, work, images, prompt, schema, job['directory'] / 'protocol.jsonl')
+                answer, proof = original_visual(directory, work, images, prompt, schema, job['directory'] / 'protocol.jsonl', activity=stage)
                 records = [row for row in job['manifest']['turns'] if row['stage'] == stage and
                     row['thread_id'] == proof['thread_id'] and row['turn_id'] == proof['turn_id']]
                 if len(records) != 1:
