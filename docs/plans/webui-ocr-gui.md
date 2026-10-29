@@ -227,6 +227,15 @@ dotazy, události a artefakty aplikace používané také GUI, se zachováním
 stávajícího procesového rozhraní OCR. Potvrzení a publikace specifikace
 samy nejsou zadáním začít implementaci.
 
+## Navazující redesign rozhraní
+
+Rozpracované změny layoutu, globálních a projektových předvoleb, editorů
+modelu/reasoning a životního cyklu okna z rozhovoru 28. 10. 2026 zachycuje
+[návrh redesignu](webui-ocr-gui-redesign.md). Byl potvrzen v GUI15 a převeden
+do [navazující specifikace 0003](../specs/0003-webui-ergonomics-and-phase-previews.md),
+publikované v [issue #24](https://github.com/triuk/Rychvald-zpravodaje-OCR/issues/24).
+Zadavatel odložil implementaci; publikace specifikace ji sama nezahajuje.
+
 ## Podklady
 
 - `GLOSSARY.md`, `docs/adr/0001-zachovat-obraz-skenu.md`,
