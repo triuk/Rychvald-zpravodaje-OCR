@@ -86,3 +86,78 @@ main { padding: 32px; }
 .queue-item { padding: .75rem; border-bottom: 1px solid #d8dee4; }
 .queue-item > strong, .queue-item > span { display: block; margin-bottom: .3rem; }
 .queue-item pre { max-height: 16rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* The project browser stays beside the work; setup no longer pushes it down. */
+.app-shell { display: grid; grid-template-columns: 310px minmax(0, 1fr); min-height: 100vh; }
+.sidebar { display: flex; flex-direction: column; padding: 0; min-width: 0; background: #fff; border-right: 1px solid #d6dfda; }
+.app-header { display: block; min-height: auto; padding: 24px 20px 18px; }
+.app-header h1 { font-size: 22px; }
+.application-menu { margin-top: 20px; }
+.application-menu summary { color: #deebe5; }
+.application-menu .hint { color: #cbdcd6; }
+.edition-browser { padding: 22px 18px; flex: 1; }
+.edition { margin-top: 14px; padding-top: 14px; }
+.edition .section-heading { align-items: start; gap: 8px; }
+.edition h3 { font-size: 14px; line-height: 1.5; }
+.project-settings-button { font-size: 11px; padding: 5px 7px; flex-shrink: 0; }
+.edition-runs { margin-top: 12px; }
+.edition-runs > summary { font-size: 12px; padding: 5px 0; }
+.sidebar-settings { border-top: 1px solid #d6dfda; padding: 16px 18px; }
+.sidebar-settings > summary { font-weight: 650; }
+.global-settings { background: #f6f8f6; }
+.setup-panel { padding: 16px 0 0; border: 0; display: flex; flex-direction: column; gap: 18px; }
+.setup-panel .input-row { flex-wrap: wrap; }
+.setup-panel .input-row input { width: 100%; flex-basis: 100%; }
+.setup-panel .input-row button { flex: 1; padding: 8px; font-size: 12px; }
+.run-form { display: flex; flex-direction: column; align-items: stretch; }
+.run-form label { margin-bottom: 0; }
+.registry-bar { padding: 0; display: flex; flex-direction: column; align-items: stretch; border: 0; background: transparent; gap: 8px; }
+.registry-bar input { width: 100%; }
+.profile-preview { padding: 12px; }
+.profile-preview h2 { font-size: 15px; }
+.main-workspace { min-width: 0; }
+.workspace-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 28px; border-bottom: 1px solid #d6dfda; background: #fff; }
+.workspace-toolbar .local-label { color: #6b7872; }
+#message { padding: 10px 28px; }
+main { padding: 20px 28px 32px; }
+.detail-title { margin: 8px 0; font-size: 25px; }
+.run-id { margin-bottom: 14px; font-size: 11px; }
+.statuses { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0 8px; }
+.status-card { padding: 12px; }
+.status-card dd { font-size: 14px; }
+.phase-tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; border-bottom: 1px solid #bdcfc5; margin: 26px 0 0; gap: 2px; }
+.phase-tabs button { flex-shrink: 0; padding: 13px 12px; border: 0; border-radius: 5px 5px 0 0; background: transparent; color: #65786e; font-size: 12px; }
+.phase-tabs button[aria-selected="true"] { background: #e4eee8; color: #183e3b; box-shadow: inset 0 -3px #285a4e; }
+.phase-panel { padding: 22px 0; min-height: 280px; }
+.phase-panel[hidden] { display: none; }
+.phase-panel > h3 { font-size: 19px; margin: 0 0 8px; }
+.phase-description { color: #586e62; font-size: 13px; line-height: 1.7; max-width: 760px; }
+.phase-panel .preparation-panel, .phase-panel > .codex-panel { margin-top: 18px; }
+.preparation-panel > .input-row { display: grid; grid-template-columns: minmax(140px, 1fr) auto auto; }
+.preparation-panel > .input-row > select { grid-column: 1 / -1; }
+.preparation-panel > .input-row > input { width: 100%; }
+.phase-technical { margin-top: 18px; }
+.placeholder-state { border: 1px dashed #bdcfc5; background: #f7f9f7; padding: 24px; border-radius: 6px; color: #61736a; font-size: 14px; }
+.run-technical { margin-top: 16px; padding: 18px 0; border-top: 1px solid #d6dfda; }
+.run-technical .artifact-section { margin-top: 16px; }
+.workspace-tools { margin: 0 28px 28px; border-top: 1px solid #d6dfda; padding-top: 18px; }
+.workspace-tools > summary { font-weight: 600; }
+.queue-panel, .comparison-panel { margin: 18px 0 0; padding: 18px; border: 1px solid #d6dfda; border-radius: 6px; background: #fff; }
+.comparison-panel .input-row { flex-wrap: wrap; align-items: center; }
+.comparison-panel select { width: auto; flex: 1; min-width: 140px; }
+button:focus-visible, input:focus-visible, summary:focus-visible, select:focus-visible { outline: 3px solid #d7ad53; outline-offset: 2px; }
+@media (max-width: 1050px) {
+  .app-shell { grid-template-columns: 270px minmax(0, 1fr); }
+  .statuses { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-toolbar { flex-wrap: wrap; }
+}
+@media (max-width: 700px) {
+  .app-shell { display: block; }
+  .sidebar { border-right: 0; border-bottom: 1px solid #d6dfda; }
+  .edition-browser { max-height: 300px; overflow: auto; }
+  main { padding: 20px 16px; }
+  .workspace-toolbar, #message { padding-left: 16px; padding-right: 16px; }
+  .workspace-tools { margin: 0 16px 20px; }
+  .preparation-panel > .input-row { grid-template-columns: minmax(100px, 1fr) auto; }
+  .preparation-panel > .input-row > button[type="submit"] { grid-column: 1 / -1; }
+}

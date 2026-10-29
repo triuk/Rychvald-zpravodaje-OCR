@@ -24,6 +24,7 @@ from app.application import WebUIApplication
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--browser', default='Chromium', choices=['Chromium', 'Chrome', 'Firefox'])
+    parser.add_argument('--headless', action='store_true', help='Use a real Chromium browser without a display.')
     parser.add_argument('--screenshot', type=Path, help='Optional screenshot via ImageMagick import (X11).')
     parser.add_argument('--profiles', action='store_true', help='Also exercise GUI import, profile inspection and two named runs.')
     parser.add_argument('--preparation', action='store_true', help='Also run real native OCR and interact with the GUI while active.')
@@ -50,7 +51,8 @@ def main():
         source.write_bytes(b'%PDF-1.4\ndifferent source\n%%EOF\n')
         cli('import', source)
         command = [str(args.ocr_python.absolute()), str(ROOT / 'tools/ocr_projects.py')] if args.ocr_python else None
-        app = WebUIApplication(registry, browser=args.browser, process_command=command)
+        app = WebUIApplication(registry, browser=args.browser, process_command=command,
+                               browser_parameters='--headless --no-sandbox --disable-gpu' if args.headless else None)
         failures = []
 
         def query(script):
@@ -88,6 +90,7 @@ def main():
                     ".map(x=>x.textContent),artifacts:document.querySelectorAll('.artifacts tbody tr').length});",
                     {'statuses': ['registered', 'idle', 'not_run', 'not_recorded'], 'artifacts': 5})
                 print('NATIVE_SELECTED ' + json.dumps(selected), flush=True)
+                exercise_layout()
                 if args.profiles:
                     exercise_profiles()
                 if args.preparation:
@@ -106,6 +109,30 @@ def main():
                 print('NATIVE_FAILURE ' + str(error), flush=True)
             finally:
                 webui.exit()
+
+        def exercise_layout():
+            expected_tabs = ['Příprava', 'Přepis', 'Pořadí a geometrie',
+                             'Sestavení a kontroly', 'Ruční revize', 'Výstupy']
+            wait_for("return JSON.stringify([...document.querySelectorAll('[role=tab]')].map(x=>x.textContent));",
+                     expected_tabs)
+            wait_for("return JSON.stringify(document.querySelectorAll('.edition details').length);", 1)
+            selected_id = query("return JSON.stringify(document.querySelector('#detail').dataset.runId);")
+            for index, name in enumerate(expected_tabs):
+                app.window.script(f"document.querySelectorAll('[role=tab]')[{index}].click(); return true;", timeout=2)
+                wait_for("return JSON.stringify(document.querySelector('[role=tab][aria-selected=true]').textContent);", name)
+                wait_for("return JSON.stringify(document.querySelectorAll('[role=tabpanel]:not([hidden])').length);", 1)
+            # Refresh must keep both the selected run and the view, without
+            # changing the stored validation/acceptance of old imported runs.
+            app.window.script("document.querySelector('#refresh').click(); return true;", timeout=2)
+            wait_for("return JSON.stringify({id:document.querySelector('#detail').dataset.runId,tab:document.querySelector('[role=tab][aria-selected=true]')?.textContent});",
+                     {'id': selected_id, 'tab': 'Výstupy'})
+            wait_for("return JSON.stringify([...document.querySelectorAll('.status-code')].map(x=>x.textContent));",
+                     ['registered', 'idle', 'not_run', 'not_recorded'])
+            # The project list remains beside the work area, and tabs are a
+            # horizontal row in the actual rendered browser, not a CSS snapshot.
+            wait_for("return JSON.stringify((()=>{const a=document.querySelector('.sidebar').getBoundingClientRect(), b=document.querySelector('#detail').getBoundingClientRect(), tabs=[...document.querySelectorAll('[role=tab]')].map(x=>x.getBoundingClientRect());return a.right<=b.left && tabs.every(x=>Math.abs(x.top-tabs[0].top)<2);})());", True)
+            app.window.script("document.querySelector('[role=tab]').click(); return true;", timeout=2)
+            print('NATIVE_LAYOUT ' + json.dumps({'tabs': expected_tabs, 'selected_run_preserved': selected_id}), flush=True)
 
         def exercise_profiles():
             incoming = root / 'new sources with spaces'
@@ -162,7 +189,7 @@ def main():
                 {'name': 'Vizuální čtení A', 'profile': '300 DPI · ces · gpt-6.1-sol · high',
                  'prompt': 'Přečti celý zdrojový sken.', 'history': 1})
             print('NATIVE_NAMED_RUNS ' + json.dumps({'named_runs': 2, 'first_preserved': preserved}, ensure_ascii=False), flush=True)
-            app.window.script("document.querySelector('#run-profile details').open=true;document.querySelector('#run-profile').scrollIntoView({block:'start'});return true;", timeout=2)
+            app.window.script("document.querySelector('.run-technical').open=true;document.querySelector('#run-profile details').open=true;document.querySelector('#run-profile').scrollIntoView({block:'start'});return true;", timeout=2)
             wait_for("return JSON.stringify(document.querySelector('#run-profile').getBoundingClientRect().top < window.innerHeight);", True)
 
         def exercise_preparation():
