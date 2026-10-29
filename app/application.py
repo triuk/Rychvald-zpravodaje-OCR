@@ -8,11 +8,13 @@ import threading
 from urllib.parse import urlparse
 
 from .service import Application
+from .path_picker import DesktopPathPicker
 
 
 class WebUIApplication:
-    def __init__(self, root, *, process_command=None, browser=None, browser_parameters=None, browser_profile=None):
-        self.api = Application(root, process_command=process_command)
+    def __init__(self, root, *, process_command=None, browser=None, browser_parameters=None, browser_profile=None, path_picker=None):
+        self.api = Application(root, process_command=process_command,
+                               path_picker=path_picker if path_picker is not None else DesktopPathPicker())
         self.window = None
         self.browser = browser
         self.browser_parameters = browser_parameters
