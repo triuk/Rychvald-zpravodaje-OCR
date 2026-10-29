@@ -272,6 +272,7 @@ with fitz.open() as document:
             app.window.script("const choice=document.querySelector('#edition-choice');choice.selectedIndex=choice.options.length-1;return true;", timeout=2)
             submit('#run-form', {'#run-name': 'Živá příprava malého skenu'})
             wait_for("return JSON.stringify(document.querySelector('.detail-title').textContent);", 'Živá příprava malého skenu')
+            app.window.script("document.querySelector('#tab-preparation').click();return true;", timeout=2)
             submit('#preparation-form', {})
             wait_for("return JSON.stringify(document.querySelector('#preparation-state')?.dataset.state === 'running' && document.querySelector('#preparation-state').dataset.activeSteps.includes('ocr:page:'));", True)
             app.window.script("document.querySelector('#refresh').click();return true;", timeout=2)
@@ -286,6 +287,9 @@ with fitz.open() as document:
             wait_for("return JSON.stringify(document.querySelector('#preparation-state')?.dataset.state);", 'completed', timeout=45)
             completed = query("return JSON.stringify({state:document.querySelector('#preparation-state').dataset.state,counts:document.querySelector('#preparation-counts').textContent,attempt:document.querySelector('#preparation-state').dataset.attemptId});")
             print('NATIVE_PREPARED ' + json.dumps(completed, ensure_ascii=False), flush=True)
+            app.window.script("document.querySelector('[data-local-phase=preparation] > details').open=true;return true;", timeout=2)
+            wait_for("return JSON.stringify([...document.querySelectorAll('[data-local-phase=preparation] .local-step summary')].some(item=>item.textContent.includes('tesseract')));", True)
+            print('NATIVE_LOCAL_HISTORY ' + json.dumps(query("return JSON.stringify({activity:document.querySelector('[data-local-phase=preparation] .local-activity').textContent,steps:document.querySelectorAll('[data-local-phase=preparation] .local-step').length});"), ensure_ascii=False), flush=True)
             first_attempt = completed['attempt']
             submit('#preparation-form', {})
             wait_for("return JSON.stringify(document.querySelector('#preparation-state')?.dataset.state === 'completed' && document.querySelector('#preparation-state').dataset.attemptId !== " + json.dumps(first_attempt) + ');', True)
@@ -293,6 +297,7 @@ with fitz.open() as document:
             if '8 rastrů, 16 úloh OCR' not in cached:
                 raise AssertionError('GUI did not show the actual verified cache counts: ' + cached)
             print('NATIVE_CACHE ' + json.dumps({'counts': cached}, ensure_ascii=False), flush=True)
+            wait_for("return JSON.stringify(document.querySelector('[data-local-phase=preparation]').textContent.includes('Ověřená místní cache'));", True)
             if args.screenshot:
                 app.window.script("document.querySelector('.preparation-panel').scrollIntoView({block:'center'});return true;", timeout=2)
                 time.sleep(.15)

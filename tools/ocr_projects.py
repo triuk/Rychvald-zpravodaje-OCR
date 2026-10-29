@@ -475,10 +475,13 @@ def build_parser():
 def main(argv=None):
     operation = 'request'
     exit_code = 0
+    local_trace = None
     try:
         args = build_parser().parse_args(argv)
         operation = args.operation
         registry = ProjectRegistry(args.root)
+        from ocr_local_history import NativeTrace
+        local_trace = NativeTrace.begin(registry, args)
         if args.operation == 'import':
             if args.source.is_dir() and (args.run_name is not None or args.profile is not None or args.profile_sha256 is not None or args.source_sha256 is not None):
                 raise ProjectError('invalid_arguments', 'Create a named run from one selected edition, not a source directory.')
@@ -640,8 +643,12 @@ def main(argv=None):
             record = registry.get(args.project_id)
             result = response(args.operation, **record)
         emit_response(result)
+        if local_trace is not None:
+            local_trace.finish(result=result)
         return exit_code
     except ProjectError as error:
+        if local_trace is not None:
+            local_trace.finish(error={'code': error.code, 'message': str(error)})
         record = {}
         if operation in ('prepare', 'resume', 'query', 'patch', 'export', 'validate'):
             try:
@@ -651,8 +658,13 @@ def main(argv=None):
         emit_response(response(operation, **record, status='failed', error={'code': error.code, 'message': str(error)}))
         return 1
     except OSError:
+        if local_trace is not None:
+            local_trace.finish(error={'code': 'io_error', 'message': 'Project filesystem operation failed.'})
         emit_response(response(operation, status='failed', error={'code': 'io_error', 'message': 'Project filesystem operation failed.'}))
         return 1
+    finally:
+        if local_trace is not None and not local_trace.closed:
+            local_trace.finish(error={'code': 'native_interrupted', 'message': 'Native operation ended without a terminal result.'})
 
 
 if __name__ == '__main__':

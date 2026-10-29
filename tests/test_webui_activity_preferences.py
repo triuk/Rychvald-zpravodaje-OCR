@@ -190,9 +190,13 @@ class ActivityWorkflowTests(unittest.TestCase):
                 self.assertEqual(params['model'], self.PAIRS[activity]['model'])
                 self.assertEqual(params['effort'], self.PAIRS[activity]['reasoning_effort'])
         self.assertEqual(activities, set(self.PAIRS))
-        metrics = self.app.dispatch('run_metrics', {'run_id': identifier})
-        self.assertTrue(metrics['ok'], metrics)
-        mixed = next(step for step in metrics['data']['steps'] if step.get('operation') == 'corrections')
+        steps, offset = [], 0
+        while offset is not None:
+            metrics = self.app.dispatch('run_metrics', {'run_id': identifier, 'offset': offset, 'limit': 200})
+            self.assertTrue(metrics['ok'], metrics)
+            steps.extend(metrics['data']['steps'])
+            offset = metrics['data']['step_next_offset']
+        mixed = next(step for step in steps if step.get('operation') == 'corrections')
         self.assertIsNone(mixed['model'])
         self.assertIsNone(mixed['cost']['usd'])
         self.assertEqual({item['model'] for item in mixed['model_settings']}, {'repair-model', 'geometry-model'})

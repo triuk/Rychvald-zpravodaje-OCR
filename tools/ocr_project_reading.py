@@ -117,6 +117,8 @@ def publish_reading(registry, project_id, proposal_path, *, check_only=False):
         atomic_json(work / 'reading-publication.json', {'schema_version': 1,
                     'review_sha256': source_hash(review_path), 'proposal_sha256': source_hash(proposal_path),
                     'coverage': coverage})
+        from ocr_phase_snapshot import preserve_reading
+        preserve_reading(work, record['project'], packet, proposal_path)
         record['project'].update(phase='visually_read', operation_state='completed', validation='not_run',
                                  review_sha256=source_hash(review_path))
         record['counts'].update(summary)
