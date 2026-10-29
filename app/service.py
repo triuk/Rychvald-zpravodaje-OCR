@@ -141,6 +141,24 @@ class Application:
         self._manual_thread = None
 
     def dispatch(self, operation, payload=None):
+        if operation == 'phase_preview':
+            # Capture selection under the application lock; rendering and large
+            # artifact reads must not block controls or background progress.
+            try:
+                from .phase_preview import preview, PreviewError
+                if not isinstance(payload, dict):
+                    raise ApplicationError('invalid_request', 'Preview payload must be an object.')
+                with self._lock:
+                    root = self.root
+                    run = self.select_run(payload.get('run_id'), notify=False)
+                data = preview(root, run, payload)
+                return {'ok': True, 'data': data, 'error': None, 'event_cursor': self._sequence}
+            except (ApplicationError, PreviewError) as error:
+                return {'ok': False, 'data': None, 'error': {'code': error.code, 'message': str(error)},
+                    'event_cursor': self._sequence}
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                return {'ok': False, 'data': None, 'error': {'code': 'preview_invalid', 'message': str(error)},
+                    'event_cursor': self._sequence}
         with self._lock:
             manual_lease = None
             try:
