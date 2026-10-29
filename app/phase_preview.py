@@ -100,6 +100,9 @@ def phase_content(work, source_sha256, phase, number, artifacts, source_page=Non
     """
     if phase == 'preparation':
         return preparation(work, source_sha256, number, artifacts, source_page)
+    if phase == 'reading':
+        from .reading_preview import reading
+        return reading(work, source_sha256, number, artifacts, source_page)
     return {'state': 'historical_missing', 'message': 'Zachovaný podklad této fáze zatím není dostupný.', 'overlays': []}
 
 
@@ -129,7 +132,8 @@ def preview(root, run, payload):
         page = document[number - 1]
         source_page = {'rect': list(page.rect), 'cropbox': list(page.cropbox),
             'mediabox': list(page.mediabox), 'rotation': page.rotation}
-        scale = min(120 / 72, 2000 / page.rect.width, 2400 / page.rect.height)
+        scale = min(max(120 / 72, 600 / max(page.rect.width, page.rect.height)),
+            2000 / page.rect.width, 2400 / page.rect.height)
         image = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
         content = image.tobytes('png')
         result['image'] = {'data_url': 'data:image/png;base64,' + base64.b64encode(content).decode('ascii'),
@@ -138,6 +142,8 @@ def preview(root, run, payload):
             'cropbox': list(page.cropbox)}
     try:
         result.update(phase_content(work, edition_id, phase, number, result['artifacts'], source_page))
+        if result.get('snapshot_binding', {}).get('run_id', identity['run_id']) != identity['run_id']:
+            raise PreviewError('Zachovaný podklad patří k jinému průchodu OCR.')
     except (OSError, ValueError, KeyError, TypeError) as error:
         result.update(state='artifact_invalid', message=f'Podklad fáze nelze ověřit: {error}', overlays=[])
     # If a worker replaced a file during this read, do not publish mixed states.
