@@ -2,6 +2,7 @@
 import copy
 import json
 
+from tools.ocr_profiles import load_profile, effective_ai_settings
 from .jobs import JobError, sha
 from .visual_continuation import content_hash
 
@@ -22,7 +23,9 @@ def restore_preparation(job, stage, prompt, schema, work, images, directory):
             row['cycle_id'] == continuation['cycle_id'] and row['continuation_id'] not in submitted]
         if len(frontier) != 1 or frontier[0] != continuation:
             raise ValueError('Continuation preparation has no unique active reservation.')
-        expected = {'model': 'gpt-6.1-sol', 'effort': 'high', 'outputSchema': schema,
+        settings = effective_ai_settings(load_profile(work / 'application/profile.json',
+            expected_sha256=job['manifest']['profile_sha256'])['profile'], stage)
+        expected = {'model': settings['model'], 'effort': settings['reasoning_effort'], 'outputSchema': schema,
             'input': [{'type': 'text', 'text': prompt}] + [
                 {'type': 'localImage', 'path': str((work / image['path']).resolve())} for image in images]}
         if (continuation['stage'] != stage or continuation['directory'] != str(directory.relative_to(job['root'])) or

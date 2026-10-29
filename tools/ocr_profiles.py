@@ -71,3 +71,9 @@ def load_profile(path, *, expected_sha256=None):
     except (ValueError, UnicodeError, TypeError, KeyError, ProfileError) as error:
         raise ProfileError('profile_invalid', f'Invalid OCR profile: {error}') from None
     return {'path': str(path), 'sha256': digest, 'text': text, 'profile': profile}
+
+
+def effective_ai_settings(profile, activity=None):
+    """Resolve the exact model pair from an already frozen run profile."""
+    parameters = profile['parameters']
+    return {key: parameters[key] for key in ('model', 'reasoning_effort')}

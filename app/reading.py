@@ -9,7 +9,7 @@ import threading
 import time
 
 from .context import OwnedContextJobs
-from .codex import MODEL, EFFORT, RpcProcess, now, process_identity, scrub
+from .codex import RpcProcess, now, process_identity, scrub
 from .context_runtime import verify_resources, configuration, command, verify_hooks
 from .jobs import JobError, atomic_json, sha
 from .reading_contract import SOURCE_INSTRUCTIONS, ACCOUNTING_INSTRUCTIONS, SOURCE_SCHEMA, PROPOSAL_SCHEMA, TOOLS
@@ -53,6 +53,12 @@ def verify_proposal(packet, source, source_turn, proposal, tools):
 
 def verify_trace(value, packet, protocol):
     """Re-derive publication evidence from original JSON-RPC, not saved flags."""
+    from tools.ocr_profiles import load_profile, effective_ai_settings
+    profile = load_profile(protocol.parents[3] / 'application/profile.json', expected_sha256=packet['profile_sha256'])['profile']
+    requested = effective_ai_settings(profile, 'visual_reading')
+    model, effort = requested['model'], requested['reasoning_effort']
+    if value.get('requested') != requested:
+        raise JobError('reading_profile_changed', 'Saved reading configuration differs from the frozen profile.')
     frames = [json.loads(line)['message'] for line in protocol.read_text().splitlines()]
     reused = value.get('reused_source')
     if reused:
@@ -84,13 +90,13 @@ def verify_trace(value, packet, protocol):
             raise JobError('reading_evidence_mismatch', 'Original completed final assistant JSON differs from preserved reading evidence.')
     thread_results = [m['result'] for m in frames if isinstance(m.get('result'), dict) and
         isinstance(m['result'].get('thread'), dict) and m['result']['thread'].get('id') == value['thread_id']]
-    if not thread_results or thread_results[-1].get('model') != MODEL or thread_results[-1].get('reasoningEffort') != EFFORT:
-        raise JobError('model_configuration_mismatch', 'Original thread response did not confirm the requested model/high.')
+    if not thread_results or thread_results[-1].get('model') != model or thread_results[-1].get('reasoningEffort') != effort:
+        raise JobError('model_configuration_mismatch', 'Original thread response did not confirm the requested model/reasoning.')
     images = [item['path'] for item in requests[0]['input'] if item['type'] == 'localImage']
     if images != [page['path'] for page in packet['pages']] or any(sha(Path(p['path'])) != p['sha256'] for p in packet['pages']):
         raise JobError('reading_source_changed', 'Every original source raster must be attached unchanged to the first turn.')
-    if any(request.get('model') != MODEL or request.get('effort') != EFFORT for request in requests):
-        raise JobError('model_configuration_mismatch', 'Original reading requests did not use the exact model/high combination.')
+    if any(request.get('model') != model or request.get('effort') != effort for request in requests):
+        raise JobError('model_configuration_mismatch', 'Original reading requests did not use the exact frozen model/reasoning combination.')
     source = json.loads(value['turns'][0]['answer'])
     proposal = json.loads(value['turns'][1]['answer'])
     verify_source(packet, source)
@@ -142,6 +148,7 @@ class ReadingJobs(OwnedContextJobs):
 
     def _run(self, job):
         value = job['manifest']
+        model, effort = value['requested']['model'], value['requested']['reasoning_effort']
         started = time.monotonic()
         trace_lock = threading.Lock()
         value.update(reading_complete=False, turns=[], completed_items=[], terminal_turns={}, hook_events=[],
@@ -260,7 +267,7 @@ class ReadingJobs(OwnedContextJobs):
         def turn(stage, prompt, schema, images=None):
             inputs = [{'type': 'text', 'text': prompt}]
             inputs += [{'type': 'localImage', 'path': page['path']} for page in images or []]
-            params = {'threadId': value['thread_id'], 'model': MODEL, 'effort': EFFORT,
+            params = {'threadId': value['thread_id'], 'model': model, 'effort': effort,
                 'input': inputs, 'outputSchema': schema}
             value.setdefault('application_requests', []).append({'stage': stage, 'params': params})
             atomic_json(job['directory'] / 'request.json', {'requests': value['application_requests'],
@@ -327,7 +334,7 @@ class ReadingJobs(OwnedContextJobs):
             cursor, found, cursors = None, None, set()
             while True:
                 catalog = rpc.request('model/list', {'cursor': cursor, 'limit': 100}, notify)
-                found = next((item for item in catalog['data'] if item.get('model') == MODEL), found)
+                found = next((item for item in catalog['data'] if item.get('model') == model), found)
                 cursor = catalog.get('nextCursor')
                 if cursor is None:
                     break
@@ -335,8 +342,8 @@ class ReadingJobs(OwnedContextJobs):
                     raise JobError('codex_protocol_invalid', 'Model catalog cursor did not advance.')
                 cursors.add(cursor)
             if found is None or 'image' not in found.get('inputModalities', []) or not any(
-                    effort.get('reasoningEffort') == EFFORT for effort in found.get('supportedReasoningEfforts', [])):
-                raise JobError('model_capability_unavailable', 'The exact model/high/image combination is unavailable.')
+                    item.get('reasoningEffort') == effort for item in found.get('supportedReasoningEfforts', [])):
+                raise JobError('model_capability_unavailable', 'The exact selected model/reasoning/image combination is unavailable.')
             previous = metadata.get('previous_reading_attempt_id')
             reused_source = None
             if previous:
@@ -353,8 +360,8 @@ class ReadingJobs(OwnedContextJobs):
                     protocol = root / original['artifacts']['protocol']
                     value['reused_source'] = {'attempt': {'path': str(original_path), 'sha256': sha(original_path)},
                         'protocol': {'path': str(protocol), 'sha256': sha(protocol)}}
-            thread_params = {'model': MODEL, 'cwd': str(workspace),
-                'config': {'model_reasoning_effort': EFFORT}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
+            thread_params = {'model': model, 'cwd': str(workspace),
+                'config': {'model_reasoning_effort': effort}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
                 'runtimeWorkspaceRoots': [str(workspace), str(storage)], 'dynamicTools': TOOLS,
                 'developerInstructions': instructions}
             if reused_source:
@@ -362,8 +369,8 @@ class ReadingJobs(OwnedContextJobs):
             thread = rpc.request('thread/resume' if reused_source else 'thread/start', thread_params, notify)
             value['thread_id'] = thread['thread']['id']
             value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort'), 'source': 'thread/start'}
-            if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
-                raise JobError('model_configuration_mismatch', 'Reading thread did not confirm the exact requested model/high.')
+            if thread.get('model') != model or thread.get('reasoningEffort') != effort:
+                raise JobError('model_configuration_mismatch', 'Reading thread did not confirm the exact requested selected model/reasoning.')
             if reused_source:
                 if value['thread_id'] != reused_source['thread_id']:
                     raise JobError('codex_identity_mismatch', 'Resumed a different source thread.')

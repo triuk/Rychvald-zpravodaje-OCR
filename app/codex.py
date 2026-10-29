@@ -18,6 +18,7 @@ import time
 import uuid
 from urllib.parse import urlparse
 
+from tools.ocr_profiles import effective_ai_settings
 from .jobs import JobError, atomic_json, sha, group_members, stop_owned_group
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -203,8 +204,6 @@ class OwnedJobs:
             if self._active is not None:
                 raise JobError('operation_active', 'A Codex diagnostic is already active.')
             parameters = run['run']['profile']['parameters']
-            if parameters['model'] != MODEL or parameters['reasoning_effort'] != EFFORT:
-                raise JobError('model_configuration_unsupported', 'Diagnostic requires exactly gpt-6.1-sol with high effort.')
             work = root / run['artifacts']['workspace']['path']
             source, suffix = None, None
             if operation == 'vision_diagnostic':
@@ -232,7 +231,7 @@ class OwnedJobs:
                          [('protocol', 'protocol.jsonl'), ('stderr', 'stderr.log'), ('request', 'request.json'), ('attempt', 'attempt.json')]}
             manifest = {'schema_version': 1, 'operation': operation, 'attempt_id': attempt_id,
                         'run_id': run['project']['run_id'], 'root': str(root), 'state': 'starting',
-                        'started_at': now(), 'ended_at': None, 'requested': {'model': MODEL, 'reasoning_effort': EFFORT},
+                        'started_at': now(), 'ended_at': None, 'requested': effective_ai_settings(run['run']['profile'], operation),
                         'effective': None, 'thread_id': None, 'turn_id': None, 'answer': None,
                         'profile_sha256': run['run']['profile_sha256'], 'image': image_record,
                         'prompt': PROMPT if source is not None else None, 'runtime': self.runtime,
@@ -387,6 +386,7 @@ class CodexJobs(OwnedJobs):
     """Account/model diagnostic execution over the shared owned lifecycle."""
     def _run(self, job):
         value = job['manifest']
+        model, effort = value['requested']['model'], value['requested']['reasoning_effort']
         started = time.monotonic()
         trace_lock = threading.Lock()
 
@@ -480,7 +480,7 @@ class CodexJobs(OwnedJobs):
                 cursor, found, cursors = None, None, set()
                 while True:
                     catalog = rpc.request('model/list', {'cursor': cursor, 'limit': 100}, notify)
-                    found = next((item for item in catalog['data'] if item.get('model') == MODEL), found)
+                    found = next((item for item in catalog['data'] if item.get('model') == model), found)
                     cursor = catalog.get('nextCursor')
                     if cursor is None:
                         break
@@ -488,20 +488,20 @@ class CodexJobs(OwnedJobs):
                         raise JobError('codex_protocol_invalid', 'Codex model catalog did not advance its cursor.')
                     cursors.add(cursor)
                 if found is None or 'image' not in found.get('inputModalities', []) or not any(
-                        item.get('reasoningEffort') == EFFORT for item in found.get('supportedReasoningEfforts', [])):
-                    raise JobError('model_capability_unavailable', 'Codex does not explicitly advertise gpt-6.1-sol, high and image input.')
+                        item.get('reasoningEffort') == effort for item in found.get('supportedReasoningEfforts', [])):
+                    raise JobError('model_capability_unavailable', 'Codex does not explicitly advertise the selected model, reasoning and image input.')
                 value['declared_model'] = found
-                thread = rpc.request('thread/start', {'model': MODEL, 'cwd': str(job['workspace']),
-                    'config': {'model_reasoning_effort': EFFORT}, 'approvalPolicy': 'never', 'sandbox': 'read-only',
+                thread = rpc.request('thread/start', {'model': model, 'cwd': str(job['workspace']),
+                    'config': {'model_reasoning_effort': effort}, 'approvalPolicy': 'never', 'sandbox': 'read-only',
                     'developerInstructions': 'Read only the attached diagnostic image. Do not invoke tools or inspect text files.'}, notify)
                 if value['thread_id'] is not None and value['thread_id'] != thread['thread']['id']:
                     raise JobError('codex_identity_mismatch', 'Thread response differs from the observed thread.')
                 value['thread_id'] = thread['thread']['id']
                 value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort'),
                                       'source': 'thread/start'}
-                if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
-                    raise JobError('model_configuration_mismatch', 'Codex thread did not confirm the exact requested model and high effort.')
-                params = {'threadId': value['thread_id'], 'model': MODEL, 'effort': EFFORT,
+                if thread.get('model') != model or thread.get('reasoningEffort') != effort:
+                    raise JobError('model_configuration_mismatch', 'Codex thread did not confirm the exact requested model and reasoning.')
+                params = {'threadId': value['thread_id'], 'model': model, 'effort': effort,
                           'input': [{'type': 'text', 'text': PROMPT}, {'type': 'localImage',
                                      'path': str(Path(value['root']) / value['image']['path'])}]}
                 atomic_json(job['directory'] / 'request.json', {'thread': thread, 'turn': params,

@@ -5,14 +5,18 @@ import os
 import threading
 import time
 
-from .codex import RpcProcess, MODEL, EFFORT, now, process_identity, scrub
+from .codex import RpcProcess, now, process_identity, scrub
 from .context_runtime import verify_resources, configuration, command, verify_hooks
 from .jobs import JobError, atomic_json, sha
 
 
 def examine(manager, job, stage, prompt, schema, work, images, *, instructions=None, directory=None):
     """No automatic retries; every accepted turn remains durable even on local failure."""
+    from tools.ocr_profiles import load_profile, effective_ai_settings
     value = job['manifest']
+    profile = load_profile(work / 'application/profile.json', expected_sha256=value['profile_sha256'])['profile']
+    requested = effective_ai_settings(profile, stage)
+    model, effort = requested['model'], requested['reasoning_effort']
     directory = directory or job['directory'] / stage
     continuation = job.get('current_continuation')
     preparation = {}
@@ -106,8 +110,8 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
         account = rpc.request('account/read', {'refreshToken': False}, notify)
         if account.get('account', {}).get('type') != 'chatgpt':
             raise JobError('chatgpt_account_required', 'A managed ChatGPT account is required.')
-        thread_params = {'model': MODEL, 'cwd': str(workspace),
-            'config': {'model_reasoning_effort': EFFORT}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
+        thread_params = {'model': model, 'cwd': str(workspace),
+            'config': {'model_reasoning_effort': effort}, 'approvalPolicy': 'never', 'sandbox': 'workspace-write',
             'runtimeWorkspaceRoots': [str(workspace), str(storage)], 'developerInstructions': instructions}
         if preparation:
             thread_params['threadId'] = preparation['params']['threadId']
@@ -116,11 +120,11 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
             raise JobError('codex_identity_mismatch', 'Native provider did not resume the exact unsubmitted thread.')
         value['thread_id'] = thread['thread']['id']
         value['effective'] = {'model': thread.get('model'), 'reasoning_effort': thread.get('reasoningEffort')}
-        if thread.get('model') != MODEL or thread.get('reasoningEffort') != EFFORT:
-            raise JobError('model_configuration_mismatch', 'Exact model/high required for geometry examination.')
+        if thread.get('model') != model or thread.get('reasoningEffort') != effort:
+            raise JobError('model_configuration_mismatch', 'Visual examination must confirm the exact selected model and reasoning.')
         inputs = [{'type': 'text', 'text': prompt}] + [
             {'type': 'localImage', 'path': str((work / image['path']).resolve())} for image in images]
-        params = {'threadId': value['thread_id'], 'model': MODEL, 'effort': EFFORT, 'input': inputs, 'outputSchema': schema}
+        params = {'threadId': value['thread_id'], 'model': model, 'effort': effort, 'input': inputs, 'outputSchema': schema}
         value.setdefault('application_requests', []).append({'stage': stage, 'params': params})
         atomic_json(job['directory']/'request.json', {'requests': value['application_requests']})
         if preparation:
