@@ -53,14 +53,16 @@ class ProjectExportTests(unittest.TestCase):
 
     def command(self, *arguments, expected=0):
         result = subprocess.run([sys.executable, str(CLI), '--root', str(self.root),
-                                 '--json', *map(str, arguments)], capture_output=True)
+                                 '--json', *map(str, arguments)], capture_output=True,
+                                env={**os.environ, **getattr(self, 'environment_overrides', {})})
         self.assertEqual(result.returncode, expected, result.stdout.decode() + result.stderr.decode())
         self.assertLessEqual(len(result.stdout), 4096)
         return json.loads(result.stdout.decode('utf-8'))
 
     def workflow(self, operation, *arguments):
         result = subprocess.run([sys.executable, str(ROOT / 'tools/ocr_workflow.py'), operation,
-                                 '--work', str(self.work), *map(str, arguments)], capture_output=True, text=True)
+                                 '--work', str(self.work), *map(str, arguments)], capture_output=True, text=True,
+                                env={**os.environ, **getattr(self, 'environment_overrides', {})})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def put(self, name, value):
@@ -117,6 +119,15 @@ class ProjectExportTests(unittest.TestCase):
         self.assertTrue(exported['tool']['version'])
         self.assertIn(str(self.identifier), exported['command'])
         self.assertTrue(exported['outputs'])
+        resources = exported['resources']
+        self.assertEqual(resources['scope']['kind'], 'process_tree')
+        self.assertTrue(resources['scope']['includes_descendants'])
+        self.assertEqual(resources['cpu_unit'], 's')
+        self.assertGreaterEqual(resources['cpu_seconds'], 0)
+        self.assertEqual(resources['ram_unit'], 'bytes')
+        self.assertGreater(resources['peak_rss_bytes'], 0)
+        self.assertEqual(resources['ram_status'], 'sampled_lower_bound')
+        self.assertGreater(resources['sample_count'], 0)
         filtered = app.dispatch('run_metrics', {'run_id': self.identifier, 'kind': 'local',
                                 'phase': 'assembly', 'newest_first': True, 'limit': 2})
         self.assertTrue(filtered['ok'], filtered)
@@ -133,6 +144,8 @@ class ProjectExportTests(unittest.TestCase):
         detail = app.dispatch('step_detail', {'run_id': self.identifier, 'step_id': tool['step_id']})
         self.assertTrue(detail['ok'], detail)
         self.assertEqual(detail['data']['command'], tool['command'])
+        self.assertGreaterEqual(detail['data']['resources']['cpu_seconds'], 0)
+        self.assertEqual(detail['data']['resources']['cpu_status'], 'observed_wait4')
         identities = {step['step_id'] for step in steps}
         app.close()
         restored = Application(self.root)
@@ -203,6 +216,112 @@ class ProjectExportTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(Path(product['path']).read_bytes()).hexdigest(), product['sha256'])
         self.assertFalse(any(s.get('scope') == 'tool' and s['tool']['name'] == 'tesseract' for s in steps))
         self.assertTrue(all(s['tokens']['status'] == 'not_applicable' for s in steps))
+
+    def test_local_resources_include_descendants_failure_interruption_and_restart(self):
+        """A selected system-tool fixture exercises the same native/GUI seam."""
+        from native_fixtures import environment_manifest
+        sys.path.insert(0, str(ROOT))
+        from app.service import Application
+        regions, samples = self.get('regions.json'), self.get('samples.json')
+        manifest = environment_manifest(ROOT)
+        original = manifest['programs']['qpdf']['path']
+        mode = self.directory / 'resource-mode.txt'
+        mode.write_text('normal')
+        helper = ROOT / 'tests/resource_descendants_fixture.py'
+        wrapper = self.directory / 'qpdf-resource-fixture'
+        wrapper.write_text(f'''#!{sys.executable}
+import os, subprocess, sys
+from pathlib import Path
+real = {original!r}
+if '--check' in sys.argv:
+    mode = Path({str(mode)!r}).read_text()
+    subprocess.run([sys.executable, {str(helper)!r}, 'child', mode, {str(mode.with_suffix('.gate'))!r}], check=True)
+    if mode == 'fail':
+        print('Controlled qpdf failure after measured descendants', file=sys.stderr)
+        raise SystemExit(7)
+os.execv(real, [real, *sys.argv[1:]])
+''')
+        wrapper.chmod(0o755)
+        manifest['build_id'] = 'explicit-resource-descendant-integration-fixture'
+        manifest['programs']['qpdf'].update(path=str(wrapper), sha256=hashlib.sha256(wrapper.read_bytes()).hexdigest(),
+                                          source='controlled native tool fixture, not a release resource')
+        environment = self.directory / 'resource-environment.json'
+        environment.write_text(json.dumps(manifest))
+        self.environment_overrides = {'OCR_ENVIRONMENT': str(environment)}
+        profile = ROOT / 'profiles/faithful-reading.json'
+        imported = self.command('import', self.source, '--new-run', '--run-name', 'Měřené místní prostředky',
+                                '--profile', profile, '--profile-sha256', hashlib.sha256(profile.read_bytes()).hexdigest())
+        self.identifier = imported['project']['run_id']
+        self.work = self.root / imported['artifacts']['workspace']
+        self.command('prepare', self.identifier)
+        self.put('regions.json', regions)
+        self.workflow('regions', '--regions', self.work / 'regions.json')
+        self.workflow('draft', '--review', self.work / 'review.json')
+        line = {**self.get('review.json')['lines'][0], 'text': 'OCR 11', 'text_status': 'visually_confirmed',
+                'decision_basis': 'Controlled synthetic source raster OCR 11', 'selection_region': [20, 60, 500, 155]}
+        self.command('patch', self.identifier, '--patch', self.put('confirm.json', {'lines': [{'line': line}]}))
+        self.put('samples.json', samples)
+        self.command('export', self.identifier)
+        app = Application(self.root)
+        self.addCleanup(app.close)
+
+        def tools():
+            response = app.dispatch('run_metrics', {'run_id': self.identifier, 'kind': 'local',
+                                   'phase': 'assembly', 'newest_first': True, 'limit': 200})
+            self.assertTrue(response['ok'], response)
+            return [s for s in response['data']['steps'] if s.get('scope') == 'tool' and
+                    s.get('tool', {}).get('name') == 'qpdf' and '--check' in s['command']]
+
+        measured = tools()[0]
+        resource = measured['resources']
+        self.assertEqual(measured['state'], 'completed')
+        self.assertEqual(resource['cpu_status'], 'observed_wait4')
+        self.assertGreater(resource['cpu_seconds'], 0)
+        self.assertGreaterEqual(resource['max_observed_processes'], 3)
+        self.assertGreater(resource['peak_rss_bytes'], 12 * 1024 * 1024)
+        self.assertEqual(resource['scope']['memory'], 'sum_of_resident_sets_within_one_scan')
+        self.assertEqual(resource['ram_status'], 'sampled_lower_bound')
+        self.assertGreater(resource['sample_count'], 1)
+        mode.write_text('staggered')
+        self.command('export', self.identifier)
+        staggered = tools()[0]['resources']
+        self.assertGreaterEqual(staggered['max_observed_processes'], 3)
+        self.assertGreater(staggered['peak_rss_bytes'], 128 * 1024 * 1024)
+        self.assertLess(staggered['peak_rss_bytes'], 256 * 1024 * 1024,
+                        'The two non-overlapping 128 MiB allocations must not be added as a simultaneous peak.')
+        mode.write_text('fail')
+        self.command('export', self.identifier)  # construction succeeds; the actual qpdf check fails
+        failed = tools()[0]
+        self.assertEqual(failed['state'], 'failed')
+        self.assertEqual(failed['resources']['termination'], 'failed')
+        self.assertGreaterEqual(failed['resources']['max_observed_processes'], 3)
+        mode.write_text('hold')
+        before = {step['step_id'] for step in tools()}
+        child = subprocess.Popen([sys.executable, str(CLI), '--root', str(self.root), '--json', 'export', self.identifier],
+                                 env={**os.environ, **self.environment_overrides},
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        self.addCleanup(lambda: child.poll() is None and os.killpg(child.pid, signal.SIGKILL))
+        deadline, running = time.monotonic() + 20, None
+        while time.monotonic() < deadline and child.poll() is None:
+            running = next((s for s in tools() if s['step_id'] not in before and s['state'] == 'running' and
+                            s.get('resources') and s['resources']['max_observed_processes'] >= 3), None)
+            if running:
+                break
+            time.sleep(.05)
+        self.assertIsNotNone(running, 'A durable resource sample must include the active child/grandchild.')
+        os.killpg(child.pid, signal.SIGKILL)
+        child.communicate(timeout=5)
+        interrupted = next(step for step in tools() if step['step_id'] == running['step_id'])
+        self.assertEqual(interrupted['state'], 'interrupted')
+        self.assertEqual(interrupted['resources']['status'], 'partial')
+        self.assertEqual(interrupted['resources']['termination'], 'interrupted')
+        self.assertGreater(interrupted['resources']['peak_rss_bytes'], 0)
+        self.assertGreaterEqual(interrupted['resources']['cpu_seconds'], 0)
+        original_resources = {step['step_id']: step['resources'] for step in tools()}
+        app.close()
+        app = Application(self.root)
+        self.addCleanup(app.close)
+        self.assertEqual({step['step_id']: step['resources'] for step in tools()}, original_resources)
 
     def test_output_review_rejects_template_without_original_turn_and_preserves_reports(self):
         self.command('export', self.identifier)

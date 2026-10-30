@@ -120,6 +120,9 @@ class NativeTrace:
         trace.emit('started', 'root', scope='native_operation', operation=args.operation,
                    tool=manifest['tool'], command=command, parameters=manifest['parameters'],
                    inputs=command_files(command), parent_step_id=None)
+        from ocr_resources import ProcessResources
+        trace.resources = ProcessResources(os.getpid(), baseline=True,
+            publish=lambda value: trace.emit('resources', 'root', resources=value)).start()
         return trace
 
     def emit(self, event_type, step_id, **data):
@@ -135,6 +138,12 @@ class NativeTrace:
 
     def parent(self):
         return getattr(self.local, 'parent', os.environ.get(PARENT_ENV, 'root'))
+
+    def run_process(self, command, *, env):
+        from ocr_resources import run_measured
+        step = self.parent()
+        return run_measured(command, env=env,
+            publish=lambda value: self.emit('resources', step, resources=value))
 
     @contextmanager
     def span(self, *, operation, tool, command=None, inputs=None, outputs=None, scope='tool'):
@@ -164,12 +173,17 @@ class NativeTrace:
             parents = getattr(self.local, 'progress_parents', {})
             parents[step] = previous
             self.local.progress_parents = parents
+            starts = getattr(self.local, 'progress_cpu_starts', {})
+            starts[step] = time.thread_time()
+            self.local.progress_cpu_starts = starts
             self.local.parent = step
             self.emit('started', step, scope='unit', parent_step_id=previous,
                       operation=data.get('unit_kind', identifier.split(':')[0]),
                       tool=data.get('tool', {'name': 'ocr_projects', 'version': platform.python_version()}),
                       command=data.get('command', []), inputs=data.get('inputs', []), parameters=data)
         elif kind in ('step_completed', 'unit_completed', 'unit_cached', 'step_failed'):
+            from ocr_resources import thread_resources
+            started = getattr(self.local, 'progress_cpu_starts', {}).pop(step, None)
             self.local.parent = getattr(self.local, 'progress_parents', {}).pop(step, 'root')
             outputs = data.get('outputs', [])
             if isinstance(outputs, dict):
@@ -178,7 +192,9 @@ class NativeTrace:
             self.emit({'unit_cached': 'cached', 'step_failed': 'failed'}.get(kind, 'completed'), step,
                       origin=data.get('origin', 'same_run_cache' if kind == 'unit_cached' else 'computed'),
                       import_provenance=data.get('import_provenance'), outputs=outputs,
-                      error=data.get('error'), details=data)
+                      error=data.get('error'), details=data,
+                      resources=thread_resources(started, termination='failed' if kind == 'step_failed' else 'completed')
+                                if started is not None else None)
 
     def finish(self, *, result=None, error=None):
         if self.closed:
@@ -190,7 +206,8 @@ class NativeTrace:
         for name, value in result.get('artifacts', {}).items():
             if name not in ('source', 'history', 'profile_snapshot', 'run_manifest') and isinstance(value, str):
                 outputs.append(Path(self.manifest['root']) / value)
-        self.emit(state, 'root', outputs=file_records(outputs), error=error,
+        resources = self.resources.finish(returncode=1 if error else 0) if hasattr(self, 'resources') else None
+        self.emit(state, 'root', outputs=file_records(outputs), error=error, resources=resources,
                   result={'validation': (result.get('project') or {}).get('validation'), 'counts': result.get('counts')})
         self.manifest.update(state=state, ended_at=now(), error=error)
         atomic_json(self.path, self.manifest)

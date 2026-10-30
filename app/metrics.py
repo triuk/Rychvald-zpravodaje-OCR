@@ -393,6 +393,12 @@ def native_local_steps(root, application, run, sources, warnings):
                 error = last.get('error') if last else None
                 if not last and not alive:
                     error = {'code': 'native_owner_ended', 'message': 'Native owner ended before publishing this step result; its completion is unknown.'}
+                resources = deepcopy(last.get('resources')) if last and last.get('resources') else next(
+                    (deepcopy(event['resources']) for event in reversed(group) if event.get('resources')), None)
+                if resources is not None and last is None:
+                    resources['status'] = 'partial'
+                    resources['termination'] = 'running' if alive else 'interrupted'
+                    resources['coverage_note'] = 'Only the last durable sample is available; no completed measurement was published.'
                 steps.append({'step_id': identifier, 'native_step_id': sid, 'kind': 'local',
                     'operation': first.get('operation', attempt['operation']), 'phase': attempt['phase'],
                     'edition_id': attempt['edition_id'], 'run_id': attempt['run_id'], 'attempt_id': aid,
@@ -404,6 +410,7 @@ def native_local_steps(root, application, run, sources, warnings):
                     'parameters': first.get('parameters', {}), 'inputs': first.get('inputs', []),
                     'outputs': last.get('outputs', []) if last else [],
                     'observations': last.get('details') if last else None,
+                    'resources': resources,
                     'result': last.get('result') if last else None,
                     'origin': last.get('origin', 'computed') if last else 'computed',
                     'import_provenance': last.get('import_provenance') if last else None,
@@ -510,6 +517,10 @@ def collect(root, run):
     page_count = run.get('counts', {}).get('pages')
     result = {'schema_version': 1, 'policy': POLICY, 'run_id': rid,
               'source_hash': digest(sources), 'sources': sources, 'warnings': warnings, 'local_warnings': local_warnings,
+              'local_resource_policy': {
+                  'cpu_unit': 's', 'ram_unit': 'bytes', 'nested_scopes_are_additive': False,
+                  'basis': 'Local process/thread counters and sampled process-tree RSS. Parent scopes include children; never sum overlapping CPU spans or independent RSS maxima.',
+                  'provider_compute': False},
               'tokens': usage, 'cost': cost, 'steps': steps, 'categories': CATEGORIES, 'cost_scale': COST_SCALE,
               'queue': {'waiting_intervals': queue_intervals,
                   'waiting_seconds': waiting_length(queue_closed, active) if queue_complete else None,

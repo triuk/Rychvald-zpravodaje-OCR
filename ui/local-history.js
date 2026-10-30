@@ -12,6 +12,15 @@
   const time = value => value ? new Date(value).toLocaleString('cs-CZ') : 'Nezaznamenáno';
   const duration = value => value === null || value === undefined ? 'Doba zatím neznámá' :
     `${value.toLocaleString('cs-CZ', {maximumFractionDigits: 3})} s`;
+  function resourceSummary(value) {
+    if (!value) return 'CPU / RAM nebyly zaznamenány.';
+    const cpu = value.cpu_seconds === null || value.cpu_seconds === undefined ? 'CPU neznámé' :
+      `CPU ${value.scope.kind === 'thread' ? 'vlákna' : 'procesu a potomků'} ${value.cpu_seconds.toLocaleString('cs-CZ', {maximumFractionDigits: 3})} s`;
+    const ram = value.peak_rss_bytes === null || value.peak_rss_bytes === undefined ?
+      value.scope.kind === 'thread' ? 'RAM nelze přiřadit jednomu vláknu' : 'RSS neznámá' :
+      `RSS max. ${(value.peak_rss_bytes / 1048576).toLocaleString('cs-CZ', {maximumFractionDigits: 2})} MiB (vzorkováno)`;
+    return `${cpu} · ${ram}${value.status === 'partial' ? ' · Neúplné měření' : ''}`;
+  }
 
   window.renderLocalHistory = (phases, run, request) => {
     clearInterval(timer);
@@ -25,7 +34,7 @@
       const activity = node('p', 'Místní práce: načítání uloženého stavu…', 'local-activity');
       const details = node('details');
       details.append(node('summary', 'Místní kroky a historie'));
-      const hint = node('p', 'Jde o místní nástroje. Podřízené kroky jsou součástí času rodiče; jejich časy se nesčítají.', 'hint');
+      const hint = node('p', 'Jde o místní nástroje. CPU je procesový čas, nikoli délka běhu. RSS je vzorkované maximum součtu paměti procesu a potomků; sdílené stránky se mohou započítat vícekrát. Rodič zahrnuje své podřízené kroky; jejich časy ani prostředky se nesčítají.', 'hint');
       const list = node('div');
       const more = node('button', 'Další starší kroky', 'secondary');
       more.type = 'button';
@@ -57,7 +66,9 @@
           const item = node('details', undefined, 'local-step');
           item.dataset.stepId = step.step_id;
           const title = `${step.tool?.name || step.operation} · ${states[step.state] || step.state} · ${duration(step.timing.wall_seconds)}`;
-          item.append(node('summary', title));
+          const summary = node('summary', title);
+          summary.append(node('span', resourceSummary(step.resources), 'local-resource-summary'));
+          item.append(summary);
           const text = node('p', `${time(step.started_at)} → ${time(step.ended_at)} · ${step.operation} · Pokus ${step.attempt_id}`);
           const origin = step.origin === 'imported_local' ? 'Převzaté místní podklady jiného průchodu' :
             step.state === 'cached' ? 'Vlastní ověřená místní cache; OCR se znovu nepočítalo' : 'Nově provedená místní práce';
@@ -77,6 +88,7 @@
               if (!item.isConnected) return;
               full.textContent = JSON.stringify({tool: detail.tool, parameters: detail.parameters,
                 observations: detail.observations,
+                resources: detail.resources,
                 inputs: detail.inputs, outputs: detail.outputs, parent_step_id: detail.parent_step_id,
                 origin: detail.origin, import_provenance: detail.import_provenance,
                 error: detail.error, artifacts: detail.artifacts}, null, 2);

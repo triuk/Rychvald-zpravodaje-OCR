@@ -105,8 +105,8 @@ průchod, fázi a případnou vazbu na rodičovský krok/pokus. `scope` rozlišu
 nativní operaci, dílčí workflow příkaz, jednotku a podřízený nástroj.
 Čas rodiče zahrnuje jeho potomky a souhrn používá sjednocení časových
 intervalů. Nelze sčítat dobu rodiče a jeho vnořených nástrojů. Čekání bez
-samostatného dokladu zůstává neznámé. V této etapě nejsou CPU a RAM
-dopočítávány z těchto časů; doplňuje je navazující měření prostředků.
+samostatného dokladu zůstává neznámé. CPU a RAM mají samostatné měření
+popsané níže; nejsou dopočítány z délky běhu.
 
 Deník zůstává čitelný po restartu, chybě i ukončení procesu. Pokud vlastník
 se stejnou kernelovou identitou již neběží a chybí koncová událost, čtecí
@@ -121,6 +121,44 @@ nezaznamenané verze nebo příkazu.
 (`preparation`/`reading`/`geometry`/`assembly`) a boolean `newest_first`.
 Stránkování se potom vztahuje k vybraným krokům; celkové metriky průchodu
 zůstávají celkové. Bez filtrů se chování dosavadního přehledu nemění.
+
+### CPU a vzorkovaná RAM místních kroků
+
+`resources` u místního kroku obsahuje jednotky, rozsah, dostupnost měření,
+počet vzorků a způsob ukončení. GUI ukazuje CPU v sekundách a vzorkovanou
+špičku RSS v MiB vedle názvu nástroje a doby běhu. Procesový čas CPU není
+čas běhu ani čekání; tato čísla mohou být různá. Nejde o prostředky vzdáleného
+poskytovatele AI. Starší nezměřené kroky mají neznámé hodnoty, nikoli nuly.
+
+- Externí nástroj/workflow má vlastní PID. CPU se čte pomocí `wait4` právě
+  pro tento PID, včetně potomků, které jeho procesový řetězec skutečně
+  vyčkal. Nepoužívá se rozdíl globálního `RUSAGE_CHILDREN` mezi souběžnými
+  vlákny. Nevyčkaní nebo přeživší pozorovaní potomci označí pokrytí jako
+  neúplné. Linuxové hranice popisují [wait4](https://www.man7.org/linux/man-pages/man2/wait4.2.html)
+  a [getrusage](https://www.man7.org/linux/man-pages/man2/getrusage.2.html).
+- Rodičovská nativní operace měří svůj proces včetně všech jeho vláken
+  a vyčkaných potomků z jeho vlastních `/proc/PID/stat` čítačů. Pozorované
+  vlastní CPU potomků se nepřičítá znovu k CPU již započtenému do rodiče;
+  alternativní pozorování tvoří pouze dolní mez. Vnořená CPU měření se
+  nesčítají a nevytváří se z nich vymyšlený celkový součet.
+- U jednotek uvnitř jednoho procesu se měří CPU volajícího vlákna. Jejich
+  vlastní RAM se nedá spolehlivě oddělit od sdíleného procesu, proto je
+  výslovně nepřiřaditelná. Rodičovská operace poskytuje společné RSS.
+- RAM se vzorkuje po 50 ms: v jednom skenu se sečtou aktuální RSS kořene
+  a pozorovaných potomků a uchová se maximum těchto součtů. Nejde o součet
+  jejich individuálních maxim. Sdílené stránky se mohou v RSS různých
+  procesů započítat vícekrát, tedy nejde o unikátní fyzickou paměť. Špička
+  mezi vzorky může uniknout; `ram_status: sampled_lower_bound` to uvádí.
+  Velmi krátký proces může mít CPU doložené, ale RAM nepozorovanou.
+
+Měření zahrnuje režii vlastního pozorování. Vzorky zůstávají v paměti;
+do trvalého deníku se ukládá počáteční stav, nejvýše přibližně jednou za
+sekundu průběžný stav a při řádném konci poslední měření. Neúspěšný nástroj
+si uchová naměřené prostředky. Při násilném ukončení přežije poslední
+uložený vzorek označený `partial`/`interrupted`, bez smyšleného konečného
+CPU nebo RSS. `scope` i `cpu_status` odlišují úplně odečtené konkrétní
+procesy od neúplných průběžných pozorování. Samotné selhání OCR a úplnost
+měření jsou odlišné skutečnosti.
 
 Odvozený `application/metrics/ledger.json` obsahuje původní vazby,
 naměřené vstupy a hashe zdrojů, účetní politiku, kartu i předpoklady.
@@ -149,6 +187,16 @@ Ověřují dostupné příkazy/vstupy/výstupy, výsledek validace, stránkován
 fáze, cache bez opakování OCR, rozpracovanou práci ukončenou signálem a
 stálé identity po restartu. Nativní `smoke_webui_projects.py --preparation`
 ověřuje také zobrazení místní historie a cache v reálném WebUI/Chromiu.
+
+Scénář `local_resources_include_descendants_failure_interruption_and_restart`
+navíc vybírá explicitní hashovaný nástrojový fixture, který při skutečném
+PDF exportu spouští potomka a vnuka. Ověřuje zahrnutí obou, CPU bez závislosti
+na rychlosti stroje, neúspěšný proces, uložený vzorek po SIGKILL a restart.
+Dvě postupné 128MiB alokace u různých potomků oddělené jejich uvolněním
+ověřují, že se individuální maxima nevydávají za současnou špičku. Fixture
+není distribuovaný qpdf; běžné exportní scénáře dál používají skutečné
+místní nástroje. Nativní GUI smoke ověřuje zobrazení CPU/RSS i označení
+nepřiřaditelné RAM jednotek.
 
 Místní ověření #34 používá výslovně vybraný, hashi ověřený profil
 `OCR_ENVIRONMENT=/tmp/rychvald-native-recovery/environment.json`

@@ -48,7 +48,11 @@ def workflow_command(work, native, command, *arguments, allowed=(0,)):
                          tool={'name': 'ocr_workflow', 'version': sys.version.split()[0]},
                          outputs=products) if trace else contextlib.nullcontext({})
     with context as observation:
-        result = subprocess.run(vector, capture_output=True, text=True, env=child_environment(native.env))
+        if trace:
+            result, resources = trace.run_process(vector, env=child_environment(native.env))
+            observation['resources'] = resources
+        else:
+            result = subprocess.run(vector, capture_output=True, text=True, env=child_environment(native.env))
         observation.update(returncode=result.returncode, state='completed' if result.returncode in allowed else 'failed',
                            error={'code': 'workflow_failed', 'message': result.stderr} if result.returncode not in allowed else None)
     with (work / 'export-process.log').open('a', encoding='utf-8') as log:
