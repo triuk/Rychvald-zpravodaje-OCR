@@ -246,7 +246,7 @@ def publish_output_review(registry, project_id, proposal):
                 verify_geometry(registry, record)
             check_installed_bindings(work, value['evidence'])
             from ocr_visual_evidence import verify_visual_turn
-            answer = verify_visual_turn(value['visual_turn'], work, packet['images'])
+            answer = verify_visual_turn(value['visual_turn'], work, packet['images'], activity='final_check')
             if answer != load(value['evidence']['proposal']['path']) or answer['preparation_sha256'] != value['preparation_sha256']:
                 raise ValueError('Reports differ from original completed assistant JSON')
             visual, findings = validate_reports(work, packet, answer)
@@ -286,7 +286,7 @@ def verify_output_review(registry, project_id):
             verify_geometry(registry, record)
         check_installed_bindings(work, value['evidence'])
         from ocr_visual_evidence import verify_visual_turn
-        answer = verify_visual_turn(value['visual_turn'], work, packet['images'])
+        answer = verify_visual_turn(value['visual_turn'], work, packet['images'], activity='final_check')
         if answer != load(value['evidence']['proposal']['path']) or answer['preparation_sha256'] != value['preparation_sha256']:
             raise ValueError('Published reports differ from the original assistant JSON')
         visual, findings = validate_reports(work, packet, answer)

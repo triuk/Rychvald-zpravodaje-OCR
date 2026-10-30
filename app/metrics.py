@@ -238,8 +238,13 @@ def ai_step(root, attempt, rows):
         usage['status'] = 'partial'
         usage['reasons'].append('Attempt did not complete; observed consumption is retained.')
     step['tokens'] = usage
+    actual_settings = sorted({(row['message']['params']['model'], row['message']['params'].get('effort'))
+        for row in rows if row.get('direction') == 'client' and row['message'].get('method') == 'turn/start'
+        and isinstance(row['message'].get('params', {}).get('model'), str)}, key=lambda item: (item[0], str(item[1])))
+    step['model_settings'] = [{'model': model, 'reasoning_effort': effort} for model, effort in actual_settings]
+    step['model_attribution'] = 'mixed_models' if len({model for model, _ in actual_settings}) > 1 else 'single_model' if actual_settings else 'not_observed'
     step['model'] = (attempt.get('effective') or {}).get('model')
-    if attempt.get('reroutes'):
+    if attempt.get('reroutes') or step['model_attribution'] == 'mixed_models':
         step['model'] = None
     step['timing'] = timing(step, rows)
     return step

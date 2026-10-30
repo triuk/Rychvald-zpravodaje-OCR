@@ -211,6 +211,26 @@ def main():
                     raise AssertionError('Preferences changed a frozen original run.')
                 print('NATIVE_PREFERENCES ' + json.dumps({'global': 'medium', 'project': 'medium', 'new_run': 'medium', 'original_run': 'high'}), flush=True)
 
+                app.api.dispatch('set_global_preferences', {'model': 'gpt-6.1-sol', 'reasoning_effort': 'medium',
+                    'overrides': {'reading': {'model': 'gpt-6.1-sol', 'reasoning_effort': 'high'}}})
+                app.window.script("updateModelPreferences(true);return true;", timeout=2)
+                wait_for("return JSON.stringify({global:document.querySelector('#global-reading-enabled').checked,project:document.querySelector('#project-reading-enabled').checked});", {'global': True, 'project': False})
+                app.window.script("document.querySelector('#global-activity-overrides').open=true;document.querySelector('#project-activity-overrides').open=true;document.querySelector('#adopt-global-preferences').click();return true;", timeout=2)
+                wait_for("return JSON.stringify({enabled:document.querySelector('#project-reading-enabled').checked,effort:document.querySelector('#project-reading-reasoning').value});", {'enabled': True, 'effort': 'high'})
+                submit('#run-form', {'#run-name': 'Výjimky D'})
+                wait_for("return JSON.stringify(JSON.parse(document.querySelector('#run-profile pre').textContent).parameters.activity_overrides);", {'reading': {'model': 'gpt-6.1-sol', 'reasoning_effort': 'high'}})
+                frozen_override_id = query("return JSON.stringify(document.querySelector('.run[aria-pressed=true]').dataset.runId);")
+                app.window.script("document.querySelector('#project-reading-enabled').click();return true;", timeout=2)
+                submit('#project-preferences-form', {})
+                wait_for("return JSON.stringify(document.querySelector('#project-effective-settings li')?.textContent);", 'Čtení a ověření prostředí: gpt-6.1-sol · medium (společné)')
+                current = app.api.dispatch('project_preferences', {'edition_id': original['data']['edition_id']})
+                frozen = app.api.dispatch('select_run', {'run_id': frozen_override_id})
+                if (current['data']['effective']['reading']['reasoning_effort'] != 'medium' or
+                        frozen['data']['run']['profile']['parameters']['activity_overrides']['reading']['reasoning_effort'] != 'high'):
+                    raise AssertionError('Clearing the override changed the frozen run or did not restore common settings.')
+                print('NATIVE_ACTIVITY_OVERRIDES ' + json.dumps({'copied': True, 'cleared_to_common': 'medium', 'frozen_reading': 'high'}), flush=True)
+
+
             app.window.script("document.querySelector('.run-technical').open=true;document.querySelector('#run-profile details').open=true;document.querySelector('#run-profile').scrollIntoView({block:'start'});return true;", timeout=2)
             wait_for("return JSON.stringify(document.querySelector('#run-profile').getBoundingClientRect().top < window.innerHeight);", True)
 

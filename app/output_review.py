@@ -120,7 +120,7 @@ class OutputReviewJobs(OwnedContextJobs):
                         from .visual_recovery import original_visual
                         answer, proof = original_visual(directory, work, packet['images'],
                             OUTPUT_PROMPT + json.dumps(packet, ensure_ascii=False), OUTPUT_SCHEMA,
-                            job['directory'] / 'protocol.jsonl')
+                            job['directory'] / 'protocol.jsonl', activity='final_check')
                         proposal = job['recovery_directory'] / 'original-output-proposal.json'
                         atomic_json(proposal, answer)
                         connection = str(next(r for r in frames if r['direction'] == 'client' and

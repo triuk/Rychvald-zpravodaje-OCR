@@ -105,3 +105,48 @@ pracovního přepisu na `ABC`. AI partner je řízená testovací náhrada; test
 dokladem dostupnosti skutečného modelu. Ověření poškozeného staršího PDF navíc
 zaručuje veřejnou chybu `preview_invalid` bez výjimky unikající do nativního
 WebUI callbacku.
+
+## První dokončené Pořadí a geometrie
+
+Nativní `publish-geometry` uchová celý první dokončený stav v
+`phase-previews/geometry/`. Stejným místem prochází běžné dokončení i obnovení
+původního dokončeného pozorování po chybě místního zveřejnění. Archiv obsahuje
+checkpoint, přípravu, manifest zdrojových stránek, přepis, skutečné znakové
+oblasti, logické jednotky a segmentační manifest. Souborové hashe se ověřují
+proti archivnímu manifestu i původně prohlédnuté geometrii.
+
+Záložka zobrazuje původní text a čísla jeho logického pořadí. Obrys řádku vychází
+ze skutečných znakových oblastí segmentace, vnitřní čárkované hranice ukazují
+jednotlivé znakové buňky. U regionu bez znakových buněk je v datech výslovně
+uvedeno `source_region_only`. Dostupný text ani hranice nevyžadují další přepínač
+a nevytvářejí řádkový inspektor. Jde stále o aproximace: umístění oblasti není
+potvrzením správného přečtení nebo identity znaku.
+
+Opravný cyklus může změnit aktuální `reviewed-lines.json`, `pages.json` a
+`geometry.json`; tento první archiv zůstává beze změny. Starší průchod bez
+zachovaného prvního stavu ukazuje `historical_missing`, i když současná pracovní
+geometrie existuje.
+
+`tests/test_webui_geometry_preview.py` ověřuje nezávisle dané polohy buněk,
+ořez a rotaci, rozdílné vizuální a logické pořadí, skutečný cílený opravný cyklus,
+restart a obnovení původního dokončeného AI pozorování bez nového tahu.
+Samostatný scénář vytvoří výsledek přes přesné uchované bajty předchozího
+generujícího adaptéru a ověří jej nynějším validátorem. Změna původních
+archivovaných bajtů se odmítne.
+
+Tabulka `native/geometry-adapter-compatibility.json` obsahuje pouze výslovné
+hashové páry pro tuto změnu ukládání náhledů. Nepovoluje obecnou shodu verzí
+ani neoslabuje vazby na zdroj, přepis, profil, prostředí, generující kód,
+očekávání nebo původní modelové doklady. Předchozí bajty adaptéru musí být
+nadále zachovány v pracovním archivu průchodu.
+
+```sh
+OCR_ENVIRONMENT=/cesta/k/overenemu/environment.json \
+  python -m unittest discover -s tests -p test_webui_geometry_preview.py -v
+DISPLAY=:91 OCR_ENVIRONMENT=/cesta/k/overenemu/environment.json \
+  python tools/smoke_webui_geometry_preview.py --screenshot /tmp/prvni-geometrie.png
+```
+
+Nativní scénář kontroluje skutečně viditelné původní `1. AXC`, pořadí a znakové
+hranice po opravě pracovního přepisu na `ABC`, včetně vysvětlení aproximací.
+Řízený AI partner zde opět dokládá aplikační kontrakt, nikoli dostupnost modelu.

@@ -157,7 +157,7 @@ def verify_geometry(registry, record, *, examined=True):
             check_installed_bindings(work, proof['historical_reading']['evidence'])
             verify_sample_origin(work, packet)
             from ocr_visual_evidence import verify_visual_turn
-            observations = verify_visual_turn(proof['visual_turn'], work, packet['images'])
+            observations = verify_visual_turn(proof['visual_turn'], work, packet['images'], activity='geometry')
             if observations != load(Path(proof['evidence']['proposal']['path'])):
                 raise ValueError('Saved observations differ from original completed assistant JSON')
             packet['preparation_sha256'] = source_hash(work / 'geometry-preparation.json')
@@ -210,7 +210,7 @@ def verify_sample_origin(work, packet):
     if origin['kind'] == 'source_visual_turn':
         check_bindings({'proposal': origin['proposal']})
         from ocr_visual_evidence import verify_visual_turn
-        answer = verify_visual_turn(origin['visual_turn'], work, origin['images'])
+        answer = verify_visual_turn(origin['visual_turn'], work, origin['images'], activity='geometry')
         if answer != load(origin['proposal']['path']) or answer['samples'] != samples or answer['source_sha256'] != origin['source_sha256']:
             raise ValueError('Samples differ from the original independent source image turn')
         expected = [{'path': f"raster/page-{p['page']}.png", 'sha256': p['raster_sha256']}
@@ -268,7 +268,7 @@ def _publish_geometry(registry, project_id, checkpoint):
         check_installed_bindings(work, value['historical_reading']['evidence'])
         verify_sample_origin(work, packet)
         from ocr_visual_evidence import verify_visual_turn
-        proposal = verify_visual_turn(value['visual_turn'], work, packet['images'])
+        proposal = verify_visual_turn(value['visual_turn'], work, packet['images'], activity='geometry')
         if proposal != load(value['evidence']['proposal']['path']):
             raise ProjectError('geometry_invalid', 'Original model-authored observations differ')
         try:
@@ -278,6 +278,8 @@ def _publish_geometry(registry, project_id, checkpoint):
         if value['preparation_sha256'] != packet['preparation_sha256']:
             raise ProjectError('geometry_invalid', 'Geometry changed before publication')
         atomic_json(work / 'geometry-checkpoint.json', value)
+        from ocr_phase_snapshot import preserve_geometry
+        preserve_geometry(work, record['project'], packet)
         record['project'].update(phase='geometry_examined', operation_state='completed', validation='not_run')
         record['counts']['geometry_open_items'] = sum(o['status'] == 'open' for o in proposal['lines']+proposal['samples'])
         record['artifacts']['geometry_checkpoint'] = str((work / 'geometry-checkpoint.json').relative_to(registry.root))

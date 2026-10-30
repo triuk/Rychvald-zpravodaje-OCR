@@ -140,3 +140,36 @@ nezávislost kopií, převzetí globálu, restart, zmrazení průchodu a předá
 dvojice všem AI činnostem včetně cílené opravy. Skutečné WebUI a Chromium
 ověřuje `tools/smoke_webui_projects.py --headless --profiles --preferences`;
 spuštění stále vyžaduje dostupný Linux displej pro nativní adaptér.
+
+### Výjimky jednotlivých AI činností
+
+Globální i projektové nastavení mají rozbalitelnou část **Výjimky pro AI
+činnosti**. Čtení, pořadí a geometrie, kontroly výsledku a cílené opravy mohou
+mít vlastní dvojici. Vypnutí výjimky a uložení obnoví společnou dvojici. Uložený
+přehled pod formulářem ukazuje skutečně účinné hodnoty pro další průchod;
+rozpracované změny formuláře je nejdříve třeba uložit.
+
+Obrazová diagnostika i ověření context-mode používají dvojici čtení, aby jejich
+preflight dokazoval přesně kombinaci potřebnou k přepisu. Geometrické ověření
+po cílené opravě používá výjimku geometrie, vlastní opravný tah výjimku oprav
+a následná kontrola PDF výjimku kontrol výsledku.
+
+Veřejné zápisy předvoleb přijímají volitelnou mapu `overrides` s klíči
+`reading`, `geometry`, `final_check`, `repair`; každá hodnota obsahuje `model`
+a `reasoning_effort`. Prázdná mapa výjimky odstraní. Odpověď poskytuje také
+`effective` a `activity_availability` pro všechny čtyři činnosti. Při založení
+průchodu se mapa zmrazí v `parameters.activity_overrides` profilu. Původní
+profily bez tohoto volitelného pole zůstávají podporované.
+
+Každý původní tah a jeho obnova se ověřují proti příslušné aktivitě zmrazeného
+profilu. Zachované protokoly dokládají skutečný model a reasoning. Pokud pokus
+obsahuje více modelů a nelze jim spolehlivě přiřadit souhrnné tokeny, metriky
+vracejí `model_attribution: mixed_models`, seznam `model_settings` a nedostupný
+cenový odhad; nepoužijí cenu posledního modelu na celý pokus.
+
+`tests/test_webui_activity_preferences.py` ověřuje kopírování, rušení výjimek,
+restart, odmítnutí nedostupné kombinace a nativní průchod se čtyřmi různými
+dvojicemi včetně následné opravy po změně projektových předvoleb. Skutečný
+GUI scénář `tools/smoke_webui_projects.py --headless --profiles --preferences`
+ověřuje i rozbalení výjimek, převzetí globálu, jejich zrušení a zachování
+zmrazeného průchodu.

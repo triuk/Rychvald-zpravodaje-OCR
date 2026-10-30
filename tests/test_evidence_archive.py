@@ -139,6 +139,8 @@ class EvidenceArchiveTests(unittest.TestCase):
             root = Path(temporary)
             original_work, work = root / 'original', root / 'relocated'
             work.mkdir()
+            (work / 'application').mkdir()
+            (work / 'application/profile.json').write_bytes((ROOT / 'profiles/faithful-reading.json').read_bytes())
             image = work / 'image.png'
             image.write_bytes(b'original encoded image bytes')
             image_sha = hashlib.sha256(image.read_bytes()).hexdigest()
@@ -170,7 +172,7 @@ class EvidenceArchiveTests(unittest.TestCase):
                 'proof': {'statement': 'explicit original workspace copy'}}]}))
             evidence.capture(inventory, root / 'archive')
             with patch.dict(os.environ, OCR_EVIDENCE_CATALOG=str(root / 'archive/catalog.json')):
-                self.assertEqual(verify_visual_turn(proof, work, [{'path': 'image.png', 'sha256': image_sha}]),
+                self.assertEqual(verify_visual_turn(proof, work, [{'path': 'image.png', 'sha256': image_sha}], activity='geometry'),
                     {'observed': True})
             self.assertEqual(protocol.read_bytes(), protocol_raw)
             self.assertEqual(image.read_bytes(), b'original encoded image bytes')
@@ -178,7 +180,7 @@ class EvidenceArchiveTests(unittest.TestCase):
             evidence.capture(inventory, root / 'no-binding')
             with patch.dict(os.environ, OCR_EVIDENCE_CATALOG=str(root / 'no-binding/catalog.json')):
                 with self.assertRaises(ValueError):
-                    verify_visual_turn(proof, work, [{'path': 'image.png', 'sha256': image_sha}])
+                    verify_visual_turn(proof, work, [{'path': 'image.png', 'sha256': image_sha}], activity='geometry')
 
     def test_binding_verifier_uses_archived_exact_identity_after_relocation(self):
         import ocr_evidence_archive as evidence

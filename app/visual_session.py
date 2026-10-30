@@ -146,7 +146,8 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
         identifier = result['turn']['id']
         value['turn_id'] = identifier
         record = {'stage': stage, 'thread_id': value['thread_id'], 'turn_id': identifier, 'state': 'running',
-            'prompt': prompt, 'protocol': str(protocol.relative_to(job['root'])), 'connection_id': connection_id}
+            'prompt': prompt, 'protocol': str(protocol.relative_to(job['root'])), 'connection_id': connection_id,
+            'requested': requested, 'effective': copy.deepcopy(value['effective'])}
         value['turns'].append(record)
         if continuation is not None:
             continuation['successor'].update(turn_id=identifier, state='accepted')
@@ -169,7 +170,7 @@ def examine(manager, job, stage, prompt, schema, work, images, *, instructions=N
     if continuation is not None:
         continuation['successor']['protocol']['sha256'] = proof['protocol']['sha256']
     from tools.ocr_visual_evidence import verify_visual_turn
-    answer = verify_visual_turn(proof, work, images)
+    answer = verify_visual_turn(proof, work, images, activity=stage)
     path = directory / 'proposal.json'
     atomic_json(path, answer)
     record.update(answer=json.dumps(answer, ensure_ascii=False), proposal=str(path.relative_to(job['root'])))
