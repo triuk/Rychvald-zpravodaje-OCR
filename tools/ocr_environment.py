@@ -56,9 +56,10 @@ class NativeEnvironment:
             return subprocess.run(vector, capture_output=True, text=True, env=environment)
         with trace.span(operation=str(command[0]), command=vector,
                         tool={'name': str(command[0]), 'version': self.manifest['programs'][command[0]].get('version')}) as observation:
-            result = subprocess.run(vector, capture_output=True, text=True, env=environment)
+            result, resources = trace.run_process(vector, env=environment)
             observation.update(returncode=result.returncode, state='failed' if result.returncode else 'completed',
-                               error={'code': 'tool_failed', 'message': result.stderr} if result.returncode else None)
+                               error={'code': 'tool_failed', 'message': result.stderr} if result.returncode else None,
+                               resources=resources)
             return result
 
     def check_file(self, name, record):

@@ -270,6 +270,8 @@ with fitz.open() as document:
             app.window.script("document.querySelector('[data-local-phase=preparation] > details').open=true;return true;", timeout=2)
             wait_for("return JSON.stringify([...document.querySelectorAll('[data-local-phase=preparation] .local-step summary')].some(item=>item.textContent.includes('tesseract')));", True)
             print('NATIVE_LOCAL_HISTORY ' + json.dumps(query("return JSON.stringify({activity:document.querySelector('[data-local-phase=preparation] .local-activity').textContent,steps:document.querySelectorAll('[data-local-phase=preparation] .local-step').length});"), ensure_ascii=False), flush=True)
+            wait_for("return JSON.stringify([...document.querySelectorAll('[data-local-phase=preparation] .local-resource-summary')].some(item=>item.textContent.includes('CPU')&&item.textContent.includes('MiB')));", True)
+            print('NATIVE_LOCAL_RESOURCES ' + json.dumps(query("return JSON.stringify([...document.querySelectorAll('[data-local-phase=preparation] .local-resource-summary')].slice(0,3).map(item=>item.textContent));"), ensure_ascii=False), flush=True)
             first_attempt = completed['attempt']
             submit('#preparation-form', {})
             wait_for("return JSON.stringify(document.querySelector('#preparation-state')?.dataset.state === 'completed' && document.querySelector('#preparation-state').dataset.attemptId !== " + json.dumps(first_attempt) + ');', True)

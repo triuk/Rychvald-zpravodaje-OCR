@@ -166,3 +166,4 @@ button:focus-visible, input:focus-visible, summary:focus-visible, select:focus-v
 .local-activity { font-weight: 600; }
 .local-step { padding: .6rem 0; }
 .local-step pre { max-height: 22rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.local-resource-summary { display: block; font-size: .88em; font-weight: 400; margin-top: .2rem; }
