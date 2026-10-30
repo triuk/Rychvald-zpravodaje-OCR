@@ -28,9 +28,11 @@ git pull --ff-only
 - [Rozhodnutí návrhového rozhovoru](docs/plans/webui-ocr-gui-redesign.md).
 - [Slovník projektu](GLOSSARY.md) a [instrukce pro práci v repozitáři](AGENTS.md).
 
-Redesign je navržený a rozdělený do úkolů; jeho realizace dosud nezačala. Zadavatel ji výslovně odložil. Publikace issues a štítek ready-for-agent samy nejsou pokynem začít implementovat.
+Realizace byla výslovně zahájena zadavatelem a pokračuje na větvi **integration/webui-ocr**. Sloučené a dílčími testy ověřené jsou úkoly #25–#31 a #34: rozložení GUI, výběr cest, předvolby a výjimky modelů, společný náhled a zachované původní stavy přepisu a geometrie i historie místních kroků.
 
-Po samostatném pokynu k realizaci nemají věcné blokace úkoly [#25](https://github.com/triuk/Rychvald-zpravodaje-OCR/issues/25) a [#26](https://github.com/triuk/Rychvald-zpravodaje-OCR/issues/26). Další úkoly se zpřístupňují podle jejich části Blocked by. Každý obsahuje vlastní kritéria přijetí.
+Rozpracované jsou náhled exportovaného PDF (#32), úplná AI historie (#33) a měření CPU/RAM (#35). Navážou analytický balík (#36), životní cyklus aplikace (#37) a společné přijetí Linux balíku (#38). Celá specifikace zatím není dokončená. Zadavatel schválil přípravu nově připnutého runtime; jeho skutečné obrazové a context-mode diagnostiky prošly v oddělené zkušební sadě, finální distribuční ověření ještě zbývá.
+
+Úkoly se realizují podle jejich části **Blocked by** a vlastních kritérií přijetí. Historické odložení implementace ve specifikaci a původních popisech úkolů již bylo nahrazeno výslovným pokynem k realizaci.
 
 ## Příprava a spuštění
 
